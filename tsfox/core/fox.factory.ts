@@ -47,7 +47,7 @@ class FoxFactory {
             const { path, type, callback } = item;
             console.info(`viewsManager: ${path} - ${callback}`)
             //validate if file is html, hbs or jxs
-            FoxFactory.instance.html(type, path, callback);
+            FoxFactory.instance.render(type, path, callback);
         })
     }
 

@@ -21,7 +21,7 @@ const CnxServer : FoxFactoryContext = {
     views: [
         {
             path: '/html',
-            type: 'html',
+            type: 'code',
             callback: (req: any, res: any) => {
                 console.log("Enter to view /")
                 res.send('<h1>Hello World!</h1>')
@@ -29,26 +29,26 @@ const CnxServer : FoxFactoryContext = {
         },
         {
             path: '/file',
-            type: 'file',
+            type: 'html',
             callback: (req: any, res: any) => {
-                console.log("Enter to view /")
-                res.render('index.html', { title: 'Hey', message: 'Hello there!' })
+                console.log("Enter to view /file")
+                res.render('index.html', { title: 'Hey', message: 'Hello test example de variables!' })
             }
         },
         {
             path: '/hbs',
             type: 'hbs',
             callback: (req: any, res: any) => {
-                console.log("Enter to view /")
-                res.render('index.hbs', { title: 'Hey', message: 'Hello there!' })
+                console.log("Enter to view /hbs")
+                res.render('index.hbs', { title: 'Hey', message: 'Hello there this hbs!' })
             }
         },
         {
-            path: '/jsx',
-            type: 'jsx',
+            path: '/fox',
+            type: 'fox',
             callback: (req: any, res: any) => {
-                console.log("Enter to view /")
-                res.render('index.jsx', { title: 'Hey', message: 'Hello there!' })
+                console.log("Enter to view /fox")
+                res.render('index.fox', { title: 'Hey', message: 'Hello there this fox!' })
             }
         }
     ],

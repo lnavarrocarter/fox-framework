@@ -2,6 +2,8 @@ import express from 'express';
 import { IServer } from '../interfaces/server.interface';
 import { ServerOptions, FoxServerInterface } from '../interfaces/factory.interface';
 import { ConfigServer } from '../enums/server.enums';
+import { engineFox, engineHtml } from './engine.feature';
+
 
 export class FoxServer implements IServer, FoxServerInterface {
     private readonly app: express.Application;
@@ -22,6 +24,9 @@ export class FoxServer implements IServer, FoxServerInterface {
         this.use(express.json());
         this.use(express.urlencoded({ extended: false }));
         this.use(express.static('public'));
+        this.app.engine('fox', engineFox)
+        this.app.engine('html', engineHtml)
+        
     }
 
     public get(path: string, callback: any): any {
@@ -52,7 +57,7 @@ export class FoxServer implements IServer, FoxServerInterface {
         this.app.set(setting, value);
     }
 
-    public html(type: string, path: string, callback: any): any {
+    public render(type: string, path: string, callback: any): any {
         this.app.set('views', ConfigServer.VIEWS);
         this.app.set('view engine', type);
         this.app.get(path, callback);

@@ -38,7 +38,7 @@ export type FoxServerInterface = {
     put: (path: string, callback: any) => void;
     delete: (path: string, callback: any) => void;
     set(path: string, callback: any): void;
-    html: (type: string, path: string, callback: any) => void;
+    render: (type: string, path: string, callback: any) => void;
 };
 
 

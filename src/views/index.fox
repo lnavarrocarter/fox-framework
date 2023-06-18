@@ -1,0 +1,18 @@
+Input::title;
+Input::message;
+
+<section>
+    <h1>$title</h1>
+    <p>$message</p>
+    ()=>[suma]
+</section>
+
+<action>
+    Exec::suma(){
+        const a = 1;
+        const b = 2;
+        return `${$title} -${$message} -  ${a + b}` 
+    }
+</action>
+
+
