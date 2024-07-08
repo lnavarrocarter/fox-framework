@@ -1,0 +1,7 @@
+import { Request, Response } from 'express';
+
+export class __NAME__Controller {
+    public async index(req: Request, res: Response): Promise<void> {
+        res.send('__NAME__ controller');
+    }
+}
