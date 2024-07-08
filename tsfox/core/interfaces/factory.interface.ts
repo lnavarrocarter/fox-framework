@@ -21,7 +21,7 @@ export interface FoxFactoryContext {
     middlewares: Array<any>;
 }
 
-export interface ServerOptions {
+export interface ServerOptions extends FoxFactoryContext{
     port: number;
     env: string; 
 }

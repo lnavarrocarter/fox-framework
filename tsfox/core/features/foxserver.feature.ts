@@ -1,8 +1,9 @@
 import express from 'express';
 import { IServer } from '../interfaces/server.interface';
-import { ServerOptions, FoxServerInterface } from '../interfaces/factory.interface';
+import { FoxServerInterface } from '../interfaces/factory.interface';
 import { ConfigServer } from '../enums/server.enums';
 import { engineFox, engineHtml } from './engine.feature';
+import { ServerConfig } from '../types';
 
 
 export class FoxServer implements IServer, FoxServerInterface {
@@ -10,7 +11,7 @@ export class FoxServer implements IServer, FoxServerInterface {
     private readonly port: number;
     private readonly env: string;
 
-    constructor(optionsServer: ServerOptions) {
+    constructor(optionsServer: ServerConfig) {
         this.app = express();
         this.port = optionsServer.port;
         this.env = optionsServer.env;

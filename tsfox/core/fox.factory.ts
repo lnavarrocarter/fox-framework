@@ -1,8 +1,9 @@
 
-import { FoxFactoryContext, FoxServerInterface } from './interfaces/factory.interface';
+import { FoxServerInterface } from './interfaces/factory.interface';
 import { RequestMethod } from './enums/methods.enums';
 import { FoxServer } from './features/foxserver.feature';
 import { ConfigServer } from './enums/server.enums';
+import { ServerConfig } from './types';
 
 const InitialRequest = {
     method: RequestMethod.GET,
@@ -20,10 +21,12 @@ const InitialView = {
     }
 }
 
-class FoxFactory {
-    private static instance: FoxServerInterface;
+export class FoxFactory {
 
-    public static createInstance(context: FoxFactoryContext) {
+    private static instance: FoxServerInterface;
+    private static requests: Array<{ method: RequestMethod, path: string, callback: any }>;
+
+    public static createInstance(context: ServerConfig) {
         if (!FoxFactory.instance) {
             const server = new FoxServer(context);
             FoxFactory.instance = server; 
@@ -36,6 +39,10 @@ class FoxFactory {
     }
     public static getInstance() {
         return FoxFactory.instance
+    }
+
+    public static listen(){
+        FoxFactory.instance.start();
     }
 
     private static destroyInstance() {
