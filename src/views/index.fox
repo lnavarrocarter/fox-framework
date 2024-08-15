@@ -15,4 +15,8 @@ Input::message;
     }
 </action>
 
+<loading>
+    <p>Loading...</p>
+</loading>
+
 

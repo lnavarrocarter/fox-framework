@@ -1,8 +1,8 @@
 {
-  "name": "dk-manager",
+  "name": "fox-framework",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "main.ts",
   "scripts": {
     "serve": "ts-node src/main.ts"
   },
