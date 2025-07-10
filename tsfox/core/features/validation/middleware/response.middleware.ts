@@ -63,7 +63,7 @@ export function validateResponse<T>(
     const originalJson = res.json.bind(res);
 
     // Override json method to validate response
-    res.json = function(body: any) {
+    res.json = function(body: any): Response {
       // Only validate responses with configured status codes
       if (statusCodes.includes(res.statusCode)) {
         try {
@@ -86,7 +86,11 @@ export function validateResponse<T>(
 
             if (onValidationError) {
               onValidationError(validationError, req, res);
-              return;
+              // Don't continue with original response, let the error handler manage
+              return originalJson({
+                error: 'Response Validation Error',
+                message: 'Custom validation error handler called'
+              });
             }
 
             // In development, return validation error details
@@ -146,7 +150,7 @@ export function validateResponseByStatus(
     const originalJson = res.json.bind(res);
 
     // Override json method to validate response
-    res.json = function(body: any) {
+    res.json = function(body: any): Response {
       const schema = schemas[res.statusCode];
       
       if (schema) {
@@ -170,7 +174,11 @@ export function validateResponseByStatus(
 
             if (options.onValidationError) {
               options.onValidationError(validationError, req, res);
-              return;
+              // Don't continue with original response, let the error handler manage
+              return originalJson({
+                error: 'Response Validation Error',
+                message: `Custom validation error handler called for status ${res.statusCode}`
+              });
             }
 
             // In development, return validation error details

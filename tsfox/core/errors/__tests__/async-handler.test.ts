@@ -20,17 +20,20 @@ import {
 import { SystemError } from '../base.error';
 
 // Mock Express objects
-const mockRequest = {} as Request;
-const mockResponse = {
-  status: jest.fn().mockReturnThis(),
-  json: jest.fn().mockReturnThis(),
-  send: jest.fn().mockReturnThis()
-} as unknown as Response;
-const mockNext = jest.fn() as NextFunction;
+let mockRequest: Request;
+let mockResponse: Response;
+let mockNext: NextFunction;
 
 describe('AsyncHandler', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    // Recreate mocks for each test
+    mockRequest = {} as Request;
+    mockResponse = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+      send: jest.fn().mockReturnThis()
+    } as unknown as Response;
+    mockNext = jest.fn() as NextFunction;
   });
 
   describe('asyncHandler', () => {
