@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Application } from 'express';
 import { IServer } from '../interfaces/server.interface';
 import { FoxServerInterface } from '../interfaces/factory.interface';
 import { ConfigServer } from '../enums/server.enums';
@@ -7,7 +7,7 @@ import { ServerConfig } from '../types';
 
 
 export class FoxServer implements IServer, FoxServerInterface {
-    private readonly app: express.Application;
+    private readonly app: Application;
     private readonly port: number;
     private readonly env: string;
 
@@ -68,10 +68,15 @@ export class FoxServer implements IServer, FoxServerInterface {
         this.app.use(callback);
     }
 
-    public start(): void {
-        this.app.listen(this.port, () => {
-            console.log(`Server listening on port ${this.port}`);
+    public listen(port?: number): void {
+        const serverPort = port || this.port;
+        this.app.listen(serverPort, () => {
+            console.log(`Server listening on port ${serverPort}`);
         });
+    }
+
+    public start(): void {
+        this.listen();
     }
 
     public destroy(): void {

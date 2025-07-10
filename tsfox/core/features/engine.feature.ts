@@ -5,19 +5,26 @@ const fs = require('fs') // this engine requires the fs module
 export function engineFox(filePath: any, options: any, callback: any) {
     fs.readFile(filePath, (err: any, content: { toString: () => string }) => {
         if (err) return callback(err)
-        // Parse the file content
-        const sections = parseSections(content);
-        // Process each section
-        const processedSections = sections.map(section => {
-            // Replace variables with input values
-            const processedSection = replaceVariables(section, options);
-            // Execute actions
-            const result = replaceVariableSymbols(executeActions(processedSection), options);
-            return result;
-        });
-
-        // Concatenate processed sections and wrap in HTML tags
-        const rendered = wrapHTML(processedSections.join(''));
+        
+        let rendered = content.toString();
+        
+        // Simple variable replacement with {{variable}} syntax
+        if (options) {
+            rendered = rendered.replace(/\{\{(\w+)\}\}/g, (match: string, variable: string) => {
+                if (options.hasOwnProperty(variable)) {
+                    return options[variable];
+                }
+                return match; // Keep unreplaced variables
+            });
+            
+            // Handle nested variables like {{user.name}}
+            rendered = rendered.replace(/\{\{(\w+)\.(\w+)\}\}/g, (match: string, obj: string, prop: string) => {
+                if (options[obj] && options[obj][prop] !== undefined) {
+                    return options[obj][prop];
+                }
+                return match; // Keep unreplaced variables
+            });
+        }
 
         return callback(null, rendered)
     })

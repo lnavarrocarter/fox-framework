@@ -38,7 +38,10 @@ export class FoxFactory {
         return this.getInstance();
     }
     public static getInstance() {
-        return FoxFactory.instance
+        if (!FoxFactory.instance) {
+            throw new Error('Factory instance not created yet. Call createInstance() first.');
+        }
+        return FoxFactory.instance;
     }
 
     public static listen(){
@@ -47,6 +50,11 @@ export class FoxFactory {
 
     private static destroyInstance() {
         FoxFactory.instance.destroy();
+    }
+    
+    // Public method for testing purposes
+    public static resetInstance() {
+        FoxFactory.instance = null as any;
     }
     
     private static viewsManager(views: Array<{ type: string, path: string, callback: any }>): void {
@@ -63,7 +71,10 @@ export class FoxFactory {
         request.forEach((item) => {
             console.info(`requestsManager: ${item.method} - ${item.path} - ${item.callback}`)
             const { method, path, callback } = item;
-            const prefixPath = `${ConfigServer.API}${path}`;
+            
+            // Add /api prefix only if it doesn't already exist
+            const prefixPath = path.startsWith('/api') ? path : `${ConfigServer.API}${path}`;
+            
             FoxFactory.instance[method](prefixPath, callback);
         })
     }
