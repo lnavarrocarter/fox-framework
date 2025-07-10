@@ -3,6 +3,19 @@ import { RequestMethod } from "./enums/methods.enums";
 import { RequestMethodsContext } from "./enums/request.enums";
 import { ServerTypeCtx } from "./enums/server.enums";
 import { ILogger } from "./logging/interfaces";
+// Security imports
+import { 
+  SecurityMiddleware,
+  CorsOptions,
+  RateLimitOptions,
+  JwtOptions,
+  SessionOptions,
+  User,
+  RbacOptions,
+  CsrfOptions,
+  SecurityHeadersOptions,
+  RequestValidationOptions
+} from "./security/interfaces";
 
 export interface FoxFactory {
     createInstance(): void;
@@ -19,6 +32,17 @@ export interface FoxFactoryContext {
     views?: Array<any>;
     serverType?: ServerTypeCtx;
     requests?: Array<RequestMethodsContext>;
+    // Security configuration
+    security?: {
+        cors?: CorsOptions;
+        rateLimit?: RateLimitOptions;
+        csrf?: CsrfOptions;
+        jwt?: JwtOptions;
+        session?: SessionOptions;
+        rbac?: RbacOptions;
+        headers?: SecurityHeadersOptions;
+        validation?: RequestValidationOptions;
+    };
 }
 
 export interface ServerOptions {

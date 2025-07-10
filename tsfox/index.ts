@@ -56,6 +56,25 @@ export {
     batchAsync
 } from './core/errors';
 
+// Security System Exports
+export {
+    Security,
+    SecurityFactory,
+    SecurityMiddleware,
+    AuthMiddleware,
+    AuthorizationMiddleware,
+    CsrfMiddleware,
+    CorsOptions,
+    RateLimitOptions,
+    JwtOptions,
+    SessionOptions,
+    User,
+    RbacOptions,
+    CsrfOptions,
+    SecurityHeadersOptions,
+    RequestValidationOptions
+} from './core/security';
+
 const startServer = (config: ServerConfig): void => {
     const app = FoxFactory.createInstance(config)
     app.start();

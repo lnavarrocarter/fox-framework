@@ -420,3 +420,443 @@ const errorHandler = (err, req, res, next) => {
 
 app.use(errorHandler);
 ```
+
+## 🛡️ Security API
+
+Fox Framework proporciona un sistema de seguridad completo e integrado que incluye autenticación, autorización, protección CSRF, CORS, rate limiting y más.
+
+### Security Factory
+
+Factory principal para configurar y gestionar el sistema de seguridad.
+
+```typescript
+import { SecurityFactory } from 'fox-framework';
+
+// Configuración básica de seguridad
+const basicSecurity = SecurityFactory.createBasic({
+  enableCors: true,
+  enableRateLimit: true,
+  rateLimit: {
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100 // máximo 100 requests por ventana
+  }
+});
+
+// Configuración completa de seguridad
+const fullSecurity = SecurityFactory.createFull({
+  cors: {
+    origin: ['http://localhost:3000', 'https://myapp.com'],
+    credentials: true
+  },
+  rateLimit: {
+    windowMs: 15 * 60 * 1000,
+    max: 100
+  },
+  csrf: {
+    cookie: { name: '_csrf', httpOnly: true }
+  },
+  jwt: {
+    secret: 'my-secret-key',
+    expiresIn: '1h'
+  }
+});
+
+// Aplicar al servidor
+app.use(basicSecurity);
+```
+
+### CORS Middleware
+
+Configuración de Cross-Origin Resource Sharing.
+
+```typescript
+import { SecurityMiddleware } from 'fox-framework';
+
+// CORS básico
+app.use(SecurityMiddleware.cors({
+  origin: true,
+  credentials: false
+}));
+
+// CORS avanzado
+app.use(SecurityMiddleware.cors({
+  origin: (origin, callback) => {
+    const allowedOrigins = ['http://localhost:3000', 'https://myapp.com'];
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['X-Total-Count']
+}));
+```
+
+### Rate Limiting
+
+Protección contra ataques de fuerza bruta y uso excesivo.
+
+```typescript
+import { SecurityMiddleware } from 'fox-framework';
+
+// Rate limiting básico
+app.use(SecurityMiddleware.rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100, // máximo 100 requests por IP
+  message: 'Demasiadas solicitudes, intenta de nuevo más tarde'
+}));
+
+// Rate limiting avanzado
+app.use(SecurityMiddleware.rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: (req) => {
+    // Diferentes límites por tipo de usuario
+    if (req.user?.isPremium) return 1000;
+    if (req.user) return 200;
+    return 50;
+  },
+  keyGenerator: (req) => {
+    // Usar user ID si está autenticado, sino IP
+    return req.user?.id || req.ip;
+  },
+  skip: (req) => {
+    // Saltar rate limiting para admins
+    return req.user?.role === 'admin';
+  }
+}));
+```
+
+### Security Headers
+
+Configuración automática de headers de seguridad.
+
+```typescript
+import { SecurityMiddleware } from 'fox-framework';
+
+// Headers de seguridad básicos
+app.use(SecurityMiddleware.securityHeaders());
+
+// Headers personalizados
+app.use(SecurityMiddleware.securityHeaders({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.example.com"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"]
+    }
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}));
+```
+
+### Authentication Middleware
+
+Sistema de autenticación con soporte para múltiples estrategias.
+
+```typescript
+import { AuthMiddleware } from 'fox-framework';
+
+// Autenticación JWT
+app.use(AuthMiddleware.jwt({
+  secret: 'my-jwt-secret',
+  algorithms: ['HS256'],
+  audience: 'my-app',
+  issuer: 'my-app'
+}));
+
+// Autenticación básica (username/password)
+app.use(AuthMiddleware.basic({
+  validate: async (username, password) => {
+    const user = await getUserFromDatabase(username);
+    return user && await bcrypt.compare(password, user.hashedPassword) ? user : false;
+  }
+}));
+
+// Autenticación por API Key
+app.use(AuthMiddleware.apiKey({
+  header: 'X-API-Key',
+  validate: async (apiKey) => {
+    return await getApiKeyFromDatabase(apiKey);
+  }
+}));
+
+// Autenticación por sesión
+app.use(AuthMiddleware.session({
+  secret: 'session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 horas
+  }
+}));
+```
+
+### Authorization Middleware
+
+Sistema de autorización basado en roles y permisos.
+
+```typescript
+import { AuthorizationMiddleware } from 'fox-framework';
+
+// Autorización por roles
+app.get('/admin/*', AuthorizationMiddleware.requireRole(['admin', 'superuser']));
+
+// Autorización por permisos
+app.post('/posts', AuthorizationMiddleware.requirePermission('posts:create'));
+app.put('/posts/:id', AuthorizationMiddleware.requirePermission('posts:update'));
+
+// RBAC (Role-Based Access Control)
+app.use(AuthorizationMiddleware.rbac({
+  roles: {
+    admin: ['*'],
+    editor: ['posts:*', 'comments:*'],
+    user: ['posts:read', 'comments:create']
+  },
+  permissions: {
+    'posts:create': 'Crear posts',
+    'posts:read': 'Leer posts',
+    'posts:update': 'Actualizar posts',
+    'posts:delete': 'Eliminar posts'
+  }
+}));
+
+// Autorización de propiedad (ownership)
+app.put('/posts/:id', AuthorizationMiddleware.requireOwnership({
+  getResourceId: (req) => req.params.id,
+  getOwnerId: (req) => req.user.id,
+  validateOwnership: async (resourceId, ownerId) => {
+    const post = await getPostById(resourceId);
+    return post && post.authorId === ownerId;
+  }
+}));
+
+// Combinadores de autorización
+app.get('/secret', 
+  AuthorizationMiddleware.all([
+    AuthorizationMiddleware.requireRole(['admin']),
+    AuthorizationMiddleware.requirePermission('secrets:read')
+  ])
+);
+
+app.get('/content',
+  AuthorizationMiddleware.any([
+    AuthorizationMiddleware.requireRole(['admin']),
+    AuthorizationMiddleware.requirePermission('content:read')
+  ])
+);
+```
+
+### CSRF Protection
+
+Protección contra ataques Cross-Site Request Forgery.
+
+```typescript
+import { CsrfMiddleware } from 'fox-framework';
+
+// Protección CSRF básica
+app.use(CsrfMiddleware.protect());
+
+// Configuración personalizada
+app.use(CsrfMiddleware.protect({
+  cookie: {
+    name: '_csrfToken',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  },
+  headerName: 'X-CSRF-Token',
+  fieldName: '_csrf'
+}));
+
+// Establecer cookie CSRF
+app.use(CsrfMiddleware.setCookie());
+
+// En tus templates, el token estará disponible como res.locals.csrfToken
+// <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+```
+
+### Request Validation
+
+Validación automática de requests con schemas.
+
+```typescript
+import { SecurityMiddleware } from 'fox-framework';
+
+// Validación de body JSON
+app.post('/users', SecurityMiddleware.validateRequest({
+  body: {
+    type: 'object',
+    required: ['name', 'email'],
+    properties: {
+      name: { type: 'string', minLength: 2 },
+      email: { type: 'string', format: 'email' },
+      age: { type: 'number', minimum: 0, maximum: 120 }
+    }
+  }
+}));
+
+// Validación de parámetros
+app.get('/users/:id', SecurityMiddleware.validateRequest({
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'string', pattern: '^[0-9]+$' }
+    }
+  }
+}));
+
+// Validación de query strings
+app.get('/search', SecurityMiddleware.validateRequest({
+  query: {
+    type: 'object',
+    properties: {
+      q: { type: 'string', minLength: 1 },
+      page: { type: 'number', minimum: 1 },
+      limit: { type: 'number', minimum: 1, maximum: 100 }
+    }
+  }
+}));
+```
+
+### Decoradores de Seguridad
+
+Uso con decoradores para controladores de clases.
+
+```typescript
+import { AuthorizationMiddleware } from 'fox-framework';
+
+class PostController {
+  @AuthorizationMiddleware.RequireRole(['admin', 'editor'])
+  async createPost(req, res) {
+    // Crear post
+  }
+
+  @AuthorizationMiddleware.RequirePermission('posts:update')
+  async updatePost(req, res) {
+    // Actualizar post
+  }
+
+  @AuthorizationMiddleware.RequireOwnership({
+    resourcePath: 'params.id',
+    ownerPath: 'user.id'
+  })
+  async deletePost(req, res) {
+    // Eliminar post (solo el propietario)
+  }
+}
+```
+
+### Configuración Integrada
+
+Integración completa en la configuración del servidor.
+
+```typescript
+import { startServer, SecurityFactory } from 'fox-framework';
+
+startServer({
+  port: 3000,
+  env: 'production',
+  security: {
+    cors: {
+      origin: ['https://myapp.com'],
+      credentials: true
+    },
+    rateLimit: {
+      windowMs: 15 * 60 * 1000,
+      max: 100
+    },
+    csrf: {
+      cookie: { name: '_csrf', httpOnly: true }
+    },
+    jwt: {
+      secret: process.env.JWT_SECRET,
+      expiresIn: '1h'
+    },
+    rbac: {
+      roles: {
+        admin: ['*'],
+        user: ['posts:read']
+      }
+    },
+    headers: {
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"]
+        }
+      }
+    }
+  }
+});
+```
+
+## 🔒 Interfaces de Seguridad
+
+### CorsOptions
+
+```typescript
+interface CorsOptions {
+  origin?: string | string[] | boolean | ((origin: string, callback: (err: Error | null, allow?: boolean) => void) => void);
+  methods?: string[];
+  allowedHeaders?: string[];
+  exposedHeaders?: string[];
+  credentials?: boolean;
+  maxAge?: number;
+  preflightContinue?: boolean;
+  optionsSuccessStatus?: number;
+}
+```
+
+### RateLimitOptions
+
+```typescript
+interface RateLimitOptions {
+  windowMs: number;
+  max: number | ((req: Request) => number);
+  message?: string;
+  keyGenerator?: (req: Request) => string;
+  skip?: (req: Request) => boolean;
+  standardHeaders?: boolean;
+  legacyHeaders?: boolean;
+}
+```
+
+### JwtOptions
+
+```typescript
+interface JwtOptions {
+  secret: string;
+  algorithms?: string[];
+  audience?: string;
+  issuer?: string;
+  expiresIn?: string | number;
+  notBefore?: string | number;
+  ignoreExpiration?: boolean;
+  clockTolerance?: number;
+}
+```
+
+### User
+
+```typescript
+interface User {
+  id: string;
+  username?: string;
+  email?: string;
+  roles?: string[];
+  permissions?: string[];
+  isActive?: boolean;
+  isPremium?: boolean;
+  metadata?: Record<string, any>;
+}
+```
