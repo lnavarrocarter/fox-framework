@@ -6,6 +6,7 @@
 - [Server API](#server-api)
 - [Router API](#router-api)
 - [Template Engine API](#template-engine-api)
+- [Validation API](#validation-api)
 - [CLI API](#cli-api)
 - [Types & Interfaces](#types--interfaces)
 
@@ -190,6 +191,49 @@ app.render('html', '/about', (req, res) => {
     <div>{{this.name}} - {{this.price}}</div>
 {{/each}}
 ```
+
+## ✅ Validation API
+
+El sistema de validación proporciona una API fluent para validar datos de entrada y salida.
+
+### SchemaBuilder
+
+Factory principal para crear schemas de validación.
+
+```typescript
+import { SchemaBuilder } from 'tsfox/core/features/validation';
+
+// Validación de string
+const nameSchema = SchemaBuilder.string().min(2).max(50);
+
+// Validación de objeto
+const userSchema = SchemaBuilder.object({
+  name: SchemaBuilder.string().min(2),
+  email: SchemaBuilder.string().email(),
+  age: SchemaBuilder.number().min(18)
+});
+
+// Validar datos
+const result = userSchema.validate(userData);
+if (result.success) {
+  console.log('Valid:', result.data);
+} else {
+  console.log('Errors:', result.errors);
+}
+```
+
+### Validators Disponibles
+
+- **string()** - Validación de strings con métodos: min, max, email, url, regex, transform
+- **number()** - Validación de números con métodos: min, max, integer, positive
+- **object()** - Validación de objetos con shape personalizable
+- **array()** - Validación de arrays con validación de elementos
+- **boolean()** - Validación de booleanos
+- **literal()** - Validación de valores literales específicos
+- **union()** - Validación de múltiples tipos (OR)
+- **enum()** - Validación de enumeraciones
+
+Ver [documentación completa de validación](./validation.md) para detalles.
 
 ## 🔧 CLI API
 
@@ -729,134 +773,348 @@ app.get('/search', SecurityMiddleware.validateRequest({
 }));
 ```
 
-### Decoradores de Seguridad
+## 🔍 Validation System API
 
-Uso con decoradores para controladores de clases.
+### ValidationFactory
+
+Factory principal para el sistema de validación de Fox Framework.
 
 ```typescript
-import { AuthorizationMiddleware } from 'fox-framework';
+import { ValidationFactory, SchemaBuilder } from 'fox-framework';
 
-class PostController {
-  @AuthorizationMiddleware.RequireRole(['admin', 'editor'])
-  async createPost(req, res) {
-    // Crear post
-  }
+// Usar el schema builder
+const userSchema = SchemaBuilder.object({
+  name: SchemaBuilder.string().min(2).max(50),
+  email: SchemaBuilder.string().email(),
+  age: SchemaBuilder.number().min(18).optional()
+});
 
-  @AuthorizationMiddleware.RequirePermission('posts:update')
-  async updatePost(req, res) {
-    // Actualizar post
-  }
-
-  @AuthorizationMiddleware.RequireOwnership({
-    resourcePath: 'params.id',
-    ownerPath: 'user.id'
-  })
-  async deletePost(req, res) {
-    // Eliminar post (solo el propietario)
-  }
+// Validar datos
+const result = ValidationFactory.utils.safeParse(userData, userSchema);
+if (result.success) {
+  console.log('Valid data:', result.data);
+} else {
+  console.log('Validation errors:', result.errors);
 }
 ```
 
-### Configuración Integrada
+### SchemaBuilder
 
-Integración completa en la configuración del servidor.
+Constructor fluido para crear esquemas de validación.
+
+#### String Schemas
 
 ```typescript
-import { startServer, SecurityFactory } from 'fox-framework';
+const nameSchema = SchemaBuilder.string()
+  .min(2)
+  .max(50)
+  .trim()
+  .required();
 
-startServer({
-  port: 3000,
-  env: 'production',
-  security: {
-    cors: {
-      origin: ['https://myapp.com'],
-      credentials: true
-    },
-    rateLimit: {
-      windowMs: 15 * 60 * 1000,
-      max: 100
-    },
-    csrf: {
-      cookie: { name: '_csrf', httpOnly: true }
-    },
-    jwt: {
-      secret: process.env.JWT_SECRET,
-      expiresIn: '1h'
-    },
-    rbac: {
-      roles: {
-        admin: ['*'],
-        user: ['posts:read']
-      }
-    },
-    headers: {
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"]
-        }
-      }
-    }
-  }
+const emailSchema = SchemaBuilder.string()
+  .email()
+  .lowercase()
+  .required();
+
+const phoneSchema = SchemaBuilder.string()
+  .pattern(/^\+?[\d\s-()]+$/)
+  .optional();
+```
+
+#### Number Schemas
+
+```typescript
+const ageSchema = SchemaBuilder.number()
+  .min(18)
+  .max(120)
+  .integer()
+  .required();
+
+const priceSchema = SchemaBuilder.number()
+  .positive()
+  .precision(2)
+  .required();
+
+const portSchema = SchemaBuilder.number()
+  .port()
+  .default(3000);
+```
+
+#### Object Schemas
+
+```typescript
+const userSchema = SchemaBuilder.object({
+  id: SchemaBuilder.string().uuid(),
+  name: SchemaBuilder.string().min(2).max(50),
+  email: SchemaBuilder.string().email(),
+  profile: SchemaBuilder.object({
+    bio: SchemaBuilder.string().max(500).optional(),
+    avatar: SchemaBuilder.string().url().optional()
+  }).optional()
 });
 ```
 
-## 🔒 Interfaces de Seguridad
-
-### CorsOptions
+#### Array Schemas
 
 ```typescript
-interface CorsOptions {
-  origin?: string | string[] | boolean | ((origin: string, callback: (err: Error | null, allow?: boolean) => void) => void);
-  methods?: string[];
-  allowedHeaders?: string[];
-  exposedHeaders?: string[];
-  credentials?: boolean;
-  maxAge?: number;
-  preflightContinue?: boolean;
-  optionsSuccessStatus?: number;
+const tagsSchema = SchemaBuilder.array(
+  SchemaBuilder.string().min(1).max(20)
+).min(1).max(10).unique();
+
+const numbersSchema = SchemaBuilder.array(
+  SchemaBuilder.number().integer()
+).length(5);
+```
+
+### Request Validation Middleware
+
+Middleware para validar requests de Express.
+
+```typescript
+import { validateRequest, validateBody, SchemaBuilder } from 'fox-framework';
+
+const createUserSchema = SchemaBuilder.object({
+  name: SchemaBuilder.string().min(2).max(50),
+  email: SchemaBuilder.string().email(),
+  password: SchemaBuilder.string().min(8)
+});
+
+// Validar solo el body
+app.post('/users', 
+  validateBody(createUserSchema),
+  (req, res) => {
+    // req.body está validado y tipado
+    const user = req.body;
+    res.json({ success: true, user });
+  }
+);
+
+// Validar múltiples partes del request
+app.put('/users/:id',
+  validateRequest({
+    params: SchemaBuilder.object({
+      id: SchemaBuilder.string().uuid()
+    }),
+    body: updateUserSchema,
+    query: SchemaBuilder.object({
+      notify: SchemaBuilder.boolean().default(false)
+    }).optional()
+  }),
+  (req, res) => {
+    // req.params, req.body y req.query están validados
+  }
+);
+```
+
+### Response Validation Middleware
+
+Middleware para validar responses (útil en desarrollo).
+
+```typescript
+import { validateResponse, ResponseSchemas, SchemaBuilder } from 'fox-framework';
+
+const userResponseSchema = SchemaBuilder.object({
+  id: SchemaBuilder.string().uuid(),
+  name: SchemaBuilder.string(),
+  email: SchemaBuilder.string().email(),
+  createdAt: SchemaBuilder.date()
+});
+
+// Validar response específico
+app.get('/users/:id',
+  validateResponse(userResponseSchema, {
+    skipInProduction: true,
+    logErrors: true
+  }),
+  (req, res) => {
+    res.json(user); // Se valida automáticamente
+  }
+);
+
+// Validar responses por status code
+app.post('/users',
+  validateResponseByStatus({
+    201: ResponseSchemas.success(userResponseSchema),
+    400: ResponseSchemas.error(),
+    409: ResponseSchemas.error()
+  }),
+  (req, res) => {
+    // Response se valida según el status code
+  }
+);
+```
+
+### Validation Utilities
+
+```typescript
+import { ValidationFactory, SchemaBuilder } from 'fox-framework';
+
+const schema = SchemaBuilder.string().email();
+
+// Verificar si un valor es válido
+const isValid = ValidationFactory.utils.isValid('test@example.com', schema);
+
+// Parse con excepción en caso de error
+try {
+  const email = ValidationFactory.utils.parse('test@example.com', schema);
+} catch (error) {
+  // Manejo de error de validación
+}
+
+// Parse seguro que retorna resultado
+const result = ValidationFactory.utils.safeParse('invalid-email', schema);
+if (result.success) {
+  console.log('Valid email:', result.data);
+} else {
+  console.log('Validation errors:', result.errors);
 }
 ```
 
-### RateLimitOptions
+### Custom Validators
 
 ```typescript
-interface RateLimitOptions {
-  windowMs: number;
-  max: number | ((req: Request) => number);
-  message?: string;
-  keyGenerator?: (req: Request) => string;
-  skip?: (req: Request) => boolean;
-  standardHeaders?: boolean;
-  legacyHeaders?: boolean;
+import { ValidationFactory } from 'fox-framework';
+
+// Crear validador personalizado
+const uniqueEmailValidator = ValidationFactory.utils.createValidator(
+  'uniqueEmail',
+  async (email) => {
+    const exists = await User.findOne({ email });
+    return !exists;
+  },
+  'Email must be unique'
+);
+
+const userSchema = SchemaBuilder.object({
+  email: SchemaBuilder.string()
+    .email()
+    .custom(uniqueEmailValidator)
+});
+```
+
+### Advanced Usage
+
+#### Conditional Validation
+
+```typescript
+const schema = SchemaBuilder.object({
+  type: SchemaBuilder.string().oneOf(['individual', 'company']),
+  name: SchemaBuilder.string().when('type', {
+    is: 'individual',
+    then: SchemaBuilder.string().min(2).max(50),
+    otherwise: SchemaBuilder.string().min(1).max(100)
+  }),
+  taxId: SchemaBuilder.string().when('type', {
+    is: 'company',
+    then: SchemaBuilder.string().required(),
+    otherwise: SchemaBuilder.string().optional()
+  })
+});
+```
+
+#### Union Types
+
+```typescript
+const idSchema = SchemaBuilder.union(
+  SchemaBuilder.string().uuid(),
+  SchemaBuilder.number().integer().positive()
+);
+
+const responseSchema = SchemaBuilder.union(
+  SchemaBuilder.object({ success: SchemaBuilder.literal(true), data: dataSchema }),
+  SchemaBuilder.object({ success: SchemaBuilder.literal(false), error: errorSchema })
+);
+```
+
+#### Record and Tuple Types
+
+```typescript
+// Record (object with dynamic keys)
+const metadataSchema = SchemaBuilder.record(SchemaBuilder.string());
+
+// Tuple (fixed-length array)
+const coordinatesSchema = SchemaBuilder.tuple([
+  SchemaBuilder.number(), // latitude
+  SchemaBuilder.number()  // longitude
+]);
+```
+
+### Error Handling
+
+```typescript
+import { ValidationError } from 'fox-framework';
+
+try {
+  const data = ValidationFactory.utils.parse(input, schema);
+} catch (error) {
+  if (error instanceof ValidationError) {
+    // Obtener errores formateados
+    const formatted = error.getFormattedErrors();
+    
+    // Obtener errores por campo
+    const byField = error.getErrorsByField();
+    
+    // Verificar error en campo específico
+    const hasEmailError = error.hasErrorForField(['email']);
+    
+    // Serializar para respuesta JSON
+    const errorResponse = error.toJSON();
+  }
 }
 ```
 
-### JwtOptions
+### Integration with Router
 
 ```typescript
-interface JwtOptions {
-  secret: string;
-  algorithms?: string[];
-  audience?: string;
-  issuer?: string;
-  expiresIn?: string | number;
-  notBefore?: string | number;
-  ignoreExpiration?: boolean;
-  clockTolerance?: number;
+import { ValidationFactory } from 'fox-framework';
+
+class UserController {
+  @ValidationFactory.integration.validateRoute({
+    body: createUserSchema
+  })
+  async createUser(req: Request, res: Response) {
+    // req.body ya está validado
+    const user = await User.create(req.body);
+    res.status(201).json(user);
+  }
 }
 ```
 
-### User
+### TypeScript Integration
 
 ```typescript
-interface User {
-  id: string;
-  username?: string;
-  email?: string;
-  roles?: string[];
-  permissions?: string[];
-  isActive?: boolean;
-  isPremium?: boolean;
-  metadata?: Record<string, any>;
+// Inferir tipos desde esquemas
+type User = InferSchemaType<typeof userSchema>;
+
+// El tipo se infiere automáticamente
+const user: User = {
+  id: '123',
+  name: 'John Doe',
+  email: 'john@example.com'
+};
+```
+
+### Validation Types
+
+```typescript
+interface ValidationResult<T> {
+  success: boolean;
+  data?: T;
+  errors?: ValidationError[];
+}
+
+interface ValidationSchemas {
+  body?: SchemaInterface<any>;
+  query?: SchemaInterface<any>;
+  params?: SchemaInterface<any>;
+  headers?: SchemaInterface<any>;
+}
+
+interface RequestValidationOptions {
+  abortEarly?: boolean;
+  stripUnknown?: boolean;
+  allowUnknown?: boolean;
+  convert?: boolean;
+  errorHandler?: (error: ValidationError, req: Request, res: Response, next: NextFunction) => void;
 }
 ```

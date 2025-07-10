@@ -18,6 +18,8 @@ Fox Framework es un framework web modular para TypeScript/Node.js que implementa
 ├─────────────────────────────────────────────────────────────┤
 │  📦 Dependency Injection   │  🛡️  Security Middleware      │
 ├─────────────────────────────────────────────────────────────┤
+│  ✅ Validation System      │  🛡️  Enhanced Error Handling  │
+├─────────────────────────────────────────────────────────────┤
 │  💾 Cache System           │  📊 Logging & Monitoring      │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -58,6 +60,13 @@ fox-framework/
 │   │   ├── error.factory.ts      # Error handling
 │   │   ├── enums/                # Enumerations
 │   │   ├── features/             # Feature implementations
+│   │   │   ├── validation/      # Sistema de validación
+│   │   │   │   ├── interfaces/  # Contratos de validación
+│   │   │   │   ├── validators/  # Validadores específicos
+│   │   │   │   ├── schema/      # Schema builders y base
+│   │   │   │   └── errors/      # Errores de validación
+│   │   │   ├── engine.feature.ts # Template engine
+│   │   │   └── foxserver.feature.ts # Server features
 │   │   └── interfaces/           # Interface contracts
 │   ├── cli/                       # Command Line Interface
 │   │   ├── index.ts              # CLI entry point
@@ -108,6 +117,12 @@ fox-framework/
 - **Soporte**: `.fox`, `.html`, `.hbs`
 - **Features**: Variables, bucles, condicionales
 
+### Validation System
+- **Responsabilidad**: Validación de datos de entrada y salida
+- **Patrón**: Builder Pattern + Schema Validation
+- **Arquitectura**: Fluent API con validators modulares
+- **Features**: String, Number, Object, Array, Boolean, Literal, Union, Enum validators
+
 ## 📊 Métricas de Arquitectura
 
 ### Complejidad
@@ -124,7 +139,8 @@ fox-framework/
 
 ### Fase 1: Estabilización
 - [ ] Dependency injection completo
-- [ ] Error handling robusto
+- [x] Error handling robusto
+- [x] Validation system completo
 - [ ] Test coverage > 80%
 
 ### Fase 2: Features Avanzadas

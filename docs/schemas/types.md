@@ -6,6 +6,7 @@
 - [Server Configuration](#server-configuration)
 - [Request Types](#request-types)
 - [Template Types](#template-types)
+- [Validation Types](#validation-types)
 - [CLI Types](#cli-types)
 - [Error Types](#error-types)
 
@@ -368,24 +369,110 @@ interface ErrorResponse {
 }
 ```
 
-### ValidationError
+## Validation Types
 
-Error específico para validación de datos.
+Esta sección documenta los tipos utilizados en el sistema de validación de Fox Framework.
+
+### BaseValidationError
+
+Tipo base para errores de validación:
 
 ```typescript
-interface ValidationError {
-  field: string;
+interface BaseValidationError {
+  path: string;
   message: string;
+  code: string;
   value?: any;
-  constraints?: string[];
-}
-
-interface ValidationResult {
-  isValid: boolean;
-  errors: ValidationError[];
 }
 ```
 
+### ValidationResult
+
+Resultado de una operación de validación:
+
+```typescript
+type ValidationResult<T> = {
+  success: boolean;
+  data?: T;
+  errors?: BaseValidationError[];
+}
+```
+
+### SchemaType
+
+Enumeración de tipos de esquema soportados:
+
+```typescript
+enum SchemaType {
+  STRING = 'string',
+  NUMBER = 'number',
+  BOOLEAN = 'boolean',
+  OBJECT = 'object',
+  ARRAY = 'array',
+  LITERAL = 'literal',
+  UNION = 'union',
+  ENUM = 'enum',
+  ANY = 'any',
+  NEVER = 'never'
+}
+```
+
+### StringValidationRules
+
+Reglas de validación para strings:
+
+```typescript
+interface StringValidationRules {
+  minLength?: number;
+  maxLength?: number;
+  pattern?: RegExp;
+  email?: boolean;
+  url?: boolean;
+  uuid?: boolean;
+  transform?: (value: string) => string;
+  refine?: (value: string) => boolean;
+}
+```
+
+### NumberValidationRules
+
+Reglas de validación para números:
+
+```typescript
+interface NumberValidationRules {
+  min?: number;
+  max?: number;
+  integer?: boolean;
+  positive?: boolean;
+  negative?: boolean;
+  multipleOf?: number;
+}
+```
+
+### ObjectValidationRules
+
+Reglas de validación para objetos:
+
+```typescript
+interface ObjectValidationRules {
+  shape: Record<string, BaseSchema<any>>;
+  strict?: boolean;
+  passthrough?: boolean;
+}
+```
+
+### ArrayValidationRules
+
+Reglas de validación para arrays:
+
+```typescript
+interface ArrayValidationRules {
+  element: BaseSchema<any>;
+  minLength?: number;
+  maxLength?: number;
+  unique?: boolean;
+}
+```
 ## 🔍 Utility Types
 
 ### Optional

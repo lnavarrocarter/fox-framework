@@ -75,6 +75,25 @@ export {
     RequestValidationOptions
 } from './core/security';
 
+// Validation System Exports
+export {
+    ValidationFactory,
+    SchemaBuilder,
+    ValidationError,
+    validateRequest,
+    validateBody,
+    validateQuery,
+    validateParams,
+    validateHeaders,
+    validateResponse,
+    validateResponseByStatus,
+    ResponseSchemas,
+    SchemaInterface,
+    ValidationResult,
+    ValidationSchemas,
+    ResponseValidationOptions
+} from './core/features/validation';
+
 const startServer = (config: ServerConfig): void => {
     const app = FoxFactory.createInstance(config)
     app.start();
