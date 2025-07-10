@@ -42,13 +42,15 @@ export function executeActions(section: string) {
         const action = match[1];
         const result = evaluateAction(action);
         section = section.replace(match[0], result);
+        // Reset regex index after modification
+        actionRegex.lastIndex = 0;
     }
 
     return section;
 }
 
 export function evaluateAction(action: string) {
-    const functionCallRegex = /()=>\[(\w+)\]/;
+    const functionCallRegex = /\(\)=>\[(\w+)\]/;
     const match = functionCallRegex.exec(action);
 
     if (!match) {
@@ -61,12 +63,12 @@ export function evaluateAction(action: string) {
         try {
             return eval(functionName);
         } catch (error) {
-            console.error(`Error executing action function '${functionName}':`, error);
+            /* eslint-disable */console.error(`Error executing action function '${functionName}':`, error);
             return '';
         }
     }
 
-    console.error(`Action function '${functionName}' is not defined.`);
+    /* eslint-disable */console.error(`Action function '${functionName}' is not defined.`);
     return '';
 }
 

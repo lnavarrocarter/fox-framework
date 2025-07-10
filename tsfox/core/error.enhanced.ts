@@ -103,6 +103,7 @@ export abstract class FoxError extends Error {
       timestamp: string;
       requestId?: string;
       details?: any;
+      stack?: string;
     };
   } {
     return {
