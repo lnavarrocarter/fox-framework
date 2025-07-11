@@ -7,9 +7,12 @@ Un framework web moderno para TypeScript/Node.js con routing modular, motor de t
 - **🏭 Factory Pattern**: Gestión centralizada de instancias de servidor
 - **🛣️ Routing Modular**: Sistema de rutas flexible y extensible
 - **🎨 Motor de Templates**: Engine personalizado `.fox` + soporte HTML/HBS
+- **🗂️ Sistema de Cache**: Multi-provider cache (Memory, Redis, File) con TTL
+- **🔍 Sistema de Validación**: Schema builder con API tipo Zod
+- **📊 Logging Estructurado**: Sistema completo con múltiples transports
 - **⚡ CLI Potente**: Generación automática de código
 - **🔧 TypeScript First**: Tipado estricto y IntelliSense completo
-- **🧪 Testing Ready**: Configuración Jest incluida
+- **🧪 Testing Ready**: Configuración Jest incluida + 300+ tests
 - **📚 Documentación Completa**: APIs y arquitectura documentadas
 
 ## 📦 Instalación
@@ -111,6 +114,149 @@ startServer(config);
     <li>{{this.name}} - {{this.email}}</li>
   {{/each}}
 </ul>
+```
+
+## 🗂️ Sistema de Cache
+
+### Cache básico
+
+```typescript
+import { CacheFactory } from '@tsfox/core/cache';
+
+// Memory cache
+const cache = CacheFactory.create({
+  provider: 'memory',
+  maxSize: 1000
+});
+
+// Store and retrieve data
+await cache.set('user:123', { name: 'John Doe' }, 3600); // 1 hour TTL
+const user = await cache.get('user:123');
+
+// Check metrics
+const metrics = cache.getMetrics();
+console.log(`Hit ratio: ${(metrics.hitRatio * 100).toFixed(1)}%`);
+```
+
+### Cache middleware para respuestas
+
+```typescript
+import { responseCache } from '@tsfox/core/cache/middleware';
+
+app.use(responseCache({
+  ttl: 300, // 5 minutes
+  condition: (req, res) => req.method === 'GET'
+}));
+```
+
+### Multi-provider cache
+
+```typescript
+// File cache para desarrollo
+const fileCache = CacheFactory.create({
+  provider: 'file',
+  file: { directory: './cache' }
+});
+
+// Redis cache para producción
+const redisCache = CacheFactory.create({
+  provider: 'redis',
+  redis: {
+    host: 'localhost',
+    port: 6379,
+    keyPrefix: 'myapp:'
+  }
+});
+```
+
+## 🔍 Sistema de Validación
+
+### Schema builder con API tipo Zod
+
+```typescript
+import { z } from '@tsfox/core/validation';
+
+// User schema
+const UserSchema = z.object({
+  name: z.string().min(2).max(50),
+  email: z.string().email(),
+  age: z.number().min(18).max(120).optional(),
+  roles: z.array(z.string()).default(['user'])
+});
+
+// Validate data
+const result = UserSchema.safeParse({
+  name: 'John Doe',
+  email: 'john@example.com',
+  age: 30
+});
+
+if (result.success) {
+  console.log('Valid user:', result.data);
+} else {
+  console.log('Validation errors:', result.error.issues);
+}
+```
+
+### Middleware de validación
+
+```typescript
+import { validate } from '@tsfox/core/validation/middleware';
+
+app.post('/users', 
+  validate({ body: UserSchema }),
+  (req, res) => {
+    // req.body is now typed and validated
+    const user = req.body;
+    res.json({ message: 'User created', user });
+  }
+);
+```
+
+## 📊 Logging Estructurado
+
+### Logger básico
+
+```typescript
+import { createLogger } from '@tsfox/core/logging';
+
+const logger = createLogger({
+  level: 'info',
+  format: 'json',
+  transports: ['console', 'file']
+});
+
+// Structured logging
+logger.info('User logged in', { 
+  userId: 123, 
+  ip: '192.168.1.1',
+  userAgent: 'Mozilla/5.0...' 
+});
+
+logger.error('Payment failed', { 
+  userId: 123,
+  amount: 99.99,
+  error: error.message,
+  stack: error.stack 
+});
+```
+
+### Multiple transports
+
+```typescript
+const logger = createLogger({
+  level: 'debug',
+  transports: ['console', 'file', 'http'],
+  file: {
+    filename: 'logs/app.log',
+    maxSize: '10m',
+    maxFiles: 5
+  },
+  http: {
+    url: 'https://logs.example.com/api',
+    headers: { 'Authorization': 'Bearer token' }
+  }
+});
 ```
 
 ## 🔧 CLI
@@ -263,25 +409,33 @@ const getUserHandler = (req, res) => {
 ## 🎯 Roadmap
 
 ### ✅ Completado
-- [x] Factory Pattern base
-- [x] Motor de templates .fox
-- [x] CLI básico
-- [x] TypeScript support
-- [x] Testing infrastructure
+
+- [x] Factory Pattern base implementado
+- [x] Routing system con todos los métodos HTTP
+- [x] Motor de templates .fox con sintaxis completa
+- [x] CLI con generadores automáticos  
+- [x] **Sistema de Cache Multi-Provider** (Memory, Redis, File)
+- [x] **Sistema de Validación** con API tipo Zod (77 tests)
+- [x] **Logging Estructurado** con múltiples transports
+- [x] **Error Handling** robusto y tipado
+- [x] Suite de tests completa (300+ tests)
 
 ### 🔄 En Progreso
-- [ ] Sistema de cache para templates
-- [ ] Middleware de seguridad
-- [ ] Validación de datos integrada
-- [ ] Performance optimization
+
+- [ ] Security middleware (JWT, Rate limiting, CORS)
+- [ ] Performance optimization con benchmarks
+- [ ] Database abstraction layer
+- [ ] Plugin system extensible
 
 ### 📋 Planificado
-- [ ] Plugin system
+
 - [ ] Event system
-- [ ] Database abstraction
 - [ ] Microservices support
 - [ ] Docker integration
 - [ ] Cloud deployment tools
+- [ ] Monitoring y métricas avanzadas
+- [ ] WebSocket support
+- [ ] GraphQL integration
 
 ## 🤝 Contribuir
 

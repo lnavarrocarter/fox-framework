@@ -8,6 +8,7 @@ import { ILogger, LogLevel } from './interfaces';
 import { Logger } from './logger';
 import { ConsoleTransport } from './transports/console.transport';
 import { FileTransport } from './transports/file.transport';
+import { HttpTransport } from './transports/http.transport';
 import { DefaultFormatter, JsonFormatter } from './formatters';
 
 export interface LoggerConfig {
@@ -24,6 +25,15 @@ export interface LoggerConfig {
     maxSize?: number;
     maxFiles?: number;
     rotateDaily?: boolean;
+  };
+  http?: {
+    enabled?: boolean;
+    level?: LogLevel;
+    url?: string;
+    method?: 'POST' | 'PUT';
+    headers?: Record<string, string>;
+    batchSize?: number;
+    batchTimeout?: number;
   };
 }
 
@@ -56,6 +66,20 @@ export class LoggerFactory {
       ));
     }
 
+    // Add HTTP transport
+    if (config.http?.enabled && config.http.url) {
+      logger.addTransport(new HttpTransport(
+        config.http.level || config.level || LogLevel.INFO,
+        {
+          url: config.http.url,
+          method: config.http.method,
+          headers: config.http.headers,
+          batchSize: config.http.batchSize,
+          batchTimeout: config.http.batchTimeout
+        }
+      ));
+    }
+
     return logger;
   }
 
@@ -72,6 +96,13 @@ export class LoggerFactory {
         maxSize: process.env.LOG_FILE_MAX_SIZE ? parseInt(process.env.LOG_FILE_MAX_SIZE) : undefined,
         maxFiles: process.env.LOG_FILE_MAX_FILES ? parseInt(process.env.LOG_FILE_MAX_FILES) : undefined,
         rotateDaily: process.env.LOG_FILE_ROTATE_DAILY === 'true'
+      },
+      http: {
+        enabled: process.env.LOG_HTTP === 'true',
+        url: process.env.LOG_HTTP_URL,
+        method: process.env.LOG_HTTP_METHOD as 'POST' | 'PUT' || 'POST',
+        batchSize: process.env.LOG_HTTP_BATCH_SIZE ? parseInt(process.env.LOG_HTTP_BATCH_SIZE) : undefined,
+        batchTimeout: process.env.LOG_HTTP_BATCH_TIMEOUT ? parseInt(process.env.LOG_HTTP_BATCH_TIMEOUT) : undefined
       }
     };
 

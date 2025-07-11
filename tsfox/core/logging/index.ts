@@ -23,12 +23,14 @@ export { LoggerFactory, LoggerConfig } from './logger.factory';
 // Transports
 export { ConsoleTransport } from './transports/console.transport';
 export { FileTransport, FileTransportOptions } from './transports/file.transport';
+export { HttpTransport, HttpTransportOptions } from './transports/http.transport';
+export { StreamTransport } from './transports/stream.transport';
 
 // Formatters
 export { DefaultFormatter, JsonFormatter } from './formatters';
 
 // Middleware
-export { RequestLoggingMiddleware, RequestLoggingOptions } from '../middleware/request-logging.middleware';
+export { RequestLoggingMiddleware, RequestLoggingOptions } from './request-logging.middleware';
 
 // Utilities
 export { generateId, generateCorrelationId, generateShortId } from '../utils/id-generator';

@@ -9,6 +9,8 @@ export { CacheFactory } from './cache.factory';
 
 // Providers
 export { MemoryCacheProvider } from './providers/memory.provider';
+export { RedisCacheProvider } from './providers/redis.provider';
+export { FileCacheProvider } from './providers/file.provider';
 
 // Middleware
 export { 

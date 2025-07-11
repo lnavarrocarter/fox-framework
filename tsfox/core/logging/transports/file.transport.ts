@@ -48,7 +48,14 @@ export class FileTransport implements ITransport {
       this.writeQueue = [];
 
       const content = entries
-        .map(entry => JSON.stringify(entry))
+        .map(entry => {
+          // Convert LogLevel enum to string for file storage
+          const entryForFile = {
+            ...entry,
+            level: typeof entry.level === 'number' ? LogLevel[entry.level] : entry.level
+          };
+          return JSON.stringify(entryForFile);
+        })
         .join('\n') + '\n';
 
       await this.writeToFile(content);

@@ -1,5 +1,5 @@
 /**
- * @fileoverview Default formatter for Fox Framework logging
+ * @fileoverview Formatters for Fox Framework logging
  * @version 1.0.0
  * @since 2025-01-10
  */

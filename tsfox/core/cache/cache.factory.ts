@@ -5,6 +5,8 @@
 
 import { Cache } from './cache';
 import { MemoryCacheProvider } from './providers/memory.provider';
+import { RedisCacheProvider } from './providers/redis.provider';
+import { FileCacheProvider } from './providers/file.provider';
 import { 
   ICache, 
   ICacheProvider, 
@@ -148,11 +150,17 @@ export class CacheFactory {
         provider = new MemoryCacheProvider(config.memory);
         break;
       case 'redis':
-        // TODO: Implement Redis provider
-        throw new Error('Redis cache provider not yet implemented');
+        if (!config.redis) {
+          throw new Error('Redis configuration is required for Redis provider');
+        }
+        provider = new RedisCacheProvider(config.redis);
+        break;
       case 'file':
-        // TODO: Implement File provider
-        throw new Error('File cache provider not yet implemented');
+        if (!config.file) {
+          throw new Error('File configuration is required for File provider');
+        }
+        provider = new FileCacheProvider(config.file);
+        break;
       default:
         throw new Error(`Unsupported cache provider: ${config.provider}`);
     }
@@ -174,11 +182,17 @@ export class CacheFactory {
         provider = new MemoryCacheProvider(config.memory);
         break;
       case 'redis':
-        // TODO: Implement Redis provider
-        throw new Error('Redis cache provider not yet implemented');
+        if (!config.redis) {
+          throw new Error('Redis configuration is required for Redis provider');
+        }
+        provider = new RedisCacheProvider(config.redis);
+        break;
       case 'file':
-        // TODO: Implement File provider
-        throw new Error('File cache provider not yet implemented');
+        if (!config.file) {
+          throw new Error('File configuration is required for File provider');
+        }
+        provider = new FileCacheProvider(config.file);
+        break;
       default:
         throw new Error(`Unsupported cache provider: ${config.provider}`);
     }
