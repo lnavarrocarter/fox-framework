@@ -19,9 +19,9 @@
 
 ### Fase 2: Core Improvements (2-3 semanas)
 - [05-cache-system.md](./05-cache-system.md) - ✅ COMPLETADO
-- [06-security-middleware.md](./06-security-middleware.md) - 🔴 Crítico
+- [06-security-middleware.md](./06-security-middleware.md) - ✅ COMPLETADO Y CERRADO
 - [07-validation-system.md](./07-validation-system.md) - ✅ COMPLETADO
-- [08-performance-optimization.md](./08-performance-optimization.md) - 🟡 Importante
+- [08-performance-optimization.md](./08-performance-optimization.md) - � EN PROGRESO
 
 ### Fase 3: Features Avanzadas (3-4 semanas)
 - [09-plugin-system.md](./09-plugin-system.md) - 🟢 Enhancement
@@ -71,6 +71,14 @@
 - [ ] Cloud deployment automático
 
 ## 🔄 Proceso de Desarrollo
+
+### 🚨 REGLA FUNDAMENTAL: CIERRE DE TICKETS
+**OBLIGATORIO**: Antes de tomar un nuevo ticket, el anterior debe estar **COMPLETAMENTE CERRADO**:
+- ✅ Implementación finalizada
+- ✅ Tests pasando 
+- ✅ Documentación actualizada
+- ✅ Lessons learned registradas
+- ✅ Estado marcado como "COMPLETADO Y CERRADO"
 
 ### Para cada tarea:
 1. **📖 Leer** documentación de arquitectura
