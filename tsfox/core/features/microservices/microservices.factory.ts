@@ -199,10 +199,22 @@ export class MicroservicesFactory {
     serviceName: string, 
     request: import('./interfaces').ServiceRequest
   ): Promise<import('./interfaces').ServiceResponse> {
+    const registry = this.getServiceRegistry();
     const loadBalancer = this.getLoadBalancer();
     const circuitBreaker = this.getCircuitBreaker();
 
     return await circuitBreaker.execute(async () => {
+      // Primero descubrir los servicios disponibles
+      const services = await registry.discover(serviceName);
+      
+      if (services.length === 0) {
+        throw new Error(`No services found for ${serviceName}`);
+      }
+
+      // Actualizar el load balancer con los servicios descubiertos
+      loadBalancer.updateServices(serviceName, services);
+      
+      // Seleccionar un servicio usando load balancing
       const service = await loadBalancer.selectService(serviceName);
       
       // Aquí iría la lógica de HTTP client

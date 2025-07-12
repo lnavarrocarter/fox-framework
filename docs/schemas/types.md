@@ -7,6 +7,7 @@
 - [Request Types](#request-types)
 - [Template Types](#template-types)
 - [Validation Types](#validation-types)
+- [Microservices Types](#microservices-types)
 - [CLI Types](#cli-types)
 - [Error Types](#error-types)
 
@@ -575,6 +576,275 @@ const completeConfig: ServerConfig = {
 };
 ```
 
+## 🔄 Microservices Types
+
+### MicroservicesConfig
+
+Configuración principal para el sistema de microservicios.
+
+```typescript
+interface MicroservicesConfig {
+  serviceName: string;              // Nombre del servicio
+  version: string;                  // Versión del servicio
+  registry: RegistryConfig;         // Configuración del service registry
+  loadBalancer: LoadBalancerConfig; // Configuración del load balancer
+  circuitBreaker: CircuitBreakerConfig; // Configuración del circuit breaker
+  serviceMesh: ServiceMeshConfig;   // Configuración del service mesh
+}
+```
+
+### ServiceInfo
+
+Información de un servicio registrado.
+
+```typescript
+interface ServiceInfo {
+  id: string;                       // ID único del servicio
+  name: string;                     // Nombre del servicio
+  version: string;                  // Versión del servicio
+  address: string;                  // Dirección IP/hostname
+  port: number;                     // Puerto del servicio
+  protocol: 'http' | 'https' | 'grpc'; // Protocolo de comunicación
+  health?: ServiceHealth;           // Estado de salud
+  metadata?: Record<string, any>;   // Metadatos adicionales
+  weight?: number;                  // Peso para load balancing
+  tags?: string[];                  // Tags para filtrado
+}
+```
+
+### ServiceRequest
+
+Request para comunicación entre servicios.
+
+```typescript
+interface ServiceRequest {
+  service: string;                  // Nombre del servicio destino
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'; // Método HTTP
+  path: string;                     // Path del endpoint
+  headers?: Record<string, string>; // Headers HTTP
+  body?: any;                       // Cuerpo de la request
+  timeout?: number;                 // Timeout en milisegundos
+}
+```
+
+### ServiceResponse
+
+Response de comunicación entre servicios.
+
+```typescript
+interface ServiceResponse {
+  statusCode: number;               // Código de estado HTTP
+  headers: Record<string, string>;  // Headers de respuesta
+  body: any;                        // Cuerpo de la respuesta
+  metadata: {
+    serviceId: string;              // ID del servicio que respondió
+    responseTime: number;           // Tiempo de respuesta en ms
+    timestamp: Date;                // Timestamp de la respuesta
+  };
+}
+```
+
+### RegistryConfig
+
+Configuración para el service registry.
+
+```typescript
+interface RegistryConfig {
+  type: 'memory' | 'consul' | 'etcd'; // Tipo de registry
+  connection?: {
+    host?: string;                  // Host del registry
+    port?: number;                  // Puerto del registry
+    username?: string;              // Usuario para autenticación
+    password?: string;              // Contraseña para autenticación
+  };
+  healthCheck?: {
+    enabled: boolean;               // Habilitar health checks
+    interval: number;               // Intervalo entre checks (ms)
+    timeout: number;                // Timeout por check (ms)
+    retries: number;                // Número de reintentos
+  };
+}
+```
+
+### LoadBalancerConfig
+
+Configuración para el load balancer.
+
+```typescript
+interface LoadBalancerConfig {
+  algorithm: 'round-robin' | 'weighted' | 'least-connections' | 
+             'random' | 'ip-hash' | 'health-based'; // Algoritmo de balanceo
+  healthCheck: boolean;             // Considerar health en balanceo
+  retries: number;                  // Número de reintentos
+  retryDelayMs: number;            // Delay entre reintentos
+  sticky?: boolean;                 // Sesiones pegajosas
+}
+```
+
+### CircuitBreakerConfig
+
+Configuración para el circuit breaker.
+
+```typescript
+interface CircuitBreakerConfig {
+  failureThreshold: number;         // Fallos antes de abrir
+  recoveryTimeout: number;          // Tiempo antes de half-open (ms)
+  monitoringPeriod: number;         // Ventana de monitoreo (ms)
+  expectedExceptions: string[];     // Excepciones esperadas (no cuentan)
+}
+```
+
+### ServiceMeshConfig
+
+Configuración para el service mesh.
+
+```typescript
+interface ServiceMeshConfig {
+  security: {
+    tlsEnabled: boolean;            // Habilitar TLS
+    mtlsEnabled: boolean;           // Habilitar mTLS
+    certificatePath: string;        // Path a certificados
+    allowedServices?: string[];     // Servicios permitidos
+  };
+  policies: {
+    retryPolicy: {
+      maxRetries: number;           // Máximo número de reintentos
+      backoffMs: number;            // Backoff entre reintentos
+    };
+    timeoutPolicy: {
+      requestTimeoutMs: number;     // Timeout de request
+    };
+    rateLimitPolicy?: {
+      requestsPerMinute: number;    // Límite de requests por minuto
+    };
+  };
+}
+```
+
+### ServiceHealth
+
+Estado de salud de un servicio.
+
+```typescript
+interface ServiceHealth {
+  status: 'healthy' | 'unhealthy' | 'warning'; // Estado de salud
+  lastCheck: Date;                  // Último check de salud
+  checks: HealthCheck[];            // Detalles de checks
+  metadata?: Record<string, any>;   // Metadatos de salud
+}
+
+interface HealthCheck {
+  type: 'connectivity' | 'endpoint' | 'response-time'; // Tipo de check
+  status: 'pass' | 'fail' | 'warn'; // Resultado del check
+  responseTime?: number;            // Tiempo de respuesta
+  message?: string;                 // Mensaje descriptivo
+  timestamp: Date;                  // Timestamp del check
+}
+```
+
+### Circuit Breaker States
+
+Estados del circuit breaker.
+
+```typescript
+type CircuitBreakerState = 'closed' | 'open' | 'half-open';
+
+interface CircuitBreakerMetrics {
+  state: CircuitBreakerState;       // Estado actual
+  successCount: number;             // Número de éxitos
+  failureCount: number;             // Número de fallos
+  successRate: number;              // Tasa de éxito (0-100)
+  lastFailureTime?: Date;           // Último fallo registrado
+  nextAttemptTime?: Date;           // Próximo intento permitido
+}
+```
+
+### Load Balancer Metrics
+
+Métricas del load balancer.
+
+```typescript
+interface LoadBalancerMetrics {
+  totalRequests: number;            // Total de requests
+  successfulRequests: number;       // Requests exitosos
+  failedRequests: number;           // Requests fallidos
+  averageResponseTime: number;      // Tiempo promedio de respuesta
+  serviceDistribution: Record<string, number>; // Distribución por servicio
+}
+```
+
+**Ejemplo de uso completo:**
+
+```typescript
+import { MicroservicesFactory, createMicroservicesConfig } from 'fox-framework';
+import type { MicroservicesConfig, ServiceInfo, ServiceRequest } from 'fox-framework';
+
+const config: MicroservicesConfig = createMicroservicesConfig({
+  serviceName: 'user-service',
+  version: '1.0.0',
+  registry: {
+    type: 'consul',
+    connection: {
+      host: 'localhost',
+      port: 8500
+    },
+    healthCheck: {
+      enabled: true,
+      interval: 30000,
+      timeout: 5000,
+      retries: 3
+    }
+  },
+  loadBalancer: {
+    algorithm: 'least-connections',
+    healthCheck: true,
+    retries: 3,
+    retryDelayMs: 1000
+  },
+  circuitBreaker: {
+    failureThreshold: 5,
+    recoveryTimeout: 60000,
+    monitoringPeriod: 10000,
+    expectedExceptions: ['ValidationError']
+  }
+});
+
+const factory = MicroservicesFactory.create(config);
+
+// Registro de servicio
+const serviceInfo: Partial<ServiceInfo> = {
+  name: 'user-service',
+  version: '1.0.0',
+  address: 'localhost',
+  port: 3000,
+  protocol: 'http',
+  metadata: {
+    description: 'User management service',
+    team: 'backend'
+  }
+};
+
+await factory.registerService(serviceInfo);
+
+// Llamada a servicio
+const request: ServiceRequest = {
+  service: 'payment-service',
+  method: 'POST',
+  path: '/api/payments',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer token123'
+  },
+  body: {
+    amount: 100,
+    currency: 'USD'
+  },
+  timeout: 5000
+};
+
+const response = await factory.callService('payment-service', request);
+```
+
 ## 🏷️ Type Guards
 
 ### Server Type Guards
@@ -606,10 +876,11 @@ function isValidRoute(route: any): route is Route {
 - Basic server configuration
 - Core interfaces
 
-### v1.1.0 (Planned)
+### v1.1.0 (Completed)
 - Enhanced error types
 - Plugin system types
 - Database abstraction types
+- **Microservices types and interfaces**
 
 ### v1.2.0 (Planned)
 - Event system types

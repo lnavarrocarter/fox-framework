@@ -12,6 +12,7 @@ Un framework web moderno para TypeScript/Node.js con routing modular, motor de t
 - **📊 Logging Estructurado**: Sistema completo con múltiples transports
 - **🎯 Event System**: Event sourcing, CQRS y sistema pub/sub distribuido
 - **🗄️ Database Abstraction**: Multi-provider DB layer (PostgreSQL, MySQL, SQLite, MongoDB, Redis)
+- **🔄 Microservices Support**: Service registry, load balancer, circuit breaker y service mesh
 - **⚡ CLI Potente**: Generación automática de código
 - **🔧 TypeScript First**: Tipado estricto y IntelliSense completo
 - **🧪 Testing Ready**: Configuración Jest incluida + 400+ tests
@@ -341,6 +342,90 @@ const db = createDatabase({
 const poolInfo = await db.getPoolInfo();
 console.log(`Active connections: ${poolInfo.activeConnections}`);
 ```
+
+## 🔄 Microservices Support
+
+Fox Framework incluye un sistema completo para construir y gestionar arquitecturas de microservicios.
+
+### Setup básico de microservicios
+
+```typescript
+import { MicroservicesFactory, createMicroservicesConfig } from 'fox-framework';
+
+const config = createMicroservicesConfig({
+  serviceName: 'user-service',
+  version: '1.0.0',
+  registry: { type: 'memory' },
+  loadBalancer: { algorithm: 'round-robin' },
+  circuitBreaker: { failureThreshold: 5 }
+});
+
+const factory = MicroservicesFactory.create(config);
+await factory.initialize();
+
+// Registrar este servicio
+await factory.registerService({
+  name: 'user-service',
+  version: '1.0.0',
+  address: 'localhost',
+  port: 3000,
+  protocol: 'http'
+});
+```
+
+### Comunicación entre servicios
+
+```typescript
+// Llamar a otro servicio con protección de circuit breaker
+const response = await factory.callService('payment-service', {
+  service: 'payment-service',
+  method: 'POST',
+  path: '/api/payments',
+  headers: { 'Content-Type': 'application/json' },
+  body: { amount: 100, currency: 'USD' }
+});
+
+console.log('Payment response:', response.body);
+```
+
+### Configuración para producción
+
+```typescript
+const prodConfig = createMicroservicesConfig({
+  serviceName: process.env.SERVICE_NAME,
+  version: process.env.SERVICE_VERSION,
+  registry: {
+    type: 'consul',
+    connection: {
+      host: 'consul.company.com',
+      port: 8500
+    }
+  },
+  loadBalancer: {
+    algorithm: 'least-connections',
+    healthCheck: true,
+    retries: 3
+  },
+  circuitBreaker: {
+    failureThreshold: 10,
+    recoveryTimeout: 60000
+  },
+  serviceMesh: {
+    security: {
+      tlsEnabled: true,
+      mtlsEnabled: true,
+      certificatePath: '/etc/ssl/certs'
+    }
+  }
+});
+```
+
+**Características incluidas:**
+- **Service Registry**: Memory, Consul, etcd adapters
+- **Load Balancer**: 6 algoritmos (round-robin, weighted, least-connections, etc.)
+- **Circuit Breaker**: Protección contra fallos en cascada
+- **Service Mesh**: Comunicación segura con TLS/mTLS
+- **Health Monitoring**: Chequeos automáticos de salud
 
 ## 🔍 Sistema de Validación
 

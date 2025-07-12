@@ -11,6 +11,7 @@
 - [Logging API](#logging-api)
 - [Event System API](#event-system-api)
 - [Database Abstraction API](#database-abstraction-api)
+- [Microservices API](#microservices-api)
 - [CLI API](#cli-api)
 - [Types & Interfaces](#types--interfaces)
 
@@ -838,4 +839,64 @@ const poolInfo = await db.getPoolInfo();
 console.log(`Active: ${poolInfo.activeConnections}`);
 ```
 
-## 🔧 CLI API
+## � Microservices API
+
+El sistema de microservicios de Fox Framework proporciona una arquitectura completa para aplicaciones distribuidas.
+
+### MicroservicesFactory.create(config: MicroservicesConfig): MicroservicesFactory
+
+Crea una instancia de factory para microservicios.
+
+```typescript
+import { MicroservicesFactory, createMicroservicesConfig } from 'fox-framework';
+
+const config = createMicroservicesConfig({
+  serviceName: 'user-service',
+  version: '1.0.0',
+  registry: { type: 'memory' },
+  loadBalancer: { algorithm: 'round-robin' },
+  circuitBreaker: { failureThreshold: 5 }
+});
+
+const factory = MicroservicesFactory.create(config);
+await factory.initialize();
+```
+
+### factory.registerService(serviceInfo: Partial<ServiceInfo>): Promise<void>
+
+Registra un servicio en el registry.
+
+```typescript
+await factory.registerService({
+  name: 'user-service',
+  version: '1.0.0',
+  address: 'localhost',
+  port: 3000,
+  protocol: 'http'
+});
+```
+
+### factory.callService(serviceName: string, request: ServiceRequest): Promise<ServiceResponse>
+
+Realiza llamadas entre servicios con protección.
+
+```typescript
+const response = await factory.callService('payment-service', {
+  service: 'payment-service',
+  method: 'POST',
+  path: '/api/payments',
+  headers: { 'Content-Type': 'application/json' },
+  body: { amount: 100, currency: 'USD' }
+});
+```
+
+**Características:**
+- Service Registry con múltiples adapters (Memory, Consul, etcd)
+- Load Balancer con 6 algoritmos de balanceo
+- Circuit Breaker para protección contra fallos
+- Service Mesh para comunicación segura
+- Health Monitoring automático
+
+📖 **Documentación completa**: [Microservices API](./microservices.md)
+
+## �🔧 CLI API
