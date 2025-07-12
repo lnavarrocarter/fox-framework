@@ -111,6 +111,20 @@ export type {
     CacheCondition
 } from './cache/interfaces';
 
+// Microservices types
+export type { 
+  MicroservicesConfig,
+  ServiceInfo,
+  HealthStatus,
+  LoadBalancingAlgorithm,
+  CircuitBreakerConfig,
+  ServiceRegistryInterface,
+  LoadBalancerInterface,
+  CircuitBreakerInterface,
+  APIGatewayInterface,
+  ServiceMeshInterface
+} from './features/microservices/interfaces';
+
 export class HttpError extends Error {
     constructor(public status: number, message: string) {
         super(message);
