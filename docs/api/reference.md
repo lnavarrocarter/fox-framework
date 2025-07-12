@@ -9,6 +9,8 @@
 - [Cache System API](#cache-system-api)
 - [Validation API](#validation-api)
 - [Logging API](#logging-api)
+- [Event System API](#event-system-api)
+- [Database Abstraction API](#database-abstraction-api)
 - [CLI API](#cli-api)
 - [Types & Interfaces](#types--interfaces)
 
@@ -546,3 +548,294 @@ Envío a servicio remoto.
   }
 }
 ```
+
+## 🎯 Event System API
+
+### EventSystemFactory
+
+#### createMemorySystem(): EventSystemInterface
+
+Crea un sistema de eventos en memoria para desarrollo y testing.
+
+```typescript
+import { EventSystemFactory } from 'fox-framework';
+
+const eventSystem = EventSystemFactory.createMemorySystem();
+```
+
+#### createFromConfig(config: EventConfig): EventSystemInterface
+
+Crea un sistema de eventos desde configuración completa.
+
+```typescript
+const eventSystem = EventSystemFactory.createFromConfig({
+  store: {
+    type: 'memory'
+  },
+  bus: {
+    adapter: 'redis',
+    connection: {
+      host: 'localhost',
+      port: 6379
+    }
+  }
+});
+```
+
+### EventSystem
+
+#### emit(event: EventInterface): Promise<void>
+
+Emite un evento a través del pipeline completo.
+
+```typescript
+const event: EventInterface = {
+  id: 'evt_001',
+  type: 'user.created',
+  aggregateId: 'user_123',
+  data: { name: 'John', email: 'john@example.com' },
+  metadata: { source: 'user-service' },
+  timestamp: new Date()
+};
+
+await eventSystem.emit(event);
+```
+
+#### on(eventType: string, handler: EventHandler): void
+
+Registra un manejador de eventos local.
+
+```typescript
+eventSystem.on('user.created', async (event) => {
+  console.log(`User created: ${event.data.name}`);
+});
+```
+
+#### subscribe(eventType: string, handler: EventHandler, options?: SubscriptionOptions): Promise<Subscription>
+
+Suscribe a eventos desde el bus distribuido.
+
+```typescript
+const subscription = await eventSystem.subscribe(
+  'user.created',
+  async (event) => {
+    // Handle distributed event
+  },
+  { durable: true, ackTimeout: 5000 }
+);
+```
+
+#### replay(streamId: string, fromVersion?: number): Promise<void>
+
+Reproduce eventos desde un stream para rebuilding de estado.
+
+```typescript
+await eventSystem.replay('user_123', 1);
+```
+
+### EventStore
+
+#### append(streamId: string, events: EventInterface[], expectedVersion?: number): Promise<void>
+
+Agrega eventos a un stream.
+
+```typescript
+const store = eventSystem.getStore();
+await store.append('user_123', [event], 0);
+```
+
+#### read(streamId: string, fromVersion?: number, maxCount?: number): Promise<EventInterface[]>
+
+Lee eventos desde un stream.
+
+```typescript
+const events = await store.read('user_123', 0, 10);
+```
+
+### EventBus
+
+#### publish(event: EventInterface): Promise<void>
+
+Publica un evento al bus distribuido.
+
+```typescript
+const bus = eventSystem.getBus();
+await bus.publish(event);
+```
+
+## 🗄️ Database Abstraction API
+
+### DatabaseFactory
+
+#### create(config: DatabaseConfig): FoxDatabase
+
+Crea una nueva instancia de base de datos.
+
+```typescript
+import { DatabaseFactory } from 'fox-framework';
+
+const db = DatabaseFactory.create({
+  provider: 'postgresql',
+  connection: {
+    host: 'localhost',
+    port: 5432,
+    database: 'myapp',
+    username: 'user',
+    password: 'pass'
+  }
+});
+```
+
+### createDatabase(config: DatabaseConfig): FoxDatabase
+
+Helper para creación rápida de database.
+
+```typescript
+import { createDatabase } from 'fox-framework';
+
+const db = createDatabase({
+  provider: 'sqlite',
+  connection: { filename: './db.sqlite' }
+});
+```
+
+### FoxDatabase
+
+#### connect(): Promise<void>
+
+Establece conexión con la base de datos.
+
+```typescript
+await db.connect();
+```
+
+#### disconnect(): Promise<void>
+
+Cierra todas las conexiones.
+
+```typescript
+await db.disconnect();
+```
+
+#### getBuilder(): QueryBuilderInterface
+
+Obtiene una instancia del query builder.
+
+```typescript
+const users = await db
+  .getBuilder()
+  .select(['id', 'name', 'email'])
+  .from('users')
+  .where({ active: true })
+  .execute();
+```
+
+#### transaction<T>(callback: (tx: TransactionInterface) => Promise<T>): Promise<T>
+
+Ejecuta operaciones dentro de una transacción.
+
+```typescript
+await db.transaction(async (tx) => {
+  await tx.query('INSERT INTO users (name) VALUES (?)', ['John']);
+  await tx.query('INSERT INTO profiles (user_id) VALUES (?)', [userId]);
+});
+```
+
+### QueryBuilder (SQL)
+
+#### select(columns: string[]): QueryBuilderInterface
+
+Especifica las columnas a seleccionar.
+
+```typescript
+const query = db.getBuilder().select(['id', 'name', 'email']);
+```
+
+#### from(table: string, alias?: string): QueryBuilderInterface
+
+Especifica la tabla base.
+
+```typescript
+const query = db.getBuilder().from('users', 'u');
+```
+
+#### where(conditions: Record<string, any>): QueryBuilderInterface
+
+Agrega condiciones WHERE.
+
+```typescript
+const query = db.getBuilder().where({ active: true, role: 'admin' });
+```
+
+#### join(table: string, alias: string, condition: string): QueryBuilderInterface
+
+Agrega un JOIN.
+
+```typescript
+const query = db.getBuilder()
+  .from('users', 'u')
+  .join('profiles', 'p', 'u.id = p.user_id');
+```
+
+#### orderBy(column: string, direction?: 'ASC' | 'DESC'): QueryBuilderInterface
+
+Agrega ordenamiento.
+
+```typescript
+const query = db.getBuilder().orderBy('created_at', 'DESC');
+```
+
+#### limit(count: number): QueryBuilderInterface
+
+Limita el número de resultados.
+
+```typescript
+const query = db.getBuilder().limit(10);
+```
+
+#### execute<T>(): Promise<T[]>
+
+Ejecuta la query y retorna resultados.
+
+```typescript
+const users = await query.execute<User>();
+```
+
+### QueryBuilder (NoSQL)
+
+#### collection(name: string): QueryBuilderInterface
+
+Especifica la colección (MongoDB).
+
+```typescript
+const query = mongoDb.getBuilder().collection('users');
+```
+
+#### find(filter: Record<string, any>): QueryBuilderInterface
+
+Agrega filtros de búsqueda.
+
+```typescript
+const query = mongoDb.getBuilder().find({ status: 'active' });
+```
+
+#### sort(fields: Record<string, 1 | -1>): QueryBuilderInterface
+
+Agrega ordenamiento.
+
+```typescript
+const query = mongoDb.getBuilder().sort({ createdAt: -1 });
+```
+
+### Connection Pool
+
+#### getPoolInfo(): Promise<PoolInfo>
+
+Obtiene información del pool de conexiones.
+
+```typescript
+const poolInfo = await db.getPoolInfo();
+console.log(`Active: ${poolInfo.activeConnections}`);
+```
+
+## 🔧 CLI API

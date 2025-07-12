@@ -10,9 +10,11 @@ Un framework web moderno para TypeScript/Node.js con routing modular, motor de t
 - **🗂️ Sistema de Cache**: Multi-provider cache (Memory, Redis, File) con TTL
 - **🔍 Sistema de Validación**: Schema builder con API tipo Zod
 - **📊 Logging Estructurado**: Sistema completo con múltiples transports
+- **🎯 Event System**: Event sourcing, CQRS y sistema pub/sub distribuido
+- **🗄️ Database Abstraction**: Multi-provider DB layer (PostgreSQL, MySQL, SQLite, MongoDB, Redis)
 - **⚡ CLI Potente**: Generación automática de código
 - **🔧 TypeScript First**: Tipado estricto y IntelliSense completo
-- **🧪 Testing Ready**: Configuración Jest incluida + 300+ tests
+- **🧪 Testing Ready**: Configuración Jest incluida + 400+ tests
 - **📚 Documentación Completa**: APIs y arquitectura documentadas
 
 ## 📦 Instalación
@@ -167,6 +169,177 @@ const redisCache = CacheFactory.create({
     keyPrefix: 'myapp:'
   }
 });
+```
+
+## 🎯 Event System
+
+### Event sourcing y CQRS
+
+```typescript
+import { EventSystemFactory, EventInterface } from 'fox-framework';
+
+// Create event system
+const eventSystem = EventSystemFactory.createMemorySystem();
+
+// Define events
+const userCreatedEvent: EventInterface = {
+  id: 'evt_001',
+  type: 'user.created',
+  aggregateId: 'user_123',
+  data: {
+    name: 'John Doe',
+    email: 'john@example.com'
+  },
+  metadata: {
+    source: 'user-service',
+    correlationId: 'req_001'
+  },
+  timestamp: new Date()
+};
+
+// Event handlers
+eventSystem.on('user.created', async (event) => {
+  console.log(`User created: ${event.data.name}`);
+  // Send welcome email, update projections, etc.
+});
+
+// Emit events
+await eventSystem.emit(userCreatedEvent);
+```
+
+### Event Store y Replay
+
+```typescript
+// Store events for event sourcing
+const store = eventSystem.getStore();
+await store.append('user_123', [userCreatedEvent]);
+
+// Read events from stream
+const events = await store.read('user_123');
+
+// Replay events for rebuilding state
+await eventSystem.replay('user_123');
+```
+
+### Distributed Event Bus
+
+```typescript
+// Subscribe to distributed events
+const subscription = await eventSystem.subscribe(
+  'user.created',
+  async (event) => {
+    // Handle distributed event
+  },
+  { durable: true, ackTimeout: 5000 }
+);
+
+// Publish to external systems
+const bus = eventSystem.getBus();
+await bus.publish(userCreatedEvent);
+```
+
+## 🗄️ Database Abstraction
+
+### Multi-Provider Database Support
+
+```typescript
+import { DatabaseFactory, createDatabase } from 'fox-framework';
+
+// PostgreSQL
+const pgDb = createDatabase({
+  provider: 'postgresql',
+  connection: {
+    host: 'localhost',
+    port: 5432,
+    database: 'myapp',
+    username: 'user',
+    password: 'pass'
+  }
+});
+
+// MongoDB  
+const mongoDb = createDatabase({
+  provider: 'mongodb',
+  connection: {
+    url: 'mongodb://localhost:27017/myapp'
+  }
+});
+
+// SQLite for development
+const sqliteDb = createDatabase({
+  provider: 'sqlite',
+  connection: {
+    filename: './database.sqlite'
+  }
+});
+```
+
+### Query Builder
+
+```typescript
+// SQL Query Builder
+const users = await db
+  .getBuilder()
+  .select(['id', 'name', 'email'])
+  .from('users')
+  .where({ active: true })
+  .orderBy('created_at', 'DESC')
+  .limit(10)
+  .execute();
+
+// Complex queries with JOINs
+const userPosts = await db
+  .getBuilder()
+  .select(['u.name', 'p.title', 'p.created_at'])
+  .from('users', 'u')
+  .join('posts', 'p', 'u.id = p.user_id')
+  .where('u.active', '=', true)
+  .andWhere('p.published', '=', true)
+  .execute();
+
+// NoSQL Query Builder (MongoDB)
+const docs = await mongoDb
+  .getBuilder()
+  .collection('users')
+  .find({ status: 'active' })
+  .sort({ createdAt: -1 })
+  .limit(10)
+  .execute();
+```
+
+### Transactions
+
+```typescript
+// ACID transactions
+await db.transaction(async (tx) => {
+  // All operations within this block are transactional
+  await tx.query('INSERT INTO users (name, email) VALUES (?, ?)', ['John', 'john@example.com']);
+  await tx.query('INSERT INTO profiles (user_id, bio) VALUES (?, ?)', [userId, 'Developer']);
+  
+  // If any operation fails, entire transaction is rolled back
+});
+```
+
+### Connection Pooling
+
+```typescript
+const db = createDatabase({
+  provider: 'postgresql',
+  connection: {
+    host: 'localhost',
+    database: 'myapp'
+  },
+  pool: {
+    min: 2,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    acquireTimeoutMillis: 60000
+  }
+});
+
+// Monitor pool health
+const poolInfo = await db.getPoolInfo();
+console.log(`Active connections: ${poolInfo.activeConnections}`);
 ```
 
 ## 🔍 Sistema de Validación
@@ -418,18 +591,19 @@ const getUserHandler = (req, res) => {
 - [x] **Sistema de Validación** con API tipo Zod (77 tests)
 - [x] **Logging Estructurado** con múltiples transports
 - [x] **Error Handling** robusto y tipado
-- [x] Suite de tests completa (300+ tests)
+- [x] **Event System** completo con Event Sourcing, CQRS y Pub/Sub distribuido
+- [x] **Database Abstraction** Multi-Provider (PostgreSQL, MySQL, SQLite, MongoDB, Redis)
+- [x] Suite de tests completa (400+ tests)
 
 ### 🔄 En Progreso
 
 - [ ] Security middleware (JWT, Rate limiting, CORS)
 - [ ] Performance optimization con benchmarks
-- [ ] Database abstraction layer
 - [ ] Plugin system extensible
 
 ### 📋 Planificado
 
-- [ ] Event system
+- [ ] CLI improvements avanzados
 - [ ] Microservices support
 - [ ] Docker integration
 - [ ] Cloud deployment tools
@@ -468,7 +642,7 @@ Este proyecto está bajo la Licencia ISC - ver el archivo [LICENSE](LICENSE) par
 
 - **Issues**: [GitHub Issues](https://github.com/tu-usuario/fox-framework/issues)
 - **Documentación**: [Wiki del proyecto](https://github.com/tu-usuario/fox-framework/wiki)
-- **Email**: soporte@foxframework.dev
+- **Email**: [soporte@foxframework.dev](mailto:soporte@foxframework.dev)
 
 ---
 
