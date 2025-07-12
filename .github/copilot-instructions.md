@@ -13,53 +13,90 @@ Este es **Fox Framework**, un framework web para TypeScript/Node.js que proporci
 - Enfoque en pruebas unitarias e integración
 - Documentación técnica detallada
 
+---
+
+## 🤖 Instrucciones Específicas para GitHub Copilot
+
+- Responde solo dentro del contexto del proyecto Fox Framework.
+- Usa siempre los tipos, interfaces y patrones definidos en `tsfox/core/`.
+- Propón código que siga las convenciones de nombres y estructura del framework.
+- Antes de sugerir una implementación, valida si ya existe una solución similar en:
+  - `tsfox/core/features/`
+  - `docs/architecture/`
+  - `.dev/lessons_learned/`
+- Nunca propongas instalar nuevas dependencias sin ticket asociado.
+
+---
+
 ## 📋 Proceso de Trabajo Obligatorio
 
-**ALWAYS** seguir este proceso antes de cualquier tarea:
+🔴 **OBLIGATORIO** seguir este proceso antes de cualquier tarea:
 
 ### 1. 📖 LEER Documentación
-- **OBLIGATORIO**: Revisar `docs/architecture/` para entender arquitectura actual
-- **OBLIGATORIO**: Consultar `docs/api/` para APIs existentes
-- **OBLIGATORIO**: Revisar `.dev/lessons_learned/` para decisiones técnicas previas
-- Verificar `docs/deployment/` para configuración actual
-- Consultar `docs/schemas/` para modelos de datos
+- 🔴 Revisar `docs/architecture/` para entender arquitectura actual
+- 🔴 Consultar `docs/api/` para APIs existentes
+- 🔴 Revisar `.dev/lessons_learned/` para decisiones técnicas previas
+- 🟡 Verificar `docs/deployment/` para configuración actual
+- 🟡 Consultar `docs/schemas/` para modelos de datos
 
 ### 2. 🎫 CONSULTAR Ticket
-- **OBLIGATORIO**: Leer completamente el ticket en `.github/tasks/XX-nombre.md`
-- Entender todos los criterios de aceptación
-- Verificar dependencias con otros tickets
-- Revisar ejemplos de código en el ticket
-- Entender arquitectura propuesta en el ticket
+- 🔴 Leer completamente el ticket en `.github/tasks/XX-nombre.md`
+- 🔴 Entender todos los criterios de aceptación
+- 🟡 Verificar dependencias con otros tickets
+- 🟡 Revisar ejemplos de código en el ticket
+- 🟡 Entender arquitectura propuesta en el ticket
 
 ### 3. 🔧 IMPLEMENTAR
-- Seguir **exactamente** las especificaciones del ticket
-- Implementar usando los ejemplos de código proporcionados
-- Mantener consistencia con arquitectura existente
-- Aplicar todos los coding guidelines del proyecto
-- Crear estructura de carpetas si es necesaria
+- 🔴 Seguir **exactamente** las especificaciones del ticket
+- 🔴 Implementar usando los ejemplos de código proporcionados
+- 🔴 Mantener consistencia con arquitectura existente
+- 🔴 Aplicar todos los coding guidelines del proyecto
+- 🟡 Crear estructura de carpetas si es necesaria
 
 ### 4. 📝 DOCUMENTAR Cambios
-- **OBLIGATORIO**: Actualizar `docs/` con cambios técnicos
-- **OBLIGATORIO**: Documentar decisiones de arquitectura
-- Actualizar diagramas en `docs/architecture/` si es necesario
-- Documentar nuevas APIs en `docs/api/`
-- Actualizar esquemas en `docs/schemas/`
+- 🔴 Actualizar `docs/` con cambios técnicos
+- 🔴 Documentar decisiones de arquitectura
+- 🟡 Actualizar diagramas en `docs/architecture/` si es necesario
+- 🟡 Documentar nuevas APIs en `docs/api/`
+- 🟡 Actualizar esquemas en `docs/schemas/`
 
 ### 5. 🧪 VALIDAR Implementación
-- Ejecutar tests unitarios e integración
-- Validar **todos** los criterios de aceptación del ticket
-- Verificar que no hay regresiones
-- Probar integración con componentes existentes
+- 🔴 Ejecutar tests unitarios e integración
+- 🔴 Validar **todos** los criterios de aceptación del ticket
+- 🔴 Verificar que no hay regresiones
+- 🟡 Probar integración con componentes existentes
 
 ### 6. 🎓 REGISTRAR Lessons Learned
-- **OBLIGATORIO**: Documentar decisiones importantes en `.dev/lessons_learned/`
+- 🔴 Documentar decisiones importantes en `.dev/lessons_learned/`
 - Formato: `YYYY-MM-DD-descripcion-corta.md`
 - Incluir: contexto, decisión tomada, alternativas consideradas, rationale
 
+#### 🧠 Ejemplo
+Archivo: `2025-07-10-router-refactor.md`
+
+```
+# Refactor Router Factory
+
+## Contexto
+Se detectó que el router original no soportaba middlewares asincrónicos.
+
+## Decisión
+Separar la lógica en 2 clases: `RouterFactory` y `MiddlewarePipeline`.
+
+## Alternativas Consideradas
+1. Agregar lógica condicional directamente → 🔴 No mantenible
+2. Usar decoradores → 🟡 Innecesario por ahora
+
+## Rationale
+Patrón actual permite testeo más sencillo y separación de responsabilidades.
+```
+
 ### 7. ✅ MARCAR Como Completado
-- Verificar todos los checkboxes del ticket
-- Actualizar status en `.github/tasks/README.md` si es necesario
-- Confirmar que documentación está actualizada
+- 🔴 Verificar todos los checkboxes del ticket
+- 🔴 Actualizar status en `.github/tasks/README.md` si es necesario
+- 🔴 Confirmar que documentación está actualizada
+
+---
 
 ## 🏗️ Arquitectura del Proyecto
 
@@ -82,6 +119,8 @@ fox-framework/
 - **Dependency Injection**: Para providers y configuración
 - **Template Engine**: Sistema de vistas modular
 
+---
+
 ## 🛠️ Coding Guidelines
 
 ### TypeScript
@@ -98,28 +137,21 @@ fox-framework/
 - **Templates** en `tsfox/cli/templates/`
 
 ### Convenciones de Naming
-```typescript
-// Interfaces
+```ts
 export interface FoxServerInterface { }
-
-// Types
 export type FoxFactoryContext = { }
-
-// Enums
 export enum RequestMethod { }
-
-// Classes
 export class FoxFactory { }
-
-// Functions
 export function startServer() { }
 ```
 
 ### Testing
-- Tests unitarios en `__test__/` folders
+- Tests unitarios en carpetas `__test__/`
 - Usar **Jest** como framework principal
 - Cobertura mínima del 80%
 - Tests de integración para features completas
+
+---
 
 ## 🔧 Herramientas y Comandos
 
@@ -136,6 +168,8 @@ npx tsfox generate controller <name>  # Generar controlador
 npx tsfox new project <name>          # Nuevo proyecto
 ```
 
+---
+
 ## 📦 Dependencias Principales
 
 - **Express**: Motor HTTP base
@@ -143,6 +177,8 @@ npx tsfox new project <name>          # Nuevo proyecto
 - **Jest**: Testing framework
 - **Commander**: CLI framework
 - **Nodemon**: Hot-reload en desarrollo
+
+---
 
 ## 🚫 Restricciones y Limitaciones
 
@@ -157,6 +193,8 @@ npx tsfox new project <name>          # Nuevo proyecto
 - Seguir el patrón factory existente
 - Usar los tipos definidos en `core/types.ts`
 - Implementar error handling robusto
+
+---
 
 ## 🎯 Casos de Uso Comunes
 
@@ -179,13 +217,16 @@ npx tsfox new project <name>          # Nuevo proyecto
 3. Implementar CLI generator
 4. Documentar en `docs/api/`
 
-## 📚 Referencias Rápidas
+---
 
-- **Factory Principal**: `tsfox/core/fox.factory.ts`
-- **Tipos Core**: `tsfox/core/types.ts`
-- **Router**: `tsfox/core/router.factory.ts`
-- **CLI**: `tsfox/cli/index.ts`
-- **Servidor Demo**: `src/server/index.ts`
+## 👋 ¿Nuevo en el proyecto? Sigue estos pasos
+
+1. Clona el repo y corre `npm install`
+2. Revisa `docs/architecture/overview.md`
+3. Corre `npm run dev` y explora el servidor de demo
+4. Lee ejemplos en `tsfox/core/features/`
+5. Mira tests en `__test__/`
+6. Revisa tickets abiertos en `.github/tasks/`
 
 ---
 
@@ -197,4 +238,4 @@ Si algo no funciona:
 3. Revisar `docs/architecture/` para entender el problema
 4. Consultar `.dev/lessons_learned/` para problemas similares
 
-**Recuerda**: SIEMPRE seguir el proceso de trabajo completo antes de implementar cualquier cambio.
+**Recuerda**: 🔴 SIEMPRE seguir el proceso de trabajo completo antes de implementar cualquier cambio.
