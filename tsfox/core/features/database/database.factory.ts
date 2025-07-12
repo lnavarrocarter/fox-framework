@@ -40,7 +40,8 @@ export class FoxDatabase implements DatabaseInterface {
       await this.provider.connect(this.config);
       this.isConnected = true;
     } catch (error) {
-      throw new Error(`Failed to connect to database: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to connect to database: ${errorMessage}`);
     }
   }
 
@@ -56,7 +57,8 @@ export class FoxDatabase implements DatabaseInterface {
       this.isConnected = false;
       this.provider = null;
     } catch (error) {
-      throw new Error(`Failed to disconnect from database: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to disconnect from database: ${errorMessage}`);
     }
   }
 
@@ -70,7 +72,8 @@ export class FoxDatabase implements DatabaseInterface {
     try {
       return await this.provider!.query<T>(sql, params);
     } catch (error) {
-      throw new Error(`Query execution failed: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Query execution failed: ${errorMessage}`);
     }
   }
 
@@ -84,7 +87,8 @@ export class FoxDatabase implements DatabaseInterface {
     try {
       return await this.provider!.execute(sql, params);
     } catch (error) {
-      throw new Error(`Command execution failed: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Command execution failed: ${errorMessage}`);
     }
   }
 
@@ -233,7 +237,7 @@ export class FoxDatabase implements DatabaseInterface {
  * Memory provider (for testing)
  */
 class MemoryProvider implements ProviderInterface {
-  readonly name = 'memory';
+  name = 'memory';
   readonly version = '1.0.0';
   private data: Map<string, any[]> = new Map();
   private isConnectedFlag = false;

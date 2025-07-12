@@ -28,8 +28,12 @@ const config: Config = {
   },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/tsfox/$1',
-    '^@src/(.*)$': '<rootDir>/src/$1'
+    '^@src/(.*)$': '<rootDir>/src/$1',
+    '^inquirer$': '<rootDir>/__mocks__/inquirer.js'
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(inquirer)/)'
+  ],
   testTimeout: 10000,
   clearMocks: true,
   restoreMocks: true

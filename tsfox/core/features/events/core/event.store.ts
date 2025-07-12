@@ -20,7 +20,6 @@ import {
  */
 class MemoryTransaction implements EventStoreTransaction {
   readonly id: string;
-  readonly status: 'pending' | 'committed' | 'rolled-back' = 'pending';
   private operations: Array<{
     streamId: string;
     events: EventInterface[];
@@ -135,11 +134,15 @@ export class MemoryEventStore implements TransactionalEventStoreInterface {
       version++;
       this.eventCounter++;
       
-      // Create event with additional properties
+      // Create event with proper metadata
       const enhancedEvent: EventInterface = {
         ...event,
-        // Add position for global ordering if not present
-        ...(event.metadata ? {} : { metadata: {} })
+        // Ensure metadata has required properties
+        metadata: event.metadata || {
+          source: 'memory-store',
+          timestamp: new Date(),
+          version: '1.0.0'
+        }
       };
       
       stream.push(enhancedEvent);
@@ -222,7 +225,14 @@ export class MemoryEventStore implements TransactionalEventStoreInterface {
 
     return {
       id: subscriptionId,
-      unsubscribe: () => {
+      eventType: '*', // All events
+      handler,
+      options: {
+        fromPosition,
+        maxConcurrency: 1,
+        deadLetterQueue: false
+      },
+      unsubscribe: async () => {
         this.subscriptions.delete(subscriptionId);
       }
     };

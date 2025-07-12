@@ -569,6 +569,11 @@ export class DatabaseConfigFactory {
   static createProductionConfig(provider: DatabaseProvider): DatabaseConfig {
     return {
       provider,
+      host: 'localhost',
+      port: 5432,
+      database: 'production_db',
+      username: 'admin',
+      password: 'secure_password',
       pool: {
         min: 5,
         max: 20,

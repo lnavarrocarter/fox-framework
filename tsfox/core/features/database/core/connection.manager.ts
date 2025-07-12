@@ -49,7 +49,8 @@ export class DatabaseConnection implements ConnectionInterface {
       // TODO: Implement actual query execution based on provider
       return await this.executeNativeQuery<T>(sql, params);
     } catch (error) {
-      throw new Error(`Query execution failed: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Query execution failed: ${errorMessage}`);
     }
   }
 
@@ -65,7 +66,8 @@ export class DatabaseConnection implements ConnectionInterface {
       // TODO: Implement actual command execution based on provider
       return await this.executeNativeCommand(sql, params);
     } catch (error) {
-      throw new Error(`Command execution failed: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Command execution failed: ${errorMessage}`);
     }
   }
 
@@ -81,7 +83,8 @@ export class DatabaseConnection implements ConnectionInterface {
       
       return new DatabaseTransaction(transactionId, this);
     } catch (error) {
-      throw new Error(`Failed to begin transaction: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to begin transaction: ${errorMessage}`);
     }
   }
 
@@ -110,7 +113,8 @@ export class DatabaseConnection implements ConnectionInterface {
         await this.nativeConnection.end();
       }
     } catch (error) {
-      throw new Error(`Failed to close connection: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to close connection: ${errorMessage}`);
     }
   }
 
@@ -242,7 +246,8 @@ export class DatabaseTransaction implements TransactionInterface {
       this.isCommitted = true;
       this.isActiveFlag = false;
     } catch (error) {
-      throw new Error(`Failed to commit transaction: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to commit transaction: ${errorMessage}`);
     }
   }
 
@@ -257,7 +262,8 @@ export class DatabaseTransaction implements TransactionInterface {
       this.isRolledBack = true;
       this.isActiveFlag = false;
     } catch (error) {
-      throw new Error(`Failed to rollback transaction: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to rollback transaction: ${errorMessage}`);
     }
   }
 
@@ -491,7 +497,8 @@ export class ConnectionPool implements ConnectionPoolInterface {
       }
     } catch (error) {
       this.stats.failed++;
-      throw new Error(`Failed to create connection: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to create connection: ${errorMessage}`);
     }
   }
 
