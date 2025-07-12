@@ -1,4 +1,7 @@
-# 📋 Fox Framework - Task Management
+# 📋 Fox Framework - Ta- [08-performance-optimization.md](./08-performance-optimization.md) - ✅ COMPLETADO Y CERRADO
+
+### Fase 3: Features Avanzadas (3-4 semanas)
+- [09-plugin-system.md](./09-plugin-system.md) - ✅ COMPLETADO Y CERRADOanagement
 
 ## 🎯 Estado Actual
 
