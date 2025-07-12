@@ -587,7 +587,7 @@ npm run test:integration
 
 ```bash
 # Clonar repositorio
-git clone https://github.com/tu-usuario/fox-framework.git
+git clone https://github.com/lnavarrocarter/fox-framework.git
 cd fox-framework
 
 # Instalar dependencias
@@ -722,11 +722,13 @@ Este proyecto está bajo la Licencia ISC - ver el archivo [LICENSE](LICENSE) par
 - TypeScript por el sistema de tipos
 - Jest por el framework de testing
 - Commander.js por el CLI
+- Copilot y ChatGPT por la ayuda en la documentación y ejemplos ademas del codigo
+- A todos los contribuidores y usuarios que hacen posible este proyecto
 
 ## 📞 Soporte
 
-- **Issues**: [GitHub Issues](https://github.com/tu-usuario/fox-framework/issues)
-- **Documentación**: [Wiki del proyecto](https://github.com/tu-usuario/fox-framework/wiki)
+- **Issues**: [GitHub Issues](https://github.com/lnavarrocarter/fox-framework/issues)
+- **Documentación**: [Wiki del proyecto](https://github.com/lnavarrocarter/fox-framework/wiki)
 - **Email**: [soporte@foxframework.dev](mailto:soporte@foxframework.dev)
 
 ---
@@ -735,9 +737,9 @@ Este proyecto está bajo la Licencia ISC - ver el archivo [LICENSE](LICENSE) par
 
 ## 📈 Stats
 
-![GitHub stars](https://img.shields.io/github/stars/tu-usuario/fox-framework)
-![GitHub forks](https://img.shields.io/github/forks/tu-usuario/fox-framework)
-![GitHub issues](https://img.shields.io/github/issues/tu-usuario/fox-framework)
-![GitHub license](https://img.shields.io/github/license/tu-usuario/fox-framework)
+![GitHub stars](https://img.shields.io/github/stars/lnavarrocarter/fox-framework)
+![GitHub forks](https://img.shields.io/github/forks/lnavarrocarter/fox-framework)
+![GitHub issues](https://img.shields.io/github/issues/lnavarrocarter/fox-framework)
+![GitHub license](https://img.shields.io/github/license/lnavarrocarter/fox-framework)
 ![npm version](https://img.shields.io/npm/v/fox-framework)
 ![npm downloads](https://img.shields.io/npm/dm/fox-framework)

@@ -8,6 +8,7 @@ import { PromptManager } from './core/prompt.manager';
 
 // Import command groups
 import { GenerateCommands } from './commands/generate';
+import { DockerCommands } from './commands/docker';
 
 export class FoxCLI {
   private program: Command;
@@ -36,7 +37,7 @@ export class FoxCLI {
       .hook('preAction', this.preActionHook.bind(this));
   }
 
-  private registerCommands(): void {
+  private  registerCommands(): void {
     // Generate commands
     const generateCommand = this.program
       .command('generate')
@@ -45,11 +46,19 @@ export class FoxCLI {
 
     this.commandManager.registerCommands(generateCommand, GenerateCommands);
 
+    // Docker commands
+    const dockerCommand = this.program
+      .command('docker')
+      .alias('d')
+      .description('Docker operations');
+
+    this.commandManager.registerCommands(dockerCommand, DockerCommands);
+
     // TODO: Add other command groups
     // - Project commands (new, init, upgrade)
     // - Development commands (serve, build, watch, test)
     // - Database commands (migrate, seed, schema)
-    // - Deploy commands (docker, cloud, ci)
+    // - Deploy commands (cloud, ci)
   }
 
   private async preActionHook(thisCommand: Command): Promise<void> {

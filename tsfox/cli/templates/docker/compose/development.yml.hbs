@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      target: development
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    volumes:
+      - .:/app
+      - /app/node_modules
+    {{#if (gt services.app.depends_on.length 0)}}
+    depends_on:
+      {{#each services.app.depends_on}}
+      - {{this}}
+      {{/each}}
+    {{/if}}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+{{#if hasDatabase}}
+  {{#if (eq (lookup services 'postgresql') undefined)}}
+  postgresql:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: foxapp
+      POSTGRES_USER: foxuser
+      POSTGRES_PASSWORD: foxpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    restart: unless-stopped
+  {{/if}}
+  
+  {{#if (eq (lookup services 'mysql') undefined)}}
+  mysql:
+    image: mysql:8-oracle
+    environment:
+      MYSQL_DATABASE: foxapp
+      MYSQL_USER: foxuser
+      MYSQL_PASSWORD: foxpass
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+    restart: unless-stopped
+  {{/if}}
+
+  {{#if (eq (lookup services 'mongodb') undefined)}}
+  mongodb:
+    image: mongo:6-jammy
+    environment:
+      MONGO_INITDB_DATABASE: foxapp
+      MONGO_INITDB_ROOT_USERNAME: foxuser
+      MONGO_INITDB_ROOT_PASSWORD: foxpass
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_dev_data:/data/db
+    restart: unless-stopped
+  {{/if}}
+{{/if}}
+
+{{#if hasRedis}}
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    restart: unless-stopped
+{{/if}}
+
+{{#if hasNginx}}
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+{{/if}}
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+{{#if hasDatabase}}
+  postgres_dev_data:
+  mysql_dev_data:
+  mongo_dev_data:
+{{/if}}
+{{#if hasRedis}}
+  redis_dev_data:
+{{/if}}

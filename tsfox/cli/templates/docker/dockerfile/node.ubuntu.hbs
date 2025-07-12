@@ -1,0 +1,70 @@
+# Use Ubuntu for broader compatibility
+FROM node:{{nodeVersion}} AS base
+
+# Set working directory
+WORKDIR {{workdir}}
+
+# Update and install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create user for security
+RUN groupadd --gid 1001 nodejs && \
+    useradd --uid 1001 --gid nodejs --shell /bin/bash nodejs
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+{{#if hasTypeScript}}
+# Development stage for TypeScript compilation
+FROM base AS development
+
+# Install all dependencies including dev dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build TypeScript
+RUN npm run build
+
+# Production stage
+FROM base AS production
+
+# Copy built application from development stage
+COPY --from=development {{workdir}}/dist ./dist
+{{else}}
+# Copy application code
+COPY . .
+{{/if}}
+
+# Change ownership to nodejs user
+RUN chown -R nodejs:nodejs {{workdir}}
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port
+EXPOSE {{port}}
+
+{{#if healthCheck}}
+# Health check
+HEALTHCHECK --interval={{healthCheck.interval}} \
+            --timeout={{healthCheck.timeout}} \
+            --start-period={{healthCheck.start_period}} \
+            --retries={{healthCheck.retries}} \
+            CMD {{#each healthCheck.test}}{{this}}{{#unless @last}} {{/unless}}{{/each}}
+{{/if}}
+
+{{#if hasTypeScript}}
+# Start command
+CMD ["node", "dist/src/server/index.js"]
+{{else}}
+CMD ["npm", "start"]
+{{/if}}

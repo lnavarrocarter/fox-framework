@@ -1,0 +1,134 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      target: production
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    {{#if (gt services.app.depends_on.length 0)}}
+    depends_on:
+      {{#each services.app.depends_on}}
+      - {{this}}
+      {{/each}}
+    {{/if}}
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+{{#if hasDatabase}}
+  postgresql:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-foxapp}
+      POSTGRES_USER: ${POSTGRES_USER:-foxuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-foxpass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  mysql:
+    image: mysql:8-oracle
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-foxapp}
+      MYSQL_USER: ${MYSQL_USER:-foxuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-foxpass}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  mongodb:
+    image: mongo:6-jammy
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-foxapp}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-foxuser}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-foxpass}
+    volumes:
+      - mongo_data:/data/db
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+{{/if}}
+
+{{#if hasRedis}}
+  redis:
+    image: redis:alpine
+    volumes:
+      - redis_data:/data
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+{{/if}}
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      {{#if ssl}}
+      - "443:443"
+      {{/if}}
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      {{#if ssl}}
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      {{/if}}
+    depends_on:
+      - app
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+{{#if hasDatabase}}
+  postgres_data:
+    driver: local
+  mysql_data:
+    driver: local
+  mongo_data:
+    driver: local
+{{/if}}
+{{#if hasRedis}}
+  redis_data:
+    driver: local
+{{/if}}
