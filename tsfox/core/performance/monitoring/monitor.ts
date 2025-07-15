@@ -735,11 +735,11 @@ export class PerformanceReporter {
     recommendations: string[];
   } {
     // Get metrics for the time range
-    const cpuHistory = this.monitor.getMetricHistory('cpu.usage', timeRange);
-    const memoryHistory = this.monitor.getMetricHistory('memory.used', timeRange);
-    const responseTimeHistory = this.monitor.getMetricHistory('response.time.avg', timeRange);
-    const requestHistory = this.monitor.getMetricHistory('requests.total', timeRange);
-    const errorHistory = this.monitor.getMetricHistory('errors.total', timeRange);
+    const cpuHistory = this.monitor.getMetricHistory('custom.cpu.usage', timeRange);
+    const memoryHistory = this.monitor.getMetricHistory('custom.memory.used', timeRange);
+    const responseTimeHistory = this.monitor.getMetricHistory('custom.response.time.avg', timeRange);
+    const requestHistory = this.monitor.getMetricHistory('custom.requests.total', timeRange);
+    const errorHistory = this.monitor.getMetricHistory('custom.errors.total', timeRange);
 
     // Calculate summary statistics
     const summary = {

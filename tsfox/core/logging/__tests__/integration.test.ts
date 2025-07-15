@@ -113,6 +113,7 @@ describe('Logging System Integration', () => {
       
       const consoleSpy = jest.spyOn(console, 'info').mockImplementation();
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation();
       
       logger.addTransport(new ConsoleTransport(LogLevel.WARN));
       
@@ -125,10 +126,12 @@ describe('Logging System Integration', () => {
       logger.error('Error message');
       
       expect(consoleSpy).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalledTimes(2);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
       
       consoleSpy.mockRestore();
       warnSpy.mockRestore();
+      errorSpy.mockRestore();
     });
 
     it('should handle transport errors gracefully', () => {
@@ -179,6 +182,9 @@ describe('Logging System Integration', () => {
       
       logger.addTransport(fileTransport);
       logger.info('Test message');
+      
+      // Wait for the file to be written
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // Close transport
       await fileTransport.close();

@@ -48,8 +48,9 @@ describe('UserController', () => {
         .get(`/user/${id}`)
         .expect(200);
 
-      // Note: This will return 404 in current implementation
-      // Update when database layer is implemented
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body).toHaveProperty('data');
+      expect(response.body.data).toHaveProperty('id', '1');
     });
 
     it('should return 404 for non-existent user', async () => {

@@ -52,7 +52,13 @@ export class FileTransport implements ITransport {
           // Convert LogLevel enum to string for file storage
           const entryForFile = {
             ...entry,
-            level: typeof entry.level === 'number' ? LogLevel[entry.level] : entry.level
+            level: typeof entry.level === 'number' ? LogLevel[entry.level] : entry.level,
+            // Properly serialize error objects
+            error: entry.error ? {
+              name: entry.error.name,
+              message: entry.error.message,
+              stack: entry.error.stack
+            } : undefined
           };
           return JSON.stringify(entryForFile);
         })
