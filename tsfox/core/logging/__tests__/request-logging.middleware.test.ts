@@ -73,6 +73,7 @@ describe('RequestLoggingMiddleware', () => {
     mockRes = {
       statusCode: 200,
       send: jest.fn().mockReturnThis(),
+      setHeader: jest.fn(),
       get: jest.fn().mockImplementation((header: string) => {
         if (header === 'Content-Length') return '100';
         return undefined;
@@ -91,7 +92,8 @@ describe('RequestLoggingMiddleware', () => {
       expect(mockReq.requestId).toBeDefined();
       expect(mockLogger.child).toHaveBeenCalledWith({
         requestId: mockReq.requestId,
-        component: 'http'
+        component: 'http',
+        operation: 'request'
       });
       expect(mockNext).toHaveBeenCalled();
     });

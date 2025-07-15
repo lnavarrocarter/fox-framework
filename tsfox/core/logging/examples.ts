@@ -109,9 +109,8 @@ export function expressIntegrationExample() {
       res.json(user);
     } catch (error) {
       routeLogger.error('Failed to fetch user', { 
-        userId: req.params.id,
-        error: error.message 
-      }, error);
+        userId: req.params.id,        error: (error as Error).message
+      }, error as Error);
       
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -159,7 +158,7 @@ export function errorHandlingExample() {
       function: 'processUserData',
       arguments: ['invalid', 'arguments'],
       expected: 'object'
-    }, error);
+    }, error as Error);
   }
 
   try {
@@ -168,7 +167,7 @@ export function errorHandlingExample() {
     logger.fatal('Critical error - application cannot continue', {
       component: 'core',
       operation: 'initialization'
-    }, error);
+    }, error as Error);
   }
 }
 
@@ -204,7 +203,7 @@ export function performanceMonitoringExample() {
       operationLogger.error('Operation failed', {
         duration: `${duration}ms`,
         status: 'error'
-      }, error);
+      }, error as Error);
 
       throw error;
     }
@@ -228,7 +227,7 @@ export function customTransportExample() {
   // Add custom stream transport (e.g., to send to external service)
   const { Writable } = require('stream');
   const customStream = new Writable({
-    write(chunk, encoding, callback) {
+    write(chunk: any, encoding: any, callback: any) {
       // Custom logic - could send to external service, database, etc.
       console.log('CUSTOM TRANSPORT:', chunk.toString().trim());
       callback();

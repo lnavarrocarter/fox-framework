@@ -11,7 +11,7 @@ describe('FoxCLI', () => {
   let originalCwd: string;
 
   beforeEach(async () => {
-    cli = new FoxCLI();
+    cli = new FoxCLI(true); // Enable test mode
     tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'fox-cli-test-'));
     originalCwd = process.cwd();
     process.chdir(tempDir);
@@ -47,8 +47,11 @@ describe('FoxCLI', () => {
       
       try {
         await cli.run(['node', 'cli.ts', 'unknown-command']);
+        // Should not reach here
+        expect(false).toBe(true);
       } catch (error) {
-        // Expected to exit with error
+        // Expected to throw in test mode
+        expect(error).toBeDefined();
       }
       
       consoleSpy.mockRestore();

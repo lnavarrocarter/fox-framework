@@ -423,7 +423,7 @@ export class TransactionExamples {
       console.log('✓ Transaction result:', result);
       
     } catch (error) {
-      console.log('✗ Transaction failed:', error.message);
+      console.log('✗ Transaction failed:', (error as Error).message);
     }
   }
 
@@ -457,7 +457,7 @@ export class TransactionExamples {
       });
       
     } catch (error) {
-      console.log('✓ Transaction rolled back due to error:', error.message);
+      console.log('✓ Transaction rolled back due to error:', (error as Error).message);
     }
   }
 
@@ -481,8 +481,8 @@ export class TransactionExamples {
     try {
       await this.db.transaction(async (tx: TransactionInterface) => {
         // Mock transaction methods
-        const mockTxQuery = jest.spyOn(tx, 'query').mockImplementation(mockQuery);
-        const mockTxExecute = jest.spyOn(tx, 'execute').mockImplementation(mockExecute);
+        const mockTxQuery = jest.spyOn(tx, 'query').mockImplementation(mockQuery as any);
+        const mockTxExecute = jest.spyOn(tx, 'execute').mockImplementation(mockExecute as any);
         
         try {
           // Transfer money between accounts
@@ -540,7 +540,7 @@ export class TransactionExamples {
       });
       
     } catch (error) {
-      console.log('✗ Money transfer failed:', error.message);
+      console.log('✗ Money transfer failed:', (error as Error).message);
     } finally {
       mockExecute.mockRestore();
       mockQuery.mockRestore();
@@ -588,7 +588,7 @@ export class ConnectionPoolExamples {
           await db.query('SELECT ? as operation_id', [i]);
           console.log(`✓ Operation ${i} completed`);
         } catch (error) {
-          console.log(`✗ Operation ${i} failed:`, error.message);
+          console.log(`✗ Operation ${i} failed:`, (error as Error).message);
         }
       });
       

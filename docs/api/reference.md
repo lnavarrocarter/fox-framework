@@ -12,6 +12,7 @@
 - [Event System API](#event-system-api)
 - [Database Abstraction API](#database-abstraction-api)
 - [Microservices API](#microservices-api)
+- [Docker Integration API](#docker-integration-api)
 - [CLI API](#cli-api)
 - [Types & Interfaces](#types--interfaces)
 
@@ -899,4 +900,175 @@ const response = await factory.callService('payment-service', {
 
 📖 **Documentación completa**: [Microservices API](./microservices.md)
 
-## �🔧 CLI API
+## 🐳 Docker Integration API
+
+Fox Framework incluye un conjunto completo de comandos Docker integrados en el CLI para facilitar el desarrollo y deployment con containers.
+
+### Comandos Docker
+
+#### docker init
+
+Genera configuración Docker completa para tu proyecto.
+
+```bash
+npx tsfox docker init [options]
+```
+
+**Opciones:**
+- `--dockerfile-only` - Genera solo Dockerfile
+- `--nginx` - Incluye configuración Nginx
+- `--env <environment>` - Especifica entorno (development/production)
+- `--database <type>` - Incluye base de datos (postgresql/mysql/mongodb/redis)
+
+**Ejemplos:**
+```bash
+# Configuración completa
+npx tsfox docker init
+
+# Solo Dockerfile
+npx tsfox docker init --dockerfile-only
+
+# Con Nginx para producción
+npx tsfox docker init --nginx --env production
+
+# Con PostgreSQL
+npx tsfox docker init --database postgresql
+```
+
+#### docker build
+
+Construye la imagen Docker del proyecto.
+
+```bash
+npx tsfox docker build [options]
+```
+
+**Opciones:**
+- `--tag <name>` - Nombre de la imagen
+- `--env <environment>` - Entorno de build
+
+#### docker run
+
+Ejecuta el container de la aplicación.
+
+```bash
+npx tsfox docker run [options]
+```
+
+**Opciones:**
+- `--dev` - Modo desarrollo con hot reload
+- `--port <port>` - Puerto de exposición
+- `--env <environment>` - Variables de entorno
+
+#### docker logs
+
+Muestra los logs del container.
+
+```bash
+npx tsfox docker logs [options]
+```
+
+#### docker compose
+
+Gestiona servicios con docker-compose.
+
+```bash
+npx tsfox docker compose <command>
+```
+
+**Comandos:**
+- `up` - Levanta todos los servicios
+- `down` - Para todos los servicios
+- `logs` - Muestra logs de servicios
+
+### DockerfileGenerator
+
+Generador de Dockerfiles optimizados.
+
+```typescript
+import { DockerfileGenerator } from '@tsfox/cli/generators';
+
+const generator = new DockerfileGenerator();
+
+// Generar Dockerfile básico
+const dockerfile = generator.generate({
+  baseImage: 'node:18-alpine',
+  workDir: '/app',
+  port: 3000,
+  environment: 'production'
+});
+
+// Generar con multi-stage build
+const multistage = generator.generateMultiStage({
+  builderImage: 'node:18-alpine',
+  runtimeImage: 'node:18-alpine',
+  buildStage: 'builder',
+  runtimeStage: 'runner'
+});
+```
+
+### ComposeGenerator
+
+Generador de archivos docker-compose.yml.
+
+```typescript
+import { ComposeGenerator } from '@tsfox/cli/generators';
+
+const generator = new ComposeGenerator();
+
+// Generar docker-compose básico
+const compose = generator.generate({
+  appName: 'fox-app',
+  services: ['app', 'database'],
+  database: 'postgresql',
+  includeNginx: true
+});
+
+// Generar para desarrollo
+const devCompose = generator.generateDev({
+  hotReload: true,
+  debugMode: true,
+  volumeMounts: ['./src:/app/src']
+});
+```
+
+### Configuración Docker
+
+#### DockerConfig
+
+Interface para configuración Docker.
+
+```typescript
+interface DockerConfig {
+  baseImage?: string;
+  workDir?: string;
+  port?: number;
+  environment?: 'development' | 'production';
+  packageManager?: 'npm' | 'yarn' | 'pnpm';
+  healthCheck?: boolean;
+  multiStage?: boolean;
+  includeNginx?: boolean;
+  database?: DatabaseType;
+}
+```
+
+#### ComposeConfig
+
+Interface para configuración docker-compose.
+
+```typescript
+interface ComposeConfig {
+  version?: string;
+  appName: string;
+  services: string[];
+  networks?: string[];
+  volumes?: string[];
+  environment?: Record<string, string>;
+  database?: DatabaseConfig;
+  nginx?: NginxConfig;
+}
+```
+
+📖 **Documentación completa**: [Docker Integration](./docker-integration.md)
+
+## 🔧 CLI API

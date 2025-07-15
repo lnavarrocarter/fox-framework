@@ -13,9 +13,10 @@ Un framework web moderno para TypeScript/Node.js con routing modular, motor de t
 - **🎯 Event System**: Event sourcing, CQRS y sistema pub/sub distribuido
 - **🗄️ Database Abstraction**: Multi-provider DB layer (PostgreSQL, MySQL, SQLite, MongoDB, Redis)
 - **🔄 Microservices Support**: Service registry, load balancer, circuit breaker y service mesh
+- **🐳 Docker Integration**: Generación automática de Dockerfiles y docker-compose
 - **⚡ CLI Potente**: Generación automática de código
 - **🔧 TypeScript First**: Tipado estricto y IntelliSense completo
-- **🧪 Testing Ready**: Configuración Jest incluida + 400+ tests
+- **🧪 Testing Ready**: Configuración Jest incluida + 950+ tests
 - **📚 Documentación Completa**: APIs y arquitectura documentadas
 
 ## 📦 Instalación
@@ -564,6 +565,106 @@ type RequestCallback = (
 type ViewCallback = (req: Request, res: Response) => void;
 ```
 
+## 🐳 Docker Integration
+
+Fox Framework incluye soporte completo para Docker con generación automática de Dockerfiles optimizados y configuraciones docker-compose.
+
+### Generar configuración Docker
+
+```bash
+# Generar Dockerfile y docker-compose.yml
+npx tsfox docker init
+
+# Generar solo Dockerfile
+npx tsfox docker init --dockerfile-only
+
+# Generar para producción con Nginx
+npx tsfox docker init --nginx --env production
+```
+
+### Comandos Docker integrados
+
+```bash
+# Construir imagen
+npx tsfox docker build
+
+# Ejecutar en desarrollo
+npx tsfox docker run --dev
+
+# Ver logs
+npx tsfox docker logs
+
+# Ejecutar con docker-compose
+npx tsfox docker compose up
+```
+
+### Dockerfile automático
+
+El generador crea Dockerfiles optimizados con:
+
+- Multi-stage builds para reducir tamaño de imagen
+- Cache layers inteligente para builds rápidos
+- Health checks integrados
+- Configuración de desarrollo y producción
+- Soporte para diferentes package managers (npm, yarn, pnpm)
+
+```dockerfile
+# Multi-stage build automático
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM node:18-alpine AS runner
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY . .
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+CMD ["npm", "start"]
+```
+
+### Docker Compose automático
+
+Genera configuraciones completas con:
+
+- Base de datos (PostgreSQL, MySQL, MongoDB, Redis)
+- Nginx reverse proxy con SSL
+- Networks y volumes configurados
+- Variables de entorno optimizadas
+
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - db
+      - redis
+  
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: foxapp
+      POSTGRES_USER: fox
+      POSTGRES_PASSWORD: foxpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - app
+```
+
 ## 🧪 Testing
 
 ```bash
@@ -678,7 +779,9 @@ const getUserHandler = (req, res) => {
 - [x] **Error Handling** robusto y tipado
 - [x] **Event System** completo con Event Sourcing, CQRS y Pub/Sub distribuido
 - [x] **Database Abstraction** Multi-Provider (PostgreSQL, MySQL, SQLite, MongoDB, Redis)
-- [x] Suite de tests completa (400+ tests)
+- [x] **Microservices Support** completo con Service Registry, Load Balancer y Circuit Breaker
+- [x] **Docker Integration** completo con generación automática de Dockerfiles y docker-compose
+- [x] Suite de tests completa (950+ tests)
 
 ### 🔄 En Progreso
 
@@ -689,8 +792,6 @@ const getUserHandler = (req, res) => {
 ### 📋 Planificado
 
 - [ ] CLI improvements avanzados
-- [ ] Microservices support
-- [ ] Docker integration
 - [ ] Cloud deployment tools
 - [ ] Monitoring y métricas avanzadas
 - [ ] WebSocket support

@@ -15,8 +15,10 @@ export class FoxCLI {
   private commandManager: CommandManager;
   private configManager: ConfigManager;
   private promptManager: PromptManager;
+  private testMode: boolean = false;
 
-  constructor() {
+  constructor(testMode: boolean = false) {
+    this.testMode = testMode;
     this.program = new Command();
     this.commandManager = new CommandManager();
     this.configManager = new ConfigManager();
@@ -35,6 +37,13 @@ export class FoxCLI {
       .option('-q, --quiet', 'Quiet mode')
       .option('--no-color', 'Disable colored output')
       .hook('preAction', this.preActionHook.bind(this));
+    
+    // Configure exit handling for test mode
+    if (this.testMode) {
+      this.program.exitOverride((err) => {
+        throw err;
+      });
+    }
   }
 
   private  registerCommands(): void {
@@ -86,7 +95,11 @@ export class FoxCLI {
       await this.program.parseAsync(argv);
     } catch (error) {
       this.handleError(error);
-      process.exit(1);
+      if (!this.testMode) {
+        process.exit(1);
+      } else {
+        throw error;
+      }
     }
   }
 

@@ -3,6 +3,10 @@
  * @module tsfox/core/features/events/interfaces
  */
 
+import { EventStoreInterface } from './store.interface';
+import { EventBusInterface } from './adapter.interface';
+import { EventProjection } from './sourcing.interface';
+
 /**
  * Core event interface representing a domain event
  */

@@ -50,6 +50,9 @@ export class RequestLoggingMiddleware {
       // Add request ID to headers for tracing
       req.headers['x-request-id'] = requestId;
       res.setHeader('x-request-id', requestId);
+      
+      // Add request ID to request object for access
+      (req as any).requestId = requestId;
 
       // Create request-specific logger
       const requestLogger = this.logger.child({

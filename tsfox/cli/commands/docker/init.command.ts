@@ -1,4 +1,4 @@
-import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult, GeneratedFile } from '../../interfaces/cli.interface';
 import { DockfileGenerator } from '../../generators/dockfile.generator';
 import { ComposeGenerator } from '../../generators/compose.generator';
 import { TemplateManager } from '../../core/template.manager';
@@ -59,8 +59,8 @@ export const DockerInitCommand: CommandInterface = {
 
       // Generate Dockerfile
       console.log('📦 Generating Dockerfile...');
-      const dockfileGenerator = new DockfileGenerator(templateManager);
-      const dockerfileFiles = await dockfileGenerator.generate({
+      const dockerfileGenerator = new DockfileGenerator(templateManager);
+      const dockerfileFiles = await dockerfileGenerator.generate({
         name: 'docker',
         options,
         projectRoot: context.projectRoot,
@@ -69,30 +69,7 @@ export const DockerInitCommand: CommandInterface = {
           version: '1.0.0',
           framework: { version: '1.0.0', features: [] }
         },
-        templates: templateManager,
-        dockerConfig: {
-          dockerfile: {
-            baseImage: 'node:18-alpine',
-            nodeVersion: '18',
-            workdir: '/app',
-            port: 3000
-          },
-          compose: {
-            version: '3.8',
-            services: {}
-          },
-          build: {
-            context: '.',
-            cache: true
-          },
-          development: {
-            volumes: ['./src:/app/src'],
-            environment: {
-              NODE_ENV: 'development'
-            },
-            ports: ['3000:3000']
-          }
-        }
+        templates: templateManager
       });
 
       // Generate docker-compose
@@ -107,30 +84,7 @@ export const DockerInitCommand: CommandInterface = {
           version: '1.0.0',
           framework: { version: '1.0.0', features: [] }
         },
-        templates: templateManager,
-        dockerConfig: {
-          dockerfile: {
-            baseImage: 'node:18-alpine',
-            nodeVersion: '18',
-            workdir: '/app',
-            port: 3000
-          },
-          compose: {
-            version: '3.8',
-            services: {}
-          },
-          build: {
-            context: '.',
-            cache: true
-          },
-          development: {
-            volumes: ['./src:/app/src'],
-            environment: {
-              NODE_ENV: 'development'
-            },
-            ports: ['3000:3000']
-          }
-        }
+        templates: templateManager
       });
 
       // Generate nginx config if requested
@@ -139,6 +93,10 @@ export const DockerInitCommand: CommandInterface = {
       }
 
       const allFiles = [...dockerfileFiles, ...composeFiles];
+
+      // Write all generated files to disk
+      console.log('\n📝 Writing files to disk...');
+      await writeGeneratedFiles(allFiles);
 
       console.log(`\n✅ Docker configuration generated successfully!`);
       console.log(`Generated ${allFiles.length} file(s):`);
@@ -167,6 +125,29 @@ export const DockerInitCommand: CommandInterface = {
     }
   }
 };
+
+/**
+ * Write generated files to disk
+ */
+async function writeGeneratedFiles(files: GeneratedFile[]): Promise<void> {
+  const fs = require('fs/promises');
+  const path = require('path');
+
+  for (const file of files) {
+    try {
+      // Create directory if it doesn't exist
+      const dir = path.dirname(file.path);
+      await fs.mkdir(dir, { recursive: true });
+
+      // Write file content
+      await fs.writeFile(file.path, file.content, 'utf8');
+      console.log(`  ✓ ${file.path}`);
+    } catch (error: any) {
+      console.error(`  ✗ ${file.path}: ${error.message}`);
+      throw error;
+    }
+  }
+}
 
 /**
  * Generate Nginx configuration files

@@ -33,7 +33,6 @@ export const DockerLogsCommand: CommandInterface = {
     },
     {
       name: 'file',
-      alias: 'f',
       description: 'Compose file to use',
       type: 'string',
       default: 'docker-compose.dev.yml'

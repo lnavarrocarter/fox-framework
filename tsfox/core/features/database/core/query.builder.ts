@@ -423,6 +423,18 @@ export class SqlQueryBuilder implements QueryBuilderInterface {
         clause += ` ${condition.connector} `;
       }
 
+      // Handle raw SQL conditions (when column contains complete clause)
+      if (condition.value === null && (
+        condition.column.includes('IS NULL') || 
+        condition.column.includes('IS NOT NULL') ||
+        condition.column.includes('=') ||
+        condition.column.includes('<') ||
+        condition.column.includes('>')
+      )) {
+        clause += condition.column;
+        return clause;
+      }
+
       clause += `${condition.column} ${condition.operator}`;
 
       if (condition.operator !== 'IS NULL' && condition.operator !== 'IS NOT NULL') {
@@ -459,10 +471,20 @@ export class SqlQueryBuilder implements QueryBuilderInterface {
    */
   private parseWhereCondition(condition: WhereCondition): WhereClause {
     if (typeof condition === 'string') {
-      // Raw SQL condition
+      // Raw SQL condition - check if it contains operators that don't need parameters
+      const isNullCondition = /IS\s+(NOT\s+)?NULL/i.test(condition);
+      if (isNullCondition) {
+        return {
+          column: condition,
+          operator: 'IS NULL', // Use valid operator for null conditions
+          value: null
+        };
+      }
+      
+      // For other raw SQL, treat as complete clause with dummy operator
       return {
         column: condition,
-        operator: '=',
+        operator: '=', // Default operator for raw SQL
         value: null
       };
     }

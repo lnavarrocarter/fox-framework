@@ -78,6 +78,23 @@ export class TemplateManager {
       return a || b;
     });
 
+    // Comparison helpers
+    this.handlebars.registerHelper('gt', (a: any, b: any) => {
+      return a > b;
+    });
+
+    this.handlebars.registerHelper('gte', (a: any, b: any) => {
+      return a >= b;
+    });
+
+    this.handlebars.registerHelper('lt', (a: any, b: any) => {
+      return a < b;
+    });
+
+    this.handlebars.registerHelper('lte', (a: any, b: any) => {
+      return a <= b;
+    });
+
     // Array helpers
     this.handlebars.registerHelper('join', (array: any[], separator: string) => {
       return array ? array.join(separator) : '';
