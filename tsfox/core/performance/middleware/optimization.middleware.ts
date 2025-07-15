@@ -138,7 +138,7 @@ export function compressionMiddleware(options: CompressionOptions = {}) {
     };
 
     // Override end method to apply compression
-    (res as any).end = async function(chunk?: any, encoding?: any): Promise<any> {
+    (res as any).end = async function(chunk?: any, encoding?: any): Promise<Response> {
       if (chunk) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding));
       }
@@ -181,8 +181,8 @@ export function compressionMiddleware(options: CompressionOptions = {}) {
             isCompressed = true;
             
             // Use compressed buffer
-            originalWrite.call(res, compressedBuffer);
-            return originalEnd.call(res) as any;
+            originalWrite.call(res, compressedBuffer, 'binary');
+            return originalEnd.call(res, undefined, 'binary');
           }
         } catch (error) {
           // Compression failed, send uncompressed
@@ -192,8 +192,8 @@ export function compressionMiddleware(options: CompressionOptions = {}) {
 
       // Send uncompressed
       res.setHeader('Content-Length', buffer.length);
-      originalWrite.call(res, buffer);
-      return originalEnd.call(res) as any;
+      originalWrite.call(res, buffer, 'binary');
+      return originalEnd.call(res, undefined, 'binary');
     };
 
     next();
@@ -233,7 +233,7 @@ export function etagMiddleware(options: ETagOptions = {}) {
       return originalWrite.call(this, chunk, encoding);
     };
 
-    res.end = function(chunk?: any, encoding?: any): void {
+    res.end = function(chunk?: any, encoding?: any): Response {
       if (chunk) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding));
       }
@@ -255,7 +255,7 @@ export function etagMiddleware(options: ETagOptions = {}) {
       if (clientETag && clientETag === etag) {
         res.statusCode = 304;
         res.removeHeader('Content-Length');
-        return originalEnd.call(res);
+        return originalEnd.call(res, undefined, 'utf8');
       }
 
       return originalEnd.call(res, chunk, encoding);
@@ -337,7 +337,7 @@ export function contentOptimizationMiddleware(options: ContentOptimizationOption
       return true;
     };
 
-    res.end = function(chunk?: any, encoding?: any): void {
+    res.end = function(chunk?: any, encoding?: any): Response {
       if (chunk) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding));
       }
@@ -365,16 +365,16 @@ export function contentOptimizationMiddleware(options: ContentOptimizationOption
           const optimizedBuffer = Buffer.from(content);
           res.setHeader('Content-Length', optimizedBuffer.length);
           
-          originalWrite.call(res, optimizedBuffer);
-          return originalEnd.call(res);
+          originalWrite.call(res, optimizedBuffer, 'utf8');
+          return originalEnd.call(res, undefined, 'utf8');
         } catch (error) {
           console.warn('Content optimization failed:', error);
         }
       }
 
       // Send original content if optimization failed or not applicable
-      originalWrite.call(res, buffer);
-      return originalEnd.call(res);
+      originalWrite.call(res, buffer, 'utf8');
+      return originalEnd.call(res, undefined, 'utf8');
     };
 
     next();
@@ -416,7 +416,7 @@ export function requestDeduplicationMiddleware() {
     // Create promise for this request
     const requestPromise = new Promise((resolve, reject) => {
       const originalEnd = res.end;
-      res.end = function(chunk?: any, encoding?: any): void {
+      res.end = function(chunk?: any, encoding?: any): Response {
         // Cache successful responses
         if (res.statusCode >= 200 && res.statusCode < 300) {
           cacheResponse(requestKey, {

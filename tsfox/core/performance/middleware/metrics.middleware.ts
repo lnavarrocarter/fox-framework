@@ -86,9 +86,9 @@ export function performanceMiddleware(options: PerformanceMiddlewareOptions = {}
     const originalEnd = res.end;
     let finished = false;
 
-    res.end = function(this: Response, ...args: any[]) {
+    res.end = function(this: Response, chunk?: any, encoding?: any, cb?: any): Response {
       if (finished) {
-        return originalEnd.apply(this, args);
+        return originalEnd.call(this, chunk, encoding, cb);
       }
       finished = true;
 
@@ -157,7 +157,7 @@ export function performanceMiddleware(options: PerformanceMiddlewareOptions = {}
         status: statusCode.toString()
       });
 
-      return originalEnd.apply(this, args);
+      return originalEnd.call(this, chunk, encoding, cb);
     };
 
     next();
@@ -175,7 +175,7 @@ export function routePerformanceMiddleware() {
 
     // Track route resolution
     const originalNext = next;
-    const wrappedNext = (...args: any[]) => {
+    const wrappedNext = (error?: any) => {
       const endTime = process.hrtime.bigint();
       const resolutionTime = Number(endTime - startTime) / 1e6;
 
@@ -184,7 +184,7 @@ export function routePerformanceMiddleware() {
         path: req.route?.path || req.path
       });
 
-      return originalNext.apply(this, args);
+      return originalNext(error);
     };
 
     wrappedNext();
@@ -200,7 +200,7 @@ export function middlewarePerformanceWrapper(name: string, middleware: Function)
   return (req: Request, res: Response, next: NextFunction): void => {
     const startTime = process.hrtime.bigint();
 
-    const wrappedNext = (...args: any[]) => {
+    const wrappedNext = (error?: any) => {
       const endTime = process.hrtime.bigint();
       const executionTime = Number(endTime - startTime) / 1e6;
 
@@ -210,7 +210,7 @@ export function middlewarePerformanceWrapper(name: string, middleware: Function)
         path: req.route?.path || req.path
       });
 
-      return next.apply(this, args);
+      return next(error);
     };
 
     // Call the original middleware with wrapped next function

@@ -249,7 +249,7 @@ export class Profiler {
         const start = Date.now();
         const memBefore = process.memoryUsage().heapUsed;
         
-        const result = originalGC.apply(global, args);
+        const result = originalGC.apply(global, args as [any]);
         
         const duration = Date.now() - start;
         const memAfter = process.memoryUsage().heapUsed;

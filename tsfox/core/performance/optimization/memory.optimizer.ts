@@ -213,7 +213,7 @@ export class MemoryOptimizer {
   private static options: MemoryOptimizationOptions;
   private static gcScheduled = false;
   private static leakDetector?: MemoryLeakDetector;
-  private static weakRefCache = new Map<string, WeakRef<any>>();
+  private static weakRefCache = new Map<string, { value: any; lastAccess: number }>();
 
   /**
    * Initialize memory optimizer
@@ -285,7 +285,7 @@ export class MemoryOptimizer {
    */
   static setWeak<T extends object>(key: string, value: T): void {
     if (this.options.useWeakReferences) {
-      this.weakRefCache.set(key, new WeakRef(value));
+      this.weakRefCache.set(key, { value, lastAccess: Date.now() });
     }
   }
 
@@ -302,13 +302,16 @@ export class MemoryOptimizer {
       return null;
     }
 
-    const value = ref.deref();
-    if (!value) {
+    // Check if the cached value is old and should be cleaned up
+    const now = Date.now();
+    if (now - ref.lastAccess > 300000) { // 5 minutes
       this.weakRefCache.delete(key);
       return null;
     }
 
-    return value;
+    // Update last access time
+    ref.lastAccess = now;
+    return ref.value;
   }
 
   /**
