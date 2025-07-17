@@ -1,0 +1,68 @@
+# 🦊 Fox Framework - Prometheus Configuration
+# Monitoring and metrics collection
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'fox-framework'
+    environment: 'production'
+
+# ==========================================
+# 📋 RULE FILES
+# ==========================================
+rule_files:
+  - "alert_rules.yml"
+
+# ==========================================
+# 🚨 ALERTING CONFIGURATION
+# ==========================================
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - 'alertmanager:9093'
+
+# ==========================================
+# 📊 SCRAPE CONFIGURATIONS
+# ==========================================
+scrape_configs:
+  # Fox Framework Application
+  - job_name: 'fox-framework'
+    static_configs:
+      - targets: ['fox-framework:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Node Exporter (System Metrics)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+
+  # Nginx Metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:8080']
+    metrics_path: '/nginx-status'
+    scrape_interval: 30s
+
+  # Prometheus Self-Monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+
+  # Redis Metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+
+  # PostgreSQL Metrics
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s

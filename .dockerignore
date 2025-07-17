@@ -1,0 +1,85 @@
+# 🦊 Fox Framework - Docker ignore file
+# Optimizes Docker build by excluding unnecessary files
+
+# ==========================================
+# 📁 NODE.JS
+# ==========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==========================================
+# 📊 COVERAGE & TESTING
+# ==========================================
+coverage/
+.nyc_output/
+*.lcov
+test-results.xml
+
+# ==========================================
+# 🏗️ BUILD & DIST
+# ==========================================
+dist/
+build/
+*.tsbuildinfo
+
+# ==========================================
+# 🧪 DEVELOPMENT
+# ==========================================
+.git/
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ==========================================
+# 📝 DOCUMENTATION
+# ==========================================
+docs/
+*.md
+!README.md
+
+# ==========================================
+# 🔧 CONFIGURATION
+# ==========================================
+.env*
+!.env.example
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# 📦 TEMPORARY & LOGS
+# ==========================================
+logs/
+*.log
+temp/
+tmp/
+staging/
+
+# ==========================================
+# 🧹 OS & EDITOR
+# ==========================================
+.DS_Store
+.vscode/
+.idea/
+*.sublime-*
+.editorconfig
+
+# ==========================================
+# 🚢 DOCKER
+# ==========================================
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# ==========================================
+# 📋 PROJECT SPECIFIC
+# ==========================================
+examples/
+__mocks__/
+.dev/
+LANZAMIENTO-*.md
+ESTABILIZACION-*.md

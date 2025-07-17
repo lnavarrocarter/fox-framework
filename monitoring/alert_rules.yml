@@ -1,0 +1,139 @@
+# 🦊 Fox Framework - Alert Rules
+# Prometheus alerting rules for monitoring
+
+groups:
+- name: fox-framework-critical
+  rules:
+  # ==========================================
+  # 🚨 CRITICAL ALERTS
+  # ==========================================
+  - alert: ServiceDown
+    expr: up{job="fox-framework"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      service: fox-framework
+    annotations:
+      summary: "Fox Framework service is down"
+      description: "Fox Framework service has been down for more than 1 minute"
+      runbook_url: "https://docs.fox-framework.com/runbooks/service-down"
+
+  - alert: HighErrorRate
+    expr: (rate(http_requests_total{code=~"5.."}[5m]) / rate(http_requests_total[5m])) > 0.05
+    for: 2m
+    labels:
+      severity: critical
+      service: fox-framework
+    annotations:
+      summary: "High error rate detected"
+      description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+      runbook_url: "https://docs.fox-framework.com/runbooks/high-error-rate"
+
+  - alert: HighMemoryUsage
+    expr: (process_resident_memory_bytes / 1024 / 1024) > 400
+    for: 5m
+    labels:
+      severity: critical
+      service: fox-framework
+    annotations:
+      summary: "High memory usage"
+      description: "Memory usage is {{ $value }}MB (threshold: 400MB)"
+      runbook_url: "https://docs.fox-framework.com/runbooks/high-memory"
+
+  - alert: DatabaseConnectionFailure
+    expr: up{job="postgres"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      service: database
+    annotations:
+      summary: "Database connection failure"
+      description: "PostgreSQL database is unreachable"
+      runbook_url: "https://docs.fox-framework.com/runbooks/database-down"
+
+- name: fox-framework-warning
+  rules:
+  # ==========================================
+  # ⚠️ WARNING ALERTS
+  # ==========================================
+  - alert: SlowResponseTime
+    expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+    for: 3m
+    labels:
+      severity: warning
+      service: fox-framework
+    annotations:
+      summary: "Slow response times"
+      description: "95th percentile response time is {{ $value }}s (threshold: 1s)"
+      runbook_url: "https://docs.fox-framework.com/runbooks/slow-response"
+
+  - alert: HighCPUUsage
+    expr: (rate(process_cpu_seconds_total[5m]) * 100) > 80
+    for: 5m
+    labels:
+      severity: warning
+      service: fox-framework
+    annotations:
+      summary: "High CPU usage"
+      description: "CPU usage is {{ $value }}% (threshold: 80%)"
+      runbook_url: "https://docs.fox-framework.com/runbooks/high-cpu"
+
+  - alert: LowDiskSpace
+    expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+    for: 5m
+    labels:
+      severity: warning
+      service: system
+    annotations:
+      summary: "Low disk space"
+      description: "Disk space is {{ $value | humanizePercentage }} full (threshold: 90%)"
+      runbook_url: "https://docs.fox-framework.com/runbooks/low-disk"
+
+  - alert: MemoryUsageWarning
+    expr: (process_resident_memory_bytes / 1024 / 1024) > 300
+    for: 10m
+    labels:
+      severity: warning
+      service: fox-framework
+    annotations:
+      summary: "Memory usage warning"
+      description: "Memory usage is {{ $value }}MB (warning threshold: 300MB)"
+      runbook_url: "https://docs.fox-framework.com/runbooks/memory-warning"
+
+  - alert: RedisConnectionWarning
+    expr: up{job="redis"} == 0
+    for: 2m
+    labels:
+      severity: warning
+      service: redis
+    annotations:
+      summary: "Redis connection warning"
+      description: "Redis cache is unreachable"
+      runbook_url: "https://docs.fox-framework.com/runbooks/redis-down"
+
+- name: fox-framework-info
+  rules:
+  # ==========================================
+  # ℹ️ INFORMATIONAL ALERTS
+  # ==========================================
+  - alert: HighRequestVolume
+    expr: rate(http_requests_total[5m]) > 100
+    for: 5m
+    labels:
+      severity: info
+      service: fox-framework
+    annotations:
+      summary: "High request volume"
+      description: "Request rate is {{ $value }} requests/second"
+      runbook_url: "https://docs.fox-framework.com/runbooks/high-volume"
+
+  - alert: DeploymentDetected
+    expr: increase(process_start_time_seconds[5m]) > 0
+    for: 0m
+    labels:
+      severity: info
+      service: fox-framework
+    annotations:
+      summary: "New deployment detected"
+      description: "Fox Framework service was restarted (possible deployment)"
+      runbook_url: "https://docs.fox-framework.com/runbooks/deployment"

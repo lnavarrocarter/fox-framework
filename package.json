@@ -8,7 +8,8 @@
     "tsfox": "dist/tsfox/cli/index.js"
   },
   "scripts": {
-    "start": "ts-node src/server/index.ts",
+    "start": "node dist/src/server/index.js",
+    "start:dev": "ts-node src/server/index.ts",
     "dev": "nodemon --watch 'src/**/*.ts' --watch 'tsfox/**/*.ts' --exec 'ts-node' src/server/index.ts",
     "build": "tsc",
     "test": "jest",
@@ -28,10 +29,18 @@
     "build:watch": "tsc --watch",
     "docker:build": "docker build -t fox-framework:latest .",
     "docker:run": "docker run -p 3000:3000 fox-framework:latest",
+    "docker:compose:up": "docker-compose up -d",
+    "docker:compose:down": "docker-compose down",
+    "docker:compose:logs": "docker-compose logs -f",
+    "docker:compose:build": "docker-compose build",
     "security:audit": "npm audit --audit-level moderate",
     "security:update": "npm update",
     "performance:baseline": "echo 'Performance baseline not implemented yet'",
-    "performance:baseline:production": "echo 'Production performance baseline not implemented yet'"
+    "performance:baseline:production": "echo 'Production performance baseline not implemented yet'",
+    "ci:test": "npm run test:ci && npm run security:audit",
+    "ci:build": "npm run build && npm run docker:build",
+    "ci:deploy:staging": "npm run staging:validate:remote",
+    "ci:deploy:production": "echo 'Production deployment script'"
   },
   "keywords": [
     "framework",
