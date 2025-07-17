@@ -6,7 +6,7 @@
 import { Command } from 'commander';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
-import ora from 'ora';
+import { createSpinner } from '../utils/spinner';
 import DeploymentManager, { DeploymentConfig } from '../../core/deployment/deployment.manager';
 import TerraformGenerator from '../../core/deployment/terraform.generator';
 
@@ -125,7 +125,8 @@ export class DeploymentCLI {
       }
 
       // Start deployment
-      const spinner = ora('Deploying application...').start();
+      const spinner = await createSpinner('Deploying application...');
+      spinner.start();
 
       const manager = new DeploymentManager(config);
       const result = await manager.deploy();
@@ -163,7 +164,8 @@ export class DeploymentCLI {
       const provider = await this.selectProvider(options.provider);
       const config = await this.getBasicConfig(provider);
 
-      const spinner = ora('Generating templates...').start();
+      const spinner = await createSpinner('Generating templates...');
+      spinner.start();
 
       TerraformGenerator.writeTerraformFiles(options.output, config);
 
@@ -249,7 +251,8 @@ export class DeploymentCLI {
         }
       }
 
-      const spinner = ora('Destroying resources...').start();
+      const spinner = await createSpinner('Destroying resources...');
+      spinner.start();
 
       // Mock destroy process
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -271,7 +274,8 @@ export class DeploymentCLI {
       console.log(chalk.blue('📊 Deployment Status'));
       console.log('===================\n');
 
-      const spinner = ora('Checking status...').start();
+      const spinner = await createSpinner('Checking status...');
+      spinner.start();
 
       // Mock status check
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -299,7 +303,8 @@ export class DeploymentCLI {
       console.log(chalk.blue('📜 Application Logs'));
       console.log('==================\n');
 
-      const spinner = ora('Fetching logs...').start();
+      const spinner = await createSpinner('Fetching logs...');
+      spinner.start();
 
       // Mock log fetching
       await new Promise(resolve => setTimeout(resolve, 1000));

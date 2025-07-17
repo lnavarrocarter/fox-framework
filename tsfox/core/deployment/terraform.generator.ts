@@ -372,6 +372,72 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+${config.database ? `
+# Database subnet group
+resource "aws_db_subnet_group" "main" {
+  name       = "\${var.app_name}-db-subnet-group"
+  subnet_ids = aws_subnet.public[*].id
+
+  tags = {
+    Name        = "\${var.app_name}-db-subnet-group"
+    Environment = var.environment
+  }
+}
+
+# Security group for database
+resource "aws_security_group" "database" {
+  name_prefix = "\${var.app_name}-db-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_tasks.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "\${var.app_name}-db-sg"
+    Environment = var.environment
+  }
+}
+
+# RDS PostgreSQL Instance
+resource "aws_db_instance" "postgresql" {
+  identifier             = "\${var.app_name}-postgres"
+  engine                 = "postgres"
+  engine_version         = "13.13"
+  instance_class         = "${config.database?.size || 'db.t3.micro'}"
+  allocated_storage      = 20
+  storage_encrypted      = true
+
+  db_name  = var.app_name
+  username = "postgres"
+  password = "changeme123!"
+
+  vpc_security_group_ids = [aws_security_group.database.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+
+  backup_retention_period = 7
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+
+  skip_final_snapshot = true
+
+  tags = {
+    Name        = "\${var.app_name}-postgres"
+    Environment = var.environment
+  }
+}
+` : ''}
+
 # Outputs
 output "load_balancer_url" {
   description = "URL of the load balancer"
@@ -392,6 +458,18 @@ output "ecs_service_name" {
   description = "Name of the ECS service"
   value       = aws_ecs_service.app.name
 }
+
+${config.database ? `
+output "database_endpoint" {
+  description = "RDS instance endpoint"
+  value       = aws_db_instance.postgresql.endpoint
+}
+
+output "database_connection_string" {
+  description = "Database connection string"
+  value       = "postgresql://postgres:changeme123!@\${aws_db_instance.postgresql.endpoint}/\${var.app_name}"
+}
+` : ''}
 `;
   }
 

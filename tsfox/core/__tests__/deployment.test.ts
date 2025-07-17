@@ -60,12 +60,10 @@ describe('Cloud Deployment System', () => {
       
       const manager = new DeploymentManager(mockConfig);
       
-      try {
-        await manager.deploy();
-        expect(true).toBe(false); // Should not reach here
-      } catch (error: any) {
-        expect(error.message).toContain('Required file');
-      }
+      const result = await manager.deploy();
+      
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Required file');
     });
 
     it('should handle successful AWS deployment', async () => {
@@ -112,10 +110,34 @@ describe('Cloud Deployment System', () => {
         const config = { ...mockConfig, provider };
         const manager = new DeploymentManager(config);
         
-        // Mock provider-specific validation
-        jest.spyOn(manager as any, `validate${provider.toUpperCase()}Credentials`)
+        // Mock provider-specific validation and deployment methods
+        let validateMethod, deployMethod;
+        
+        switch (provider) {
+          case 'aws':
+            validateMethod = 'validateAWSCredentials';
+            deployMethod = 'deployToAWS';
+            break;
+          case 'gcp':
+            validateMethod = 'validateGCPCredentials';
+            deployMethod = 'deployToGCP';
+            break;
+          case 'azure':
+            validateMethod = 'validateAzureCredentials';
+            deployMethod = 'deployToAzure';
+            break;
+          case 'kubernetes':
+            validateMethod = 'validateKubernetesConfig';
+            deployMethod = 'deployToKubernetes';
+            break;
+          default:
+            validateMethod = 'validateConfig';
+            deployMethod = 'executeDeployment';
+        }
+        
+        jest.spyOn(manager as any, validateMethod)
           .mockResolvedValue(undefined);
-        jest.spyOn(manager as any, `deployTo${provider.toUpperCase()}`)
+        jest.spyOn(manager as any, deployMethod)
           .mockResolvedValue({ success: true, message: 'Deployed' });
         
         expect(manager).toBeInstanceOf(DeploymentManager);
@@ -201,6 +223,9 @@ describe('Cloud Deployment System', () => {
     });
 
     it('should write terraform files to disk', () => {
+      // Reset the mock to allow directory creation check
+      mockFs.existsSync.mockReturnValue(false);
+      
       TerraformGenerator.writeTerraformFiles(tempDir, mockConfig);
       
       expect(mockFs.mkdirSync).toHaveBeenCalledWith(
@@ -217,6 +242,9 @@ describe('Cloud Deployment System', () => {
   describe('HelmChartGenerator', () => {
     it('should generate complete Helm chart structure', () => {
       const k8sConfig = { ...mockConfig, provider: 'kubernetes' as const };
+      
+      // Reset the mock to allow directory creation check
+      mockFs.existsSync.mockReturnValue(false);
       
       HelmChartGenerator.generateCompleteChart(tempDir, k8sConfig);
       

@@ -66,7 +66,7 @@ export class DeploymentManager {
       console.error('❌ Deployment failed:', error);
       return {
         success: false,
-        message: 'Deployment failed',
+        message: error instanceof Error ? error.message : 'Deployment failed',
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
