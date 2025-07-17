@@ -4,6 +4,10 @@
 import { Command } from 'commander';
 import { generateController, generateModel, generateView } from './generators';
 import { DockerCommands } from './commands/docker';
+import { HealthCommands } from './commands/health';
+import { MetricsCommands } from './commands/metrics';
+import { CacheCommands } from './commands/cache';
+import { PerformanceCommands } from './commands/performance';
 
 const program = new Command();
 
@@ -66,6 +70,186 @@ DockerCommands.forEach(dockerCommand => {
             await dockerCommand.action([], options, context);
         } catch (error) {
             console.error(`Error executing ${dockerCommand.name}:`, error);
+            process.exit(1);
+        }
+    });
+});
+
+// Add Health commands
+const healthCmd = program
+    .command('health')
+    .description('Health check system commands');
+
+HealthCommands.forEach(healthCommand => {
+    const cmd = healthCmd
+        .command(healthCommand.name)
+        .description(healthCommand.description);
+    
+    // Add options
+    if (healthCommand.options) {
+        healthCommand.options.forEach(option => {
+            let optionStr = option.alias ? `-${option.alias}, --${option.name}` : `--${option.name}`;
+            
+            // Add value placeholder for non-boolean options
+            if (option.type !== 'boolean') {
+                optionStr += ' <value>';
+            }
+            
+            if (option.choices) {
+                cmd.option(optionStr, `${option.description} (choices: ${option.choices.join('|')})`, option.default);
+            } else {
+                cmd.option(optionStr, option.description, option.default);
+            }
+        });
+    }
+    
+    cmd.action(async (options: any) => {
+        try {
+            const context = {
+                command: healthCommand,
+                projectRoot: process.cwd(),
+                verbose: options.verbose || false,
+                quiet: options.quiet || false,
+                noColor: options.noColor || false
+            };
+            await healthCommand.action([], options, context);
+        } catch (error) {
+            console.error(`Error executing health ${healthCommand.name}:`, error);
+            process.exit(1);
+        }
+    });
+});
+
+// Add Metrics commands
+const metricsCmd = program
+    .command('metrics')
+    .description('Metrics collection and monitoring commands');
+
+MetricsCommands.forEach(metricsCommand => {
+    const cmd = metricsCmd
+        .command(metricsCommand.name)
+        .description(metricsCommand.description);
+    
+    // Add options
+    if (metricsCommand.options) {
+        metricsCommand.options.forEach(option => {
+            let optionStr = option.alias ? `-${option.alias}, --${option.name}` : `--${option.name}`;
+            
+            // Add value placeholder for non-boolean options
+            if (option.type !== 'boolean') {
+                optionStr += ' <value>';
+            }
+            
+            if (option.choices) {
+                cmd.option(optionStr, `${option.description} (choices: ${option.choices.join('|')})`, option.default);
+            } else {
+                cmd.option(optionStr, option.description, option.default);
+            }
+        });
+    }
+    
+    cmd.action(async (options: any) => {
+        try {
+            const context = {
+                command: metricsCommand,
+                projectRoot: process.cwd(),
+                verbose: options.verbose || false,
+                quiet: options.quiet || false,
+                noColor: options.noColor || false
+            };
+            await metricsCommand.action([], options, context);
+        } catch (error) {
+            console.error(`Error executing metrics ${metricsCommand.name}:`, error);
+            process.exit(1);
+        }
+    });
+});
+
+// Add Cache commands
+const cacheCmd = program
+    .command('cache')
+    .description('Cache system management commands');
+
+CacheCommands.forEach(cacheCommand => {
+    const cmd = cacheCmd
+        .command(cacheCommand.name)
+        .description(cacheCommand.description);
+    
+    // Add options
+    if (cacheCommand.options) {
+        cacheCommand.options.forEach(option => {
+            let optionStr = option.alias ? `-${option.alias}, --${option.name}` : `--${option.name}`;
+            
+            // Add value placeholder for non-boolean options
+            if (option.type !== 'boolean') {
+                optionStr += ' <value>';
+            }
+            
+            if (option.choices) {
+                cmd.option(optionStr, `${option.description} (choices: ${option.choices.join('|')})`, option.default);
+            } else {
+                cmd.option(optionStr, option.description, option.default);
+            }
+        });
+    }
+    
+    cmd.action(async (options: any) => {
+        try {
+            const context = {
+                command: cacheCommand,
+                projectRoot: process.cwd(),
+                verbose: options.verbose || false,
+                quiet: options.quiet || false,
+                noColor: options.noColor || false
+            };
+            await cacheCommand.action([], options, context);
+        } catch (error) {
+            console.error(`Error executing cache ${cacheCommand.name}:`, error);
+            process.exit(1);
+        }
+    });
+});
+
+// Add Performance commands
+const performanceCmd = program
+    .command('performance')
+    .description('Performance analysis and optimization commands');
+
+PerformanceCommands.forEach(performanceCommand => {
+    const cmd = performanceCmd
+        .command(performanceCommand.name)
+        .description(performanceCommand.description);
+    
+    // Add options
+    if (performanceCommand.options) {
+        performanceCommand.options.forEach(option => {
+            let optionStr = option.alias ? `-${option.alias}, --${option.name}` : `--${option.name}`;
+            
+            // Add value placeholder for non-boolean options
+            if (option.type !== 'boolean') {
+                optionStr += ' <value>';
+            }
+            
+            if (option.choices) {
+                cmd.option(optionStr, `${option.description} (choices: ${option.choices.join('|')})`, option.default);
+            } else {
+                cmd.option(optionStr, option.description, option.default);
+            }
+        });
+    }
+    
+    cmd.action(async (options: any) => {
+        try {
+            const context = {
+                command: performanceCommand,
+                projectRoot: process.cwd(),
+                verbose: options.verbose || false,
+                quiet: options.quiet || false,
+                noColor: options.noColor || false
+            };
+            await performanceCommand.action([], options, context);
+        } catch (error) {
+            console.error(`Error executing performance ${performanceCommand.name}:`, error);
             process.exit(1);
         }
     });
