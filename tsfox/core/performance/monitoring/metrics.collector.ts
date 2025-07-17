@@ -203,6 +203,13 @@ export class MetricsCollector implements IMetricsCollector {
   }
 
   /**
+   * Get metrics in Prometheus format
+   */
+  getPrometheusFormat(): string {
+    return this.export('prometheus');
+  }
+
+  /**
    * Get memory usage statistics
    */
   getMemoryStats(): { usedMemory: number; totalMetrics: number; dataPoints: number } {

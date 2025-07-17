@@ -28,6 +28,9 @@ export interface IPerformance {
   
   /** Reset all metrics */
   reset(): void;
+  
+  /** Get access to the underlying metrics collector */
+  getMetricsCollector(): IMetricsCollector;
 }
 
 /**
@@ -45,6 +48,9 @@ export interface IMetricsCollector {
   
   /** Export metrics in specified format */
   export(format: ExportFormat): string;
+  
+  /** Export metrics in Prometheus format */
+  getPrometheusFormat(): string;
   
   /** Start automatic collection */
   start(): void;

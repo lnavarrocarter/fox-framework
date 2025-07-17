@@ -375,6 +375,13 @@ export class Performance implements IPerformance {
     
     return customMetrics;
   }
+
+  /**
+   * Get access to the underlying metrics collector for Prometheus export
+   */
+  getMetricsCollector(): MetricsCollector {
+    return this.metricsCollector;
+  }
 }
 
 // ============================================================================
