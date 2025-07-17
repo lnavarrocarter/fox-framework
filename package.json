@@ -1,11 +1,29 @@
 {
-  "name": "fox-framework",
+  "name": "@foxframework/core",
   "version": "1.0.0",
-  "description": "A modern web framework for TypeScript/Node.js with modular routing, integrated template engine, and factory patterns",
+  "description": "A modern, production-ready web framework for TypeScript/Node.js with modular routing, integrated template engine, CLI tools, and enterprise features",
   "main": "dist/tsfox/index.js",
   "types": "dist/tsfox/index.d.ts",
   "bin": {
     "tsfox": "dist/tsfox/cli/index.js"
+  },
+  "files": [
+    "dist/tsfox/**/*",
+    "dist/src/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lnavarrocarter/fox-framework.git"
+  },
+  "homepage": "https://github.com/lnavarrocarter/fox-framework#readme",
+  "bugs": {
+    "url": "https://github.com/lnavarrocarter/fox-framework/issues"
   },
   "scripts": {
     "start": "node dist/src/server/index.js",
@@ -40,20 +58,42 @@
     "ci:test": "npm run test:ci && npm run security:audit",
     "ci:build": "npm run build && npm run docker:build",
     "ci:deploy:staging": "npm run staging:validate:remote",
-    "ci:deploy:production": "echo 'Production deployment script'"
+    "ci:deploy:production": "echo 'Production deployment script'",
+    "prepublishOnly": "npm run build:clean && npm run test:ci",
+    "postpublish": "echo '🎉 Fox Framework published to NPM successfully!'"
   },
   "keywords": [
     "framework",
-    "web",
+    "web-framework", 
     "typescript",
     "nodejs",
     "express",
     "template-engine",
     "factory-pattern",
-    "cli"
+    "cli",
+    "microservices",
+    "enterprise",
+    "production-ready",
+    "routing",
+    "middleware",
+    "cache",
+    "logging",
+    "security",
+    "performance",
+    "docker"
   ],
-  "author": "Fox Framework Team",
-  "license": "ISC",
+  "author": {
+    "name": "Luis Navarro Carter",
+    "email": "lnavarrocarter@foxframework.dev",
+    "url": "https://github.com/lnavarrocarter"
+  },
+  "contributors": [
+    {
+      "name": "Fox Framework Team",
+      "url": "https://github.com/lnavarrocarter/fox-framework"
+    }
+  ],
+  "license": "MIT",
   "engines": {
     "node": ">=16.0.0"
   },
