@@ -32,6 +32,16 @@ program
         generateView(name);
     });
 
+// Add new project command
+program
+    .command('new <name>')
+    .description('Create a new Fox Framework project')
+    .option('-t, --template <template>', 'Project template (basic, api, full)', 'basic')
+    .action(async (projectName: string, options: { template?: string }) => {
+        const { generateNewProject } = await import('./generators');
+        await generateNewProject(projectName, options.template || 'basic');
+    });
+
 // Add Docker commands
 const dockerCmd = program
     .command('docker')

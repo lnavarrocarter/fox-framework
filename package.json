@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A modern, production-ready web framework for TypeScript/Node.js with modular routing, integrated template engine, CLI tools, and enterprise features",
   "main": "dist/tsfox/index.js",
   "types": "dist/tsfox/index.d.ts",
