@@ -49,13 +49,13 @@ jobs:
       continue-on-error: true
       
     - name: 🧪 Run unit tests
-      run: npm run test:unit
+      run: npm run test:unit --detectOpenHandles
       
     - name: 🔗 Run integration tests
-      run: npm run test:integration
+      run: npm run test:integration --detectOpenHandles
       
     - name: 📊 Generate coverage report
-      run: npm run test:coverage
+      run: npm run test:coverage --detectOpenHandles
       
     - name: 📈 Upload coverage reports
       uses: actions/upload-artifact@v4
