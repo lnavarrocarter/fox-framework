@@ -16,9 +16,22 @@
     "test:coverage": "jest --coverage",
     "test:integration": "jest --testMatch='**/__tests__/integration/**/*.test.ts'",
     "test:unit": "jest --testMatch='**/__tests__/**/*.test.ts' --ignore-pattern='integration'",
+    "test:ci": "npm run test:unit && npm run test:integration",
+    "staging:start": "ts-node staging/server.ts",
+    "staging:validate": "ts-node staging/validate.ts",
+    "staging:validate:remote": "ts-node staging/validate-remote.ts",
+    "staging:full": "npm run staging:validate",
     "clean": "rm -rf dist coverage",
     "lint": "echo 'ESLint not configured yet'",
-    "lint:fix": "echo 'ESLint not configured yet'"
+    "lint:fix": "echo 'ESLint not configured yet'",
+    "build:clean": "rm -rf dist && npm run build",
+    "build:watch": "tsc --watch",
+    "docker:build": "docker build -t fox-framework:latest .",
+    "docker:run": "docker run -p 3000:3000 fox-framework:latest",
+    "security:audit": "npm audit --audit-level moderate",
+    "security:update": "npm update",
+    "performance:baseline": "echo 'Performance baseline not implemented yet'",
+    "performance:baseline:production": "echo 'Production performance baseline not implemented yet'"
   },
   "keywords": [
     "framework",
@@ -50,6 +63,7 @@
     "typescript": "^5.3.2"
   },
   "dependencies": {
+    "axios": "^1.10.0",
     "chokidar": "^3.6.0",
     "commander": "^12.1.0",
     "express": "^4.18.2",
