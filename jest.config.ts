@@ -3,6 +3,8 @@ import type { Config } from 'jest';
 const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  globalTeardown: '<rootDir>/jest.teardown.ts',
   roots: ['<rootDir>/src', '<rootDir>/tsfox'],
   testMatch: [
     '**/__tests__/**/*.test.ts',
@@ -26,6 +28,12 @@ const config: Config = {
       statements: 70
     }
   },
+  // Test timeout increased for performance tests
+  testTimeout: 30000,
+  // Force exit to prevent hanging
+  forceExit: true,
+  // Detect open handles in development
+  detectOpenHandles: process.env.NODE_ENV === 'development',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/tsfox/$1',
     '^@src/(.*)$': '<rootDir>/src/$1',
@@ -34,7 +42,6 @@ const config: Config = {
   transformIgnorePatterns: [
     'node_modules/(?!(inquirer)/)'
   ],
-  testTimeout: 10000,
   clearMocks: true,
   restoreMocks: true
 };

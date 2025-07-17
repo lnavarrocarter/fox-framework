@@ -12,6 +12,7 @@ describe('Monitoring System Integration', () => {
   let app: express.Application;
   let healthChecker: HealthChecker;
   let metricsCollector: MetricsCollector;
+  let server: any;
 
   beforeEach(() => {
     app = express();
@@ -86,6 +87,24 @@ describe('Monitoring System Integration', () => {
     app.get('/test', (req, res) => {
       res.json({ message: 'test' });
     });
+  });
+
+  afterEach(async () => {
+    // Cleanup any running servers
+    if (server) {
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
+      server = null;
+    }
+    
+    // Give time for cleanup
+    await new Promise(resolve => setTimeout(resolve, 10));
+  });
+
+  afterAll(async () => {
+    // Final cleanup - ensure all handles are closed
+    await new Promise(resolve => setTimeout(resolve, 100));
   });
 
   describe('Health Check Endpoints', () => {
