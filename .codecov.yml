@@ -1,0 +1,69 @@
+# Configuración de Codecov para Fox Framework
+codecov:
+  require_ci_to_pass: true
+  
+coverage:
+  # Configuración de precisión
+  precision: 2
+  round: down
+  range: "70...100"
+  
+  # Configuración de status checks
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 2%
+        base: auto
+        informational: false
+    patch:
+      default:
+        target: 70%
+        threshold: 5%
+        base: auto
+        informational: true
+
+# Configuración de comentarios en PR
+comment:
+  layout: "reach,diff,flags,files,footer"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
+# Flags para diferentes tipos de pruebas
+flag_management:
+  default_rules:
+    carryforward: true
+    carryforward_mode: all
+  individual_flags:
+    - name: unittests
+      carryforward: true
+    - name: integration
+      carryforward: true
+
+# Configuración de parsers
+parsers:
+  gcov:
+    branch_detection:
+      conditional: yes
+      loop: yes
+      method: no
+      macro: no
+
+# Archivos a ignorar en coverage
+ignore:
+  - "**/__tests__/**"
+  - "**/__test__/**"
+  - "**/*.test.ts"
+  - "**/*.test.js"
+  - "**/node_modules/**"
+  - "**/coverage/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "jest.config.*"
+  - "jest.setup.*"
+  - "jest.teardown.*"
+  - "**/*.d.ts"
+  - "src/server/index.ts"  # Archivo de entrada del servidor
+  - "tsfox/index.ts"       # Archivo de entrada del framework

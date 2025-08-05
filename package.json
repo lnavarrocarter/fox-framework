@@ -36,6 +36,7 @@
     "test:integration": "jest --testMatch='**/__tests__/integration/**/*.test.ts' --detectOpenHandles",
     "test:unit": "jest --testMatch='**/__tests__/**/*.test.ts' --ignore-pattern='integration' --detectOpenHandles",
     "test:ci": "npm run test:unit && npm run test:integration",
+    "test:codecov": "./scripts/check-codecov.sh",
     "staging:start": "ts-node staging/server.ts",
     "staging:validate": "ts-node staging/validate.ts",
     "staging:validate:remote": "ts-node staging/validate-remote.ts",
