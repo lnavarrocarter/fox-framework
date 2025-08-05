@@ -1,0 +1,619 @@
+# Contribuir al Framework
+
+¡Gracias por tu interés en contribuir a Fox Framework! Esta guía te ayudará a entender cómo puedes participar en el desarrollo y crecimiento del proyecto.
+
+## 🌟 Formas de Contribuir
+
+### 💻 Código
+- Implementar nuevas funcionalidades
+- Corregir bugs
+- Mejorar el rendimiento
+- Escribir tests
+- Refactorizar código existente
+
+### 📖 Documentación
+- Mejorar documentación existente
+- Crear nuevos tutoriales
+- Traducir documentación
+- Escribir ejemplos de código
+- Crear videos tutoriales
+
+### 🐛 Reporte de Bugs
+- Reportar bugs encontrados
+- Proporcionar casos de reproducción
+- Verificar y priorizar issues
+- Ayudar a otros usuarios con problemas
+
+### 💡 Ideas y Sugerencias
+- Proponer nuevas funcionalidades
+- Sugerir mejoras de API
+- Compartir casos de uso
+- Participar en discusiones de diseño
+
+## 🚀 Primeros Pasos
+
+### 1. Fork y Clone del Repositorio
+
+```bash
+# Fork el repositorio en GitHub
+# Luego clona tu fork
+
+git clone https://github.com/tu-usuario/fox-framework.git
+cd fox-framework
+
+# Agregar upstream remote
+git remote add upstream https://github.com/fox-framework/fox-framework.git
+```
+
+### 2. Configuración del Entorno de Desarrollo
+
+```bash
+# Instalar dependencias
+npm install
+
+# Instalar dependencias de desarrollo
+npm run setup:dev
+
+# Verificar que todo funciona
+npm test
+npm run build
+```
+
+### 3. Estructura del Proyecto
+
+```
+fox-framework/
+├── src/                    # Código fuente principal
+│   ├── core/              # Funcionalidades core
+│   ├── cli/               # Herramientas CLI
+│   ├── plugins/           # Plugins oficiales
+│   └── examples/          # Ejemplos de uso
+├── docs/                  # Documentación
+├── tests/                 # Tests
+│   ├── unit/              # Tests unitarios
+│   ├── integration/       # Tests de integración
+│   └── e2e/               # Tests end-to-end
+├── benchmarks/            # Benchmarks de rendimiento
+├── scripts/               # Scripts de construcción y deployment
+└── packages/              # Paquetes npm separados
+```
+
+## 🔧 Configuración de Desarrollo
+
+### Dependencias Requeridas
+
+- **Node.js 16+**: Runtime principal
+- **TypeScript 4.8+**: Lenguaje de desarrollo
+- **Jest 29+**: Framework de testing
+- **Docker**: Para tests de integración
+- **Git**: Control de versiones
+
+### Variables de Entorno
+
+Crea un archivo `.env.development`:
+
+```env
+# Base de datos para tests
+TEST_DATABASE_URL=postgresql://fox_test:password@localhost:5432/fox_test
+
+# Redis para tests de cache
+TEST_REDIS_URL=redis://localhost:6379/1
+
+# Logging level
+LOG_LEVEL=debug
+
+# Habilitar debugging
+DEBUG=fox:*
+```
+
+### Comandos de Desarrollo
+
+```bash
+# Desarrollo con hot reload
+npm run dev
+
+# Ejecutar tests
+npm test
+npm run test:watch
+npm run test:coverage
+
+# Linting y formatting
+npm run lint
+npm run lint:fix
+npm run format
+
+# Build
+npm run build
+npm run build:watch
+
+# Benchmarks
+npm run benchmark
+```
+
+## 📝 Proceso de Contribución
+
+### 1. Crear Issue (Opcional pero Recomendado)
+
+Antes de trabajar en una funcionalidad grande, crea un issue para discutir:
+
+```markdown
+**Descripción**
+Breve descripción de la funcionalidad o bug
+
+**Motivación**
+¿Por qué es necesario este cambio?
+
+**Solución Propuesta**
+¿Cómo planeas implementarlo?
+
+**Alternativas Consideradas**
+¿Hay otras formas de resolver esto?
+
+**Tareas**
+- [ ] Implementar funcionalidad
+- [ ] Escribir tests
+- [ ] Actualizar documentación
+- [ ] Crear ejemplos
+```
+
+### 2. Crear Branch
+
+```bash
+# Actualizar main
+git checkout main
+git pull upstream main
+
+# Crear branch descriptiva
+git checkout -b feature/cache-redis-cluster
+git checkout -b fix/memory-leak-in-parser
+git checkout -b docs/getting-started-guide
+```
+
+### 3. Desarrollo
+
+#### Convenciones de Código
+
+```typescript
+// ✅ Bueno - Nombres descriptivos
+export class UserAuthenticationService {
+  async validateUserCredentials(email: string, password: string): Promise<User | null> {
+    // Implementación clara
+  }
+}
+
+// ❌ Malo - Nombres poco descriptivos
+export class UAService {
+  async validate(e: string, p: string): Promise<any> {
+    // Implementación confusa
+  }
+}
+```
+
+#### Estructura de Commits
+
+Usamos [Conventional Commits](https://www.conventionalcommits.org/):
+
+```bash
+# Tipos válidos
+feat: nueva funcionalidad
+fix: corrección de bug
+docs: cambios en documentación
+style: formateo, punto y coma faltante, etc.
+refactor: refactoring de código
+test: agregar tests faltantes
+chore: cambios en build, herramientas, etc.
+
+# Ejemplos
+git commit -m "feat(cache): add Redis cluster support"
+git commit -m "fix(router): resolve memory leak in route matching"
+git commit -m "docs(getting-started): add Docker setup instructions"
+```
+
+#### Testing
+
+Todos los cambios deben incluir tests apropiados:
+
+```typescript
+// test/unit/cache/redis-cache.test.ts
+import { RedisCache } from '../../../src/cache/redis-cache';
+
+describe('RedisCache', () => {
+  let cache: RedisCache;
+
+  beforeEach(() => {
+    cache = new RedisCache({
+      url: process.env.TEST_REDIS_URL
+    });
+  });
+
+  afterEach(async () => {
+    await cache.flushAll();
+    await cache.disconnect();
+  });
+
+  describe('set and get', () => {
+    it('should store and retrieve values', async () => {
+      await cache.set('test-key', 'test-value');
+      const result = await cache.get('test-key');
+      
+      expect(result).toBe('test-value');
+    });
+
+    it('should respect TTL', async () => {
+      await cache.set('ttl-key', 'ttl-value', 1); // 1 segundo
+      
+      // Inmediatamente debe existir
+      expect(await cache.get('ttl-key')).toBe('ttl-value');
+      
+      // Después de 1.1 segundos no debe existir
+      await new Promise(resolve => setTimeout(resolve, 1100));
+      expect(await cache.get('ttl-key')).toBeNull();
+    });
+  });
+});
+```
+
+#### Documentación
+
+Agrega JSDoc a funciones públicas:
+
+```typescript
+/**
+ * Cachea un valor en Redis con un TTL opcional
+ * 
+ * @param key - Clave para almacenar el valor
+ * @param value - Valor a almacenar (será serializado a JSON)
+ * @param ttl - Tiempo de vida en segundos (opcional)
+ * @returns Promise que resuelve cuando el valor está almacenado
+ * 
+ * @example
+ * ```typescript
+ * await cache.set('user:123', { name: 'John', email: 'john@example.com' }, 3600);
+ * ```
+ */
+async set(key: string, value: any, ttl?: number): Promise<void> {
+  // implementación
+}
+```
+
+### 4. Pull Request
+
+#### Preparación
+
+```bash
+# Ejecutar todos los checks antes del PR
+npm run pre-commit
+
+# Equivale a:
+npm run lint
+npm run type-check
+npm test
+npm run build
+```
+
+#### Template de PR
+
+```markdown
+## Descripción
+Breve descripción de los cambios
+
+## Tipo de Cambio
+- [ ] Bug fix (cambio que no rompe funcionalidad existente)
+- [ ] Nueva funcionalidad (cambio que agrega funcionalidad)
+- [ ] Breaking change (cambio que rompe compatibilidad)
+- [ ] Documentación
+
+## ¿Cómo se ha probado?
+- [ ] Tests unitarios
+- [ ] Tests de integración
+- [ ] Tests manuales
+- [ ] Benchmarks de rendimiento
+
+## Checklist
+- [ ] Mi código sigue las convenciones del proyecto
+- [ ] He realizado auto-review de mi código
+- [ ] He agregado tests que prueban mi fix/feature
+- [ ] Tests nuevos y existentes pasan localmente
+- [ ] He agregado documentación necesaria
+- [ ] Mis cambios no generan warnings nuevos
+
+## Screenshots (si aplica)
+```
+
+## 🧪 Guía de Testing
+
+### Estructura de Tests
+
+```
+tests/
+├── unit/                  # Tests aislados de unidades individuales
+│   ├── core/
+│   ├── cache/
+│   └── router/
+├── integration/           # Tests de interacción entre componentes
+│   ├── database/
+│   ├── api/
+│   └── middleware/
+├── e2e/                   # Tests completos de flujo
+│   ├── user-registration/
+│   └── order-processing/
+├── performance/           # Tests de rendimiento
+└── fixtures/              # Datos de prueba
+```
+
+### Writing Good Tests
+
+```typescript
+// ✅ Bueno - Descriptivo y completo
+describe('UserService', () => {
+  describe('createUser', () => {
+    it('should create user with valid data and send welcome email', async () => {
+      // Arrange
+      const userData = {
+        name: 'John Doe',
+        email: 'john@example.com',
+        password: 'secure123'
+      };
+      const mockUser = { id: '123', ...userData };
+      
+      userRepository.save.mockResolvedValue(mockUser);
+      emailService.sendWelcome.mockResolvedValue(undefined);
+
+      // Act
+      const result = await userService.createUser(userData);
+
+      // Assert
+      expect(userRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: userData.name,
+          email: userData.email,
+          password: expect.any(String) // hasheada
+        })
+      );
+      expect(emailService.sendWelcome).toHaveBeenCalledWith(mockUser);
+      expect(result).toEqual(mockUser);
+    });
+
+    it('should throw error when email already exists', async () => {
+      // Arrange
+      const userData = { email: 'existing@example.com' };
+      userRepository.save.mockRejectedValue(new EmailExistsError());
+
+      // Act & Assert
+      await expect(userService.createUser(userData))
+        .rejects
+        .toThrow(EmailExistsError);
+    });
+  });
+});
+```
+
+### Mocking Guidelines
+
+```typescript
+// ✅ Bueno - Mock específico y útil
+const mockUserRepository = {
+  save: jest.fn(),
+  findByEmail: jest.fn(),
+  findById: jest.fn()
+} as jest.Mocked<UserRepository>;
+
+// ❌ Malo - Mock demasiado genérico
+const mockUserRepository = {} as any;
+```
+
+## 🚀 Release Process
+
+### Versioning
+
+Fox Framework sigue [Semantic Versioning](https://semver.org/):
+
+- **MAJOR** (1.0.0): Breaking changes
+- **MINOR** (1.1.0): Nueva funcionalidad backward-compatible
+- **PATCH** (1.1.1): Bug fixes backward-compatible
+
+### Release Checklist
+
+Para maintainers del proyecto:
+
+```bash
+# 1. Verificar que main está limpio
+git status
+
+# 2. Ejecutar todos los tests
+npm run test:all
+
+# 3. Ejecutar benchmarks
+npm run benchmark
+
+# 4. Generar changelog
+npm run changelog
+
+# 5. Bump version
+npm version patch|minor|major
+
+# 6. Build final
+npm run build:production
+
+# 7. Publish
+npm publish
+
+# 8. Tag y push
+git push --follow-tags
+```
+
+## 📋 Convenciones del Proyecto
+
+### Code Style
+
+Usamos Prettier y ESLint con configuración estricta:
+
+```json
+{
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": true,
+  "quoteProps": "as-needed",
+  "trailingComma": "es5"
+}
+```
+
+### Naming Conventions
+
+```typescript
+// Clases - PascalCase
+class UserAuthenticationService {}
+
+// Interfaces - PascalCase con I prefix
+interface IUserRepository {}
+
+// Types - PascalCase
+type DatabaseConnection = {};
+
+// Funciones y variables - camelCase
+const getUserById = () => {};
+const isAuthenticated = true;
+
+// Constantes - SCREAMING_SNAKE_CASE
+const MAX_RETRY_ATTEMPTS = 3;
+const DEFAULT_TIMEOUT = 5000;
+
+// Archivos - kebab-case
+user-authentication.service.ts
+database-connection.config.ts
+```
+
+### Error Handling
+
+```typescript
+// ✅ Bueno - Errores específicos
+export class UserNotFoundError extends Error {
+  constructor(userId: string) {
+    super(`User with ID ${userId} not found`);
+    this.name = 'UserNotFoundError';
+  }
+}
+
+// ✅ Bueno - Error handling consistente
+async function getUser(id: string): Promise<User> {
+  try {
+    const user = await userRepository.findById(id);
+    if (!user) {
+      throw new UserNotFoundError(id);
+    }
+    return user;
+  } catch (error) {
+    if (error instanceof UserNotFoundError) {
+      throw error;
+    }
+    throw new DatabaseError('Failed to retrieve user', error);
+  }
+}
+```
+
+## 🛠️ Herramientas de Desarrollo
+
+### Configuración de IDE
+
+#### VS Code (Recomendado)
+
+Instala estas extensiones:
+
+```json
+{
+  "recommendations": [
+    "ms-vscode.vscode-typescript-next",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "ms-vscode.test-adapter-converter",
+    "hbenl.vscode-test-explorer"
+  ]
+}
+```
+
+Configuración en `.vscode/settings.json`:
+
+```json
+{
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "jest.autoRun": "watch"
+}
+```
+
+### Debug Configuration
+
+```json
+{
+  "type": "node",
+  "request": "launch",
+  "name": "Debug Fox Framework",
+  "program": "${workspaceFolder}/src/index.ts",
+  "preLaunchTask": "npm: build",
+  "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+  "env": {
+    "NODE_ENV": "development",
+    "DEBUG": "fox:*"
+  }
+}
+```
+
+## 🎖️ Reconocimiento de Contribuidores
+
+### Niveles de Contribución
+
+- **Core Contributors**: Contribuidores regulares con acceso de escritura
+- **Active Contributors**: Contribuidores frecuentes reconocidos
+- **Contributors**: Cualquiera que haya hecho una contribución válida
+
+### Proceso de Reconocimiento
+
+1. **Primer PR aceptado**: Agregado a Contributors
+2. **5+ PRs aceptados**: Consideración para Active Contributor
+3. **Contribución sostenida**: Invitación a Core Contributor
+
+### Beneficios
+
+- **Contributors**: Reconocimiento en README y sitio web
+- **Active Contributors**: Badge especial + invitación a Discord privado
+- **Core Contributors**: Acceso de escritura + participación en roadmap
+
+## 📞 Contacto y Soporte
+
+### Canales de Comunicación
+
+- **GitHub Issues**: Bugs y feature requests
+- **GitHub Discussions**: Preguntas generales y discusiones
+- **Discord**: Chat en tiempo real
+- **Email**: [contributors@fox-framework.com](mailto:contributors@fox-framework.com)
+
+### Mentoring
+
+¿Nuevo en open source? Ofrecemos mentoring para primeros contribuidores:
+
+- Asignación de issues "good first issue"
+- Revisión de código detallada
+- Pair programming sessions
+- Guía en Discord
+
+## 🙏 Código de Conducta
+
+Todos los participantes deben seguir nuestro [Código de Conducta](CODE_OF_CONDUCT.md):
+
+- **Sé respetuoso**: Trata a todos con respeto y profesionalismo
+- **Sé constructivo**: Proporciona feedback constructivo y útil
+- **Sé inclusivo**: Fomenta un ambiente acogedor para todos
+- **Sé paciente**: Recuerda que todos estamos aprendiendo
+
+## ✨ ¡Gracias por Contribuir!
+
+Cada contribución, sin importar su tamaño, hace que Fox Framework sea mejor para toda la comunidad. ¡Esperamos tus contribuciones!
+
+---
+
+**¿Preguntas?** No dudes en preguntar en [Discord](https://discord.gg/fox-framework) o crear un issue.

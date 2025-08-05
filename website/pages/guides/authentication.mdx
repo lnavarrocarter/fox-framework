@@ -1,0 +1,232 @@
+# Implementando Autenticación y Autorización
+
+Esta guía explica cómo implementar un sistema completo de autenticación y autorización en Fox Framework.
+
+## Contenido
+
+- [Configuración Inicial](#configuración-inicial)
+- [Autenticación JWT](#autenticación-jwt)
+- [Control de Acceso Basado en Roles](#control-de-acceso-basado-en-roles)
+- [Protegiendo Rutas](#protegiendo-rutas)
+- [Ejemplo Completo](#ejemplo-completo)
+
+## Configuración Inicial
+
+Primero, vamos a configurar los componentes necesarios:
+
+```typescript
+// src/security/index.ts
+import { Security, SecurityFactory, JwtOptions } from 'fox-framework';
+
+// Configuración JWT
+const jwtOptions: JwtOptions = {
+  secret: process.env.JWT_SECRET || 'tu-clave-secreta-aqui',
+  expiresIn: '24h',
+  algorithm: 'HS256'
+};
+
+// Crear instancia de seguridad
+const security = SecurityFactory.create({
+  jwt: jwtOptions,
+  rbac: {
+    roles: ['admin', 'user', 'guest'],
+    permissions: {
+      'admin': ['read:all', 'write:all', 'delete:all'],
+      'user': ['read:own', 'write:own'],
+      'guest': ['read:public']
+    }
+  }
+});
+
+export default security;
+```
+
+## Autenticación JWT
+
+Ahora implementaremos la lógica de login y verificación de token:
+
+```typescript
+// src/controllers/auth.controller.ts
+import { Request, Response } from 'fox-framework';
+import security from '../security';
+
+// Simulación de base de datos de usuarios
+const users = [
+  { id: 1, username: 'admin', password: 'admin123', role: 'admin' },
+  { id: 2, username: 'user', password: 'user123', role: 'user' }
+];
+
+export class AuthController {
+  login = async (req: Request, res: Response): Promise<void> => {
+    const { username, password } = req.body;
+    
+    // Validar credenciales
+    const user = users.find(
+      u => u.username === username && u.password === password
+    );
+    
+    if (!user) {
+      return res.status(401).json({
+        error: 'Credenciales inválidas'
+      });
+    }
+    
+    // Generar token
+    const token = security.jwt.sign({
+      userId: user.id,
+      username: user.username,
+      role: user.role
+    });
+    
+    res.json({
+      message: 'Login exitoso',
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role
+      }
+    });
+  }
+  
+  getProfile = async (req: Request, res: Response): Promise<void> => {
+    // El middleware de autenticación ya ha verificado el token
+    // y ha añadido el usuario a req.user
+    res.json({
+      user: req.user
+    });
+  }
+}
+```
+
+## Control de Acceso Basado en Roles
+
+Creamos los middlewares para autorización:
+
+```typescript
+// src/middleware/auth.middleware.ts
+import { Request, Response, NextFunction } from 'fox-framework';
+import security from '../security';
+
+export const authenticateJwt = async (
+  req: Request, 
+  res: Response, 
+  next: NextFunction
+): Promise<void> => {
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({
+      error: 'Token no proporcionado'
+    });
+  }
+  
+  try {
+    // Verificar token
+    const decoded = security.jwt.verify(token);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      error: 'Token inválido o expirado'
+    });
+  }
+};
+
+export const requireRole = (role: string) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    // Verificar que el usuario está autenticado
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'Usuario no autenticado'
+      });
+    }
+    
+    // Verificar rol
+    if (req.user.role !== role) {
+      return res.status(403).json({
+        error: 'Acceso denegado'
+      });
+    }
+    
+    next();
+  };
+};
+```
+
+## Protegiendo Rutas
+
+Aplicamos los middlewares a nuestras rutas:
+
+```typescript
+// src/routes/auth.routes.ts
+import { Router } from 'fox-framework';
+import { AuthController } from '../controllers/auth.controller';
+import { authenticateJwt, requireRole } from '../middleware/auth.middleware';
+
+const authController = new AuthController();
+const router = Router.create();
+
+// Rutas públicas
+router.post('/login', authController.login);
+
+// Rutas protegidas
+router.get('/profile', authenticateJwt, authController.getProfile);
+router.get('/admin', authenticateJwt, requireRole('admin'), (req, res) => {
+  res.json({ message: 'Panel de administración' });
+});
+
+export default router;
+```
+
+## Ejemplo Completo
+
+Juntando todo en el servidor:
+
+```typescript
+// src/server/index.ts
+import { FoxFactory, ServerConfig } from 'fox-framework';
+import authRouter from '../routes/auth.routes';
+
+const config: ServerConfig = {
+  port: 3000,
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  },
+  bodyParser: {
+    json: true
+  }
+};
+
+const app = FoxFactory.createInstance(config);
+
+// Registrar rutas
+app.use('/auth', authRouter);
+
+app.start();
+console.log('Authentication server running on port 3000');
+```
+
+## Flujo de Autenticación
+
+1. El usuario envía credenciales a `/auth/login`
+2. El servidor valida y devuelve un token JWT
+3. El cliente almacena el token y lo incluye en el header `Authorization` en futuras peticiones
+4. Para rutas protegidas, el middleware verifica el token y los roles
+
+## Mejores Prácticas
+
+- Utiliza variables de entorno para claves secretas
+- Limita la duración de los tokens
+- Implementa refresh tokens para sesiones largas
+- Almacena contraseñas hasheadas (bcrypt)
+- Utiliza HTTPS en producción
+- Considera implementar 2FA para mayor seguridad
+
+## Recursos Adicionales
+
+- [Documentación JWT](https://jwt.io/)
+- [OWASP Authentication Best Practices](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
+- [Ejemplos de Autenticación Fox Framework](/examples/auth-jwt)

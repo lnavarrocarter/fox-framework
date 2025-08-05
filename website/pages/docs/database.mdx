@@ -1,0 +1,488 @@
+# Abstracción de Base de Datos
+
+Fox Framework proporciona una capa de abstracción para bases de datos que permite trabajar con múltiples proveedores a través de una API unificada.
+
+## Características Principales
+
+- **Multi-Provider**: Soporte para PostgreSQL, MySQL, SQLite, MongoDB y Redis
+- **API Unificada**: Misma interfaz para SQL y NoSQL
+- **Query Builder**: Construcción de consultas tipadas y seguras
+- **Connection Pooling**: Gestión eficiente de conexiones
+- **Transacciones**: Soporte para operaciones ACID
+- **Migraciones**: Sistema para evolucionar esquemas
+- **TypeScript Integration**: Tipado completo para seguridad en tiempo de compilación
+
+## Configuración
+
+### Configuración Básica
+
+```typescript
+import { DatabaseFactory, DatabaseConfig } from 'fox-framework';
+
+// Configuración para PostgreSQL
+const config: DatabaseConfig = {
+  provider: 'postgresql',
+  connection: {
+    host: 'localhost',
+    port: 5432,
+    database: 'my_database',
+    user: 'postgres',
+    password: 'password'
+  },
+  pool: {
+    min: 2,
+    max: 10
+  }
+};
+
+// Crear instancia de base de datos
+const db = DatabaseFactory.create(config);
+
+// Inicializar conexión
+await db.initialize();
+```
+
+### Configuración para Diferentes Proveedores
+
+#### MySQL
+
+```typescript
+const mysqlConfig: DatabaseConfig = {
+  provider: 'mysql',
+  connection: {
+    host: 'localhost',
+    port: 3306,
+    database: 'my_database',
+    user: 'root',
+    password: 'password'
+  }
+};
+```
+
+#### SQLite
+
+```typescript
+const sqliteConfig: DatabaseConfig = {
+  provider: 'sqlite',
+  connection: {
+    filename: './database.sqlite'
+  }
+};
+```
+
+#### MongoDB
+
+```typescript
+const mongoConfig: DatabaseConfig = {
+  provider: 'mongodb',
+  connection: {
+    uri: 'mongodb://localhost:27017/my_database',
+    options: {
+      useUnifiedTopology: true
+    }
+  }
+};
+```
+
+#### Redis
+
+```typescript
+const redisConfig: DatabaseConfig = {
+  provider: 'redis',
+  connection: {
+    host: 'localhost',
+    port: 6379,
+    password: 'optional_password'
+  }
+};
+```
+
+## Operaciones Básicas
+
+### Ejecutar Consultas Directas
+
+```typescript
+// SQL directo (PostgreSQL, MySQL, SQLite)
+const users = await db.query('SELECT * FROM users WHERE active = $1', [true]);
+
+// MongoDB
+const users = await db.query('users', { active: true });
+
+// Redis
+await db.query('SET', ['user:1', JSON.stringify({ name: 'Ana' })]);
+const userData = await db.query('GET', ['user:1']);
+```
+
+### Query Builder
+
+Fox Framework proporciona un query builder tipado para construir consultas de forma programática:
+
+```typescript
+// Para bases de datos SQL
+const users = await db
+  .table('users')
+  .select('id', 'name', 'email')
+  .where('active', true)
+  .andWhere('created_at', '>', '2023-01-01')
+  .orderBy('name', 'asc')
+  .limit(10)
+  .offset(20)
+  .get();
+
+// Para MongoDB
+const users = await db
+  .collection('users')
+  .find({
+    active: true,
+    created_at: { $gt: new Date('2023-01-01') }
+  })
+  .sort({ name: 1 })
+  .limit(10)
+  .skip(20)
+  .toArray();
+```
+
+### Operaciones CRUD
+
+```typescript
+// Crear
+const userId = await db.table('users').insert({
+  name: 'Carlos',
+  email: 'carlos@example.com',
+  active: true
+});
+
+// Leer
+const user = await db.table('users').find(userId);
+
+// Actualizar
+await db.table('users')
+  .where('id', userId)
+  .update({ 
+    email: 'carlos.updated@example.com' 
+  });
+
+// Eliminar
+await db.table('users').where('id', userId).delete();
+```
+
+## Transacciones
+
+Fox Framework soporta transacciones para operaciones atómicas:
+
+```typescript
+// Iniciar transacción
+const trx = await db.beginTransaction();
+
+try {
+  // Operaciones dentro de la transacción
+  const userId = await db.table('users')
+    .transacting(trx)
+    .insert({ 
+      name: 'Ana',
+      email: 'ana@example.com'
+    });
+  
+  await db.table('profiles')
+    .transacting(trx)
+    .insert({ 
+      user_id: userId,
+      bio: 'Developer'
+    });
+  
+  // Si todo va bien, commit
+  await trx.commit();
+} catch (error) {
+  // En caso de error, rollback
+  await trx.rollback();
+  throw error;
+}
+```
+
+## Modelos y Repositories
+
+Fox Framework implementa el patrón Repository para trabajar con entidades:
+
+### Definir un Modelo
+
+```typescript
+import { Model } from 'fox-framework';
+
+interface UserAttributes {
+  id?: number;
+  name: string;
+  email: string;
+  active: boolean;
+  created_at?: Date;
+}
+
+class User extends Model<UserAttributes> {
+  tableName = 'users';
+  
+  // Definir relaciones
+  get profile() {
+    return this.hasOne('Profile');
+  }
+  
+  get posts() {
+    return this.hasMany('Post');
+  }
+  
+  // Métodos personalizados
+  activate() {
+    this.active = true;
+    return this.save();
+  }
+  
+  deactivate() {
+    this.active = false;
+    return this.save();
+  }
+}
+```
+
+### Crear un Repositorio
+
+```typescript
+import { Repository } from 'fox-framework';
+
+class UserRepository extends Repository<User> {
+  constructor(db) {
+    super(db, User);
+  }
+  
+  // Métodos específicos del repositorio
+  async findByEmail(email: string): Promise<User | null> {
+    return this.findOne({ email });
+  }
+  
+  async findActiveUsers(): Promise<User[]> {
+    return this.find({ active: true });
+  }
+  
+  async activateUser(id: number): Promise<boolean> {
+    const user = await this.findById(id);
+    if (!user) return false;
+    
+    await user.activate();
+    return true;
+  }
+}
+
+// Uso del repositorio
+const userRepository = new UserRepository(db);
+
+// Obtener usuarios
+const users = await userRepository.findAll();
+const activeUsers = await userRepository.findActiveUsers();
+const user = await userRepository.findById(1);
+
+// Crear usuario
+const newUser = await userRepository.create({
+  name: 'Elena',
+  email: 'elena@example.com',
+  active: true
+});
+
+// Actualizar usuario
+await userRepository.update(newUser.id, { name: 'Elena García' });
+
+// Eliminar usuario
+await userRepository.delete(newUser.id);
+```
+
+## Migraciones
+
+Fox Framework incluye un sistema de migraciones para evolucionar esquemas de base de datos:
+
+```typescript
+import { Migration } from 'fox-framework';
+
+export class CreateUsersTable extends Migration {
+  async up(db) {
+    await db.schema.createTable('users', table => {
+      table.increments('id').primary();
+      table.string('name').notNull();
+      table.string('email').notNull().unique();
+      table.boolean('active').defaultTo(true);
+      table.timestamps();
+    });
+    
+    // Índices
+    await db.schema.createIndex('users', ['email']);
+  }
+  
+  async down(db) {
+    await db.schema.dropTable('users');
+  }
+}
+```
+
+### Ejecutar Migraciones
+
+```typescript
+import { MigrationRunner } from 'fox-framework';
+
+// Configurar runner de migraciones
+const migrationRunner = new MigrationRunner({
+  db,
+  migrationPath: './migrations',
+  tableName: 'migrations'
+});
+
+// Ejecutar migraciones pendientes
+await migrationRunner.migrate();
+
+// Revertir última migración
+await migrationRunner.rollback();
+
+// Verificar estado
+const status = await migrationRunner.status();
+console.log('Migrations status:', status);
+```
+
+## Esquemas y Validación
+
+Fox Framework integra validación de esquemas para garantizar la integridad de los datos:
+
+```typescript
+import { Schema, DatabaseFactory } from 'fox-framework';
+
+// Definir esquema
+const userSchema = new Schema({
+  name: { type: 'string', required: true, minLength: 2 },
+  email: { type: 'string', required: true, format: 'email' },
+  age: { type: 'number', minimum: 18 },
+  role: { type: 'string', enum: ['user', 'admin', 'editor'] },
+  active: { type: 'boolean', default: true }
+});
+
+// Crear tabla con esquema
+await db.schema.createTable('users', userSchema);
+
+// Validar datos antes de insertar
+try {
+  await db.table('users')
+    .validateWith(userSchema)
+    .insert({
+      name: 'Carlos',
+      email: 'invalid-email',  // Formato inválido
+      age: 16                  // Menor que el mínimo
+    });
+} catch (error) {
+  console.error('Validation errors:', error.validationErrors);
+}
+```
+
+## Relaciones y Joins
+
+Fox Framework soporta relaciones entre entidades:
+
+```typescript
+// Definir relaciones en el modelo
+class Post extends Model<PostAttributes> {
+  tableName = 'posts';
+  
+  get author() {
+    return this.belongsTo('User');
+  }
+  
+  get comments() {
+    return this.hasMany('Comment');
+  }
+  
+  get categories() {
+    return this.belongsToMany('Category', 'post_categories');
+  }
+}
+
+// Usar relaciones en consultas
+// Eager loading
+const postsWithAuthors = await db.table('posts')
+  .with('author')
+  .get();
+
+// Join manual
+const postsWithComments = await db.table('posts')
+  .select('posts.*', 'users.name as author_name')
+  .leftJoin('users', 'posts.user_id', 'users.id')
+  .get();
+
+// Relation query
+const userPosts = await user.posts.get();
+```
+
+## Caché de Consultas
+
+Fox Framework integra caché de consultas para optimizar rendimiento:
+
+```typescript
+// Habilitar caché para una consulta
+const users = await db.table('users')
+  .cache(60)  // Tiempo en segundos
+  .get();
+
+// Habilitar caché con clave personalizada
+const user = await db.table('users')
+  .where('id', 1)
+  .cache(60, 'user:1')
+  .first();
+
+// Invalidar caché
+await db.cache.invalidate('user:1');
+await db.cache.invalidatePattern('user:*');
+```
+
+## Logging y Debugging
+
+```typescript
+// Habilitar logging para todas las consultas
+db.enableLogging(true);
+
+// Configurar logging avanzado
+db.setLogger({
+  log: (query, params) => {
+    console.log(`Executing query: ${query}`);
+    console.log(`Parameters: ${JSON.stringify(params)}`);
+  },
+  error: (error, query, params) => {
+    console.error(`Query error: ${error.message}`);
+    console.error(`Failed query: ${query}`);
+    console.error(`Parameters: ${JSON.stringify(params)}`);
+  }
+});
+
+// Debug de una consulta específica
+const result = await db.table('users')
+  .debug()
+  .where('active', true)
+  .get();
+```
+
+## Monitorización de Rendimiento
+
+Fox Framework incluye herramientas para monitorizar el rendimiento de la base de datos:
+
+```typescript
+// Obtener estadísticas del pool de conexiones
+const poolStats = db.getPoolStats();
+console.log('Connection pool:', poolStats);
+
+// Obtener métricas de consultas
+const queryMetrics = db.getQueryMetrics();
+console.log('Query metrics:', queryMetrics);
+
+// Exportar métricas para Prometheus
+const metrics = db.getPrometheusMetrics();
+```
+
+## Mejores Prácticas
+
+1. **Usa repositorios**: Encapsula la lógica de acceso a datos en repositorios
+2. **Migraciones para todo**: No modifiques esquemas manualmente
+3. **Validación**: Valida datos antes de guardarlos
+4. **Transacciones**: Usa transacciones para operaciones múltiples
+5. **Índices**: Crea índices para campos utilizados en filtros y joins
+6. **Query Building**: Usa el query builder para consultas seguras
+7. **Desconectar**: Cierra conexiones al finalizar la aplicación
+8. **Timeouts**: Configura timeouts para prevenir bloqueos

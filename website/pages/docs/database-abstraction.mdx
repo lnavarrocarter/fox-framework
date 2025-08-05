@@ -1,0 +1,1821 @@
+# Abstracción de Base de Datos
+
+Fox Framework proporciona una potente capa de abstracción de base de datos que permite interactuar con diferentes motores de bases de datos mediante una API unificada. Esta abstracción facilita el cambio entre bases de datos y simplifica las operaciones comunes.
+
+## Características Principales
+
+- **API Unificada**: Interactúa con múltiples motores de bases de datos a través de una misma interfaz
+- **Query Builder**: Construcción de consultas fluida y tipada
+- **ORM Integrado**: Mapeo objeto-relacional para trabajar con entidades
+- **Migraciones**: Sistema de migraciones para gestionar esquemas
+- **Transacciones**: Soporte completo para operaciones transaccionales
+- **Conexiones Múltiples**: Gestión de múltiples conexiones a diferentes bases de datos
+- **Modelos**: Definición de modelos con validación integrada
+- **Soft Delete**: Eliminación suave para preservar datos históricos
+- **Caché**: Estrategias de caché para optimizar consultas frecuentes
+- **TypeScript**: Soporte completo para tipos estáticos
+
+## Motores Soportados
+
+Fox Framework soporta los siguientes motores de bases de datos:
+
+- **MySQL / MariaDB**
+- **PostgreSQL**
+- **SQLite**
+- **Microsoft SQL Server**
+- **MongoDB**
+- **Redis** (para caché y almacenamiento clave-valor)
+
+## Configuración Básica
+
+### Configuración de Conexiones
+
+```typescript
+import { Database, DatabaseConfig } from 'fox-framework/database';
+
+// Configuración
+const dbConfig: DatabaseConfig = {
+  // Conexión principal por defecto
+  default: 'postgres',
+  
+  // Definición de conexiones
+  connections: {
+    // Conexión PostgreSQL
+    postgres: {
+      driver: 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME || 'myapp',
+      username: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || 'secret',
+      ssl: process.env.DB_SSL === 'true',
+      options: {
+        pool: {
+          min: 2,
+          max: 10,
+          idleTimeoutMillis: 30000
+        }
+      }
+    },
+    
+    // Conexión MySQL
+    mysql: {
+      driver: 'mysql',
+      host: process.env.MYSQL_HOST || 'localhost',
+      port: parseInt(process.env.MYSQL_PORT || '3306'),
+      database: process.env.MYSQL_DB || 'myapp',
+      username: process.env.MYSQL_USER || 'root',
+      password: process.env.MYSQL_PASSWORD || 'secret',
+      options: {
+        charset: 'utf8mb4'
+      }
+    },
+    
+    // Conexión SQLite para pruebas
+    sqlite: {
+      driver: 'sqlite',
+      database: ':memory:', // o ruta a archivo
+      options: {
+        useNullAsDefault: true
+      }
+    },
+    
+    // Conexión MongoDB
+    mongodb: {
+      driver: 'mongodb',
+      url: process.env.MONGO_URL || 'mongodb://localhost:27017/myapp',
+      options: {
+        useUnifiedTopology: true
+      }
+    }
+  },
+  
+  // Opciones globales
+  options: {
+    // Debug mode
+    debug: process.env.DB_DEBUG === 'true',
+    // Opciones globales de logging
+    log: {
+      enabled: true,
+      level: 'info', // 'debug', 'info', 'warn', 'error'
+      slowQueryThreshold: 1000 // ms
+    }
+  }
+};
+
+// Crear instancia de base de datos
+const db = new Database(dbConfig);
+
+// Inicializar conexiones
+await db.initialize();
+
+// Exportar para usar en la aplicación
+export default db;
+```
+
+### Integrando con FoxFactory
+
+```typescript
+import { FoxFactory } from 'fox-framework';
+
+// Crear servidor con integración de base de datos
+const server = FoxFactory.createServer({
+  port: 3000,
+  router,
+  
+  // Configuración de base de datos
+  database: {
+    default: 'postgres',
+    connections: {
+      postgres: {
+        driver: 'postgres',
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432'),
+        database: process.env.DB_NAME || 'myapp',
+        username: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || 'secret'
+      }
+    }
+  }
+});
+
+// Acceder a la instancia de base de datos
+const db = server.getDatabase();
+
+// Iniciar servidor
+await server.start();
+```
+
+## Query Builder
+
+El Query Builder permite construir consultas SQL de manera fluida y tipada:
+
+### Consultas Básicas
+
+```typescript
+import { db } from '../database';
+
+// Consultar todos los registros
+const users = await db.table('users').get();
+
+// Selección específica de columnas
+const userNames = await db
+  .table('users')
+  .select('id', 'name', 'email')
+  .get();
+
+// Filtrar por condiciones
+const activeUsers = await db
+  .table('users')
+  .where('active', true)
+  .get();
+
+// Filtros complejos
+const filteredUsers = await db
+  .table('users')
+  .where('age', '>=', 18)
+  .where('role', 'user')
+  .whereNotNull('email_verified_at')
+  .get();
+
+// Ordenar resultados
+const orderedUsers = await db
+  .table('users')
+  .orderBy('created_at', 'desc')
+  .get();
+
+// Paginación
+const page = 1;
+const pageSize = 10;
+
+const pagedUsers = await db
+  .table('users')
+  .limit(pageSize)
+  .offset((page - 1) * pageSize)
+  .get();
+
+// Contar registros
+const totalUsers = await db
+  .table('users')
+  .count('id', { as: 'total' });
+
+// Primera coincidencia
+const user = await db
+  .table('users')
+  .where('email', 'john@example.com')
+  .first();
+
+// Obtener por ID
+const userById = await db
+  .table('users')
+  .find(1); // Equivalente a .where('id', 1).first()
+```
+
+### Consultas Avanzadas
+
+```typescript
+// Joins
+const usersWithPosts = await db
+  .table('users')
+  .select('users.*', 'posts.title', 'posts.content')
+  .leftJoin('posts', 'users.id', 'posts.user_id')
+  .get();
+
+// Group By y Having
+const usersByRole = await db
+  .table('users')
+  .select('role')
+  .count('id', { as: 'user_count' })
+  .groupBy('role')
+  .having('user_count', '>', 5)
+  .get();
+
+// Subconsultas
+const usersWithPostCount = await db
+  .table('users')
+  .select('users.*')
+  .selectSub(
+    db.table('posts').select(db.raw('COUNT(*)')).where('user_id', db.ref('users.id')),
+    'post_count'
+  )
+  .get();
+
+// Raw Queries
+const activeUsersCount = await db.raw('SELECT COUNT(*) FROM users WHERE active = ?', [true]);
+
+// Union
+const allPeople = await db
+  .table('users')
+  .select('name', 'email')
+  .where('role', 'customer')
+  .union(
+    db.table('staff')
+      .select('name', 'email')
+      .where('department', 'sales')
+  );
+```
+
+### Operaciones de Inserción
+
+```typescript
+// Insertar un registro
+const userId = await db
+  .table('users')
+  .insert({
+    name: 'John Doe',
+    email: 'john@example.com',
+    age: 30,
+    created_at: new Date()
+  });
+
+// Insertar múltiples registros
+await db
+  .table('users')
+  .insert([
+    { name: 'John Doe', email: 'john@example.com', age: 30 },
+    { name: 'Jane Smith', email: 'jane@example.com', age: 25 }
+  ]);
+
+// Insertar y devolver el registro completo
+const newUser = await db
+  .table('users')
+  .insertAndGet({
+    name: 'John Doe',
+    email: 'john@example.com',
+    age: 30
+  });
+```
+
+### Operaciones de Actualización
+
+```typescript
+// Actualizar registros
+const updated = await db
+  .table('users')
+  .where('id', 1)
+  .update({
+    email: 'new-email@example.com',
+    updated_at: new Date()
+  });
+
+// Actualizar o insertar (upsert)
+await db
+  .table('settings')
+  .upsert(
+    { key: 'site_title', value: 'My Awesome Site' },
+    'key' // Columna única para determinar si actualizar o insertar
+  );
+
+// Incrementar/Decrementar valores
+await db
+  .table('products')
+  .where('id', 1)
+  .increment('stock', 5);
+
+await db
+  .table('users')
+  .where('id', 1)
+  .decrement('credits', 10);
+
+// Actualizar con condiciones complejas
+await db
+  .table('orders')
+  .where('status', 'pending')
+  .where('created_at', '<', new Date(Date.now() - 86400000)) // Más de 1 día
+  .update({ status: 'expired' });
+```
+
+### Operaciones de Eliminación
+
+```typescript
+// Eliminar por ID
+await db
+  .table('users')
+  .where('id', 1)
+  .delete();
+
+// Eliminar con condiciones
+await db
+  .table('sessions')
+  .where('expires_at', '<', new Date())
+  .delete();
+
+// Soft delete (si está configurado)
+await db
+  .table('posts')
+  .where('id', 1)
+  .softDelete();
+
+// Restaurar soft deleted
+await db
+  .table('posts')
+  .where('id', 1)
+  .restore();
+
+// Truncar tabla
+await db
+  .table('logs')
+  .truncate();
+```
+
+## ORM
+
+Fox Framework incluye un ORM que permite trabajar con modelos de datos de manera orientada a objetos:
+
+### Definición de Modelos
+
+```typescript
+import { Model, field, table } from 'fox-framework/database/orm';
+
+@table('users')
+export class User extends Model {
+  // Definición de campos con tipos
+  @field({ primaryKey: true, autoIncrement: true })
+  id: number;
+
+  @field({ required: true })
+  name: string;
+
+  @field({ required: true, unique: true })
+  email: string;
+
+  @field()
+  age?: number;
+
+  @field({ name: 'is_active', default: true })
+  active: boolean;
+
+  @field()
+  createdAt: Date;
+
+  @field()
+  updatedAt: Date;
+
+  // Relaciones
+  @hasMany(() => Post)
+  posts: Post[];
+
+  @hasOne(() => Profile)
+  profile: Profile;
+
+  @belongsToMany(() => Role, 'user_roles', 'user_id', 'role_id')
+  roles: Role[];
+
+  // Métodos de instancia
+  isAdmin(): boolean {
+    return this.roles?.some(role => role.name === 'admin') ?? false;
+  }
+
+  fullName(): string {
+    return `${this.name} (${this.email})`;
+  }
+
+  // Hooks de ciclo de vida
+  @beforeSave()
+  setDates() {
+    if (!this.id) {
+      this.createdAt = new Date();
+    }
+    this.updatedAt = new Date();
+  }
+
+  // Métodos estáticos
+  static async findByEmail(email: string): Promise<User | null> {
+    return this.query()
+      .where('email', email)
+      .first();
+  }
+}
+
+@table('posts')
+export class Post extends Model {
+  @field({ primaryKey: true, autoIncrement: true })
+  id: number;
+
+  @field({ required: true })
+  title: string;
+
+  @field({ required: true })
+  content: string;
+
+  @field({ name: 'user_id' })
+  userId: number;
+
+  @field()
+  createdAt: Date;
+
+  @field()
+  updatedAt: Date;
+
+  @field({ name: 'deleted_at' })
+  deletedAt: Date | null;
+
+  // Relaciones
+  @belongsTo(() => User, 'user_id')
+  author: User;
+
+  @hasMany(() => Comment)
+  comments: Comment[];
+
+  // Uso de soft delete
+  @softDelete('deleted_at')
+  static softDelete = true;
+}
+```
+
+### Uso de Modelos
+
+```typescript
+// Crear una instancia de modelo
+const user = new User();
+user.name = 'John Doe';
+user.email = 'john@example.com';
+user.age = 30;
+
+// Guardar en la base de datos
+await user.save();
+
+// Crear y guardar en un solo paso
+const user = await User.create({
+  name: 'John Doe',
+  email: 'john@example.com',
+  age: 30
+});
+
+// Buscar un registro
+const user = await User.findById(1);
+
+// Query builder con modelos
+const users = await User.query()
+  .where('age', '>', 18)
+  .orderBy('name')
+  .get();
+
+// First o fail (lanza error si no encuentra)
+try {
+  const user = await User.query()
+    .where('email', 'john@example.com')
+    .firstOrFail();
+} catch (error) {
+  console.error('Usuario no encontrado');
+}
+
+// Actualizar modelo
+user.name = 'John Updated';
+await user.save();
+
+// Actualizar directamente
+await User.query()
+  .where('id', 1)
+  .update({ name: 'John Updated' });
+
+// Eliminar modelo
+await user.delete();
+
+// Eliminar directamente
+await User.query()
+  .where('id', 1)
+  .delete();
+
+// Soft delete
+await Post.query()
+  .where('id', 1)
+  .delete(); // Usa softDelete automáticamente
+
+// Incluir soft deleted en consultas
+const allPosts = await Post.query()
+  .withTrashed()
+  .get();
+
+// Solo obtener soft deleted
+const trashedPosts = await Post.query()
+  .onlyTrashed()
+  .get();
+
+// Restaurar soft deleted
+await Post.query()
+  .where('id', 1)
+  .restore();
+```
+
+### Trabajando con Relaciones
+
+```typescript
+// Eager loading (carga ansiosa)
+const usersWithPosts = await User.query()
+  .with('posts')
+  .get();
+
+// Múltiples relaciones
+const usersWithAll = await User.query()
+  .with(['posts', 'profile', 'roles'])
+  .get();
+
+// Relaciones anidadas
+const usersWithPostsAndComments = await User.query()
+  .with('posts.comments')
+  .get();
+
+// Filtrar por relaciones
+const usersWithActivePosts = await User.query()
+  .whereHas('posts', query => {
+    query.where('active', true);
+  })
+  .get();
+
+// Contar relaciones
+const usersWithPostCount = await User.query()
+  .withCount('posts')
+  .get();
+
+// Acceder a relaciones
+const user = await User.findById(1);
+const posts = await user.related('posts').get();
+
+// Añadir a relaciones
+const user = await User.findById(1);
+const post = new Post({
+  title: 'New Post',
+  content: 'Post content'
+});
+
+await user.related('posts').save(post);
+
+// Relaciones muchos a muchos
+const user = await User.findById(1);
+const adminRole = await Role.query().where('name', 'admin').first();
+
+// Asociar
+await user.related('roles').attach(adminRole.id);
+
+// Asociar con datos pivote
+await user.related('roles').attach(adminRole.id, {
+  assigned_at: new Date()
+});
+
+// Desasociar
+await user.related('roles').detach(adminRole.id);
+
+// Sincronizar (eliminar otras asociaciones)
+await user.related('roles').sync([1, 2, 3]);
+```
+
+### Agregaciones y Consultas Avanzadas
+
+```typescript
+// Agregaciones
+const stats = await User.query()
+  .count('* as total')
+  .avg('age as averageAge')
+  .min('age as minAge')
+  .max('age as maxAge')
+  .first();
+
+// Consultas avanzadas con modelos
+const topUsers = await User.query()
+  .select('users.*')
+  .selectSub(query => {
+    query.from('posts')
+      .count('*')
+      .whereColumn('user_id', 'users.id');
+  }, 'posts_count')
+  .orderBy('posts_count', 'desc')
+  .limit(10)
+  .get();
+
+// Subconsultas en where
+const usersWithPopularPosts = await User.query()
+  .whereExists(query => {
+    query.from('posts')
+      .whereColumn('posts.user_id', 'users.id')
+      .where('posts.views', '>', 1000);
+  })
+  .get();
+```
+
+## Migraciones
+
+El sistema de migraciones permite gestionar la estructura de la base de datos de forma controlada y versionada:
+
+### Creación de Migraciones
+
+```typescript
+import { Migration } from 'fox-framework/database/migrations';
+
+export class CreateUsersTable extends Migration {
+  // Nombre único de la migración
+  name = 'create_users_table';
+  
+  // Versión para ordenar las migraciones
+  version = 1;
+
+  // Aplicar migración
+  async up(): Promise<void> {
+    await this.schema.createTable('users', table => {
+      table.increments('id').primary();
+      table.string('name').notNull();
+      table.string('email').notNull().unique();
+      table.integer('age').nullable();
+      table.boolean('is_active').default(true);
+      table.timestamp('created_at').notNull();
+      table.timestamp('updated_at').notNull();
+    });
+
+    // Crear índices
+    await this.schema.table('users', table => {
+      table.index('email');
+      table.index('created_at');
+    });
+  }
+
+  // Revertir migración
+  async down(): Promise<void> {
+    await this.schema.dropTable('users');
+  }
+}
+
+export class CreatePostsTable extends Migration {
+  name = 'create_posts_table';
+  version = 2;
+
+  async up(): Promise<void> {
+    await this.schema.createTable('posts', table => {
+      table.increments('id').primary();
+      table.string('title').notNull();
+      table.text('content').notNull();
+      table.integer('user_id').notNull();
+      table.timestamp('created_at').notNull();
+      table.timestamp('updated_at').notNull();
+      table.timestamp('deleted_at').nullable();
+
+      // Clave foránea
+      table.foreign('user_id')
+        .references('id')
+        .on('users')
+        .onDelete('CASCADE');
+    });
+  }
+
+  async down(): Promise<void> {
+    await this.schema.dropTable('posts');
+  }
+}
+```
+
+### Gestión de Tablas
+
+```typescript
+// Crear tabla
+await this.schema.createTable('products', table => {
+  // Columnas básicas
+  table.increments('id').primary();
+  table.string('name').notNull();
+  table.text('description').nullable();
+  table.decimal('price', 10, 2).notNull();
+  table.integer('stock').notNull().default(0);
+  
+  // Columna enum
+  table.enum('status', ['active', 'inactive', 'discontinued']).default('active');
+  
+  // UUID
+  table.uuid('uuid').notNull();
+  
+  // JSON
+  table.json('metadata').nullable();
+  
+  // Timestamps
+  table.timestamp('created_at').notNull();
+  table.timestamp('updated_at').notNull();
+  table.timestamp('deleted_at').nullable();
+});
+
+// Modificar tabla existente
+await this.schema.table('users', table => {
+  // Añadir columnas
+  table.string('phone').nullable();
+  table.date('birth_date').nullable();
+  
+  // Modificar columnas
+  table.string('name', 100).notNull().alter();
+  
+  // Renombrar columnas
+  table.renameColumn('is_active', 'active');
+  
+  // Eliminar columnas
+  table.dropColumn('temporary_field');
+  
+  // Índices
+  table.unique(['email', 'phone']);
+  table.index('birth_date');
+  
+  // Foreign key
+  table.integer('department_id').nullable();
+  table.foreign('department_id')
+    .references('id')
+    .on('departments')
+    .onDelete('SET NULL');
+});
+
+// Eliminar tabla
+await this.schema.dropTable('logs');
+
+// Comprobar si existe tabla
+if (await this.schema.hasTable('users')) {
+  // ...
+}
+
+// Comprobar si existe columna
+if (await this.schema.hasColumn('users', 'phone')) {
+  // ...
+}
+
+// Renombrar tabla
+await this.schema.renameTable('old_name', 'new_name');
+```
+
+### Ejecución de Migraciones
+
+```typescript
+import { MigrationManager } from 'fox-framework/database/migrations';
+import { db } from '../database';
+
+// Crear gestor de migraciones
+const migrationManager = new MigrationManager({
+  db,
+  // Directorio donde se encuentran las migraciones
+  directory: './src/database/migrations',
+  // Tabla para almacenar el historial de migraciones
+  tableName: 'migrations'
+});
+
+// Registrar migraciones (automáticamente carga los archivos del directorio)
+await migrationManager.registerMigrations();
+
+// Ejecutar todas las migraciones pendientes
+await migrationManager.migrate();
+
+// Revertir última migración
+await migrationManager.rollback();
+
+// Revertir todas las migraciones
+await migrationManager.reset();
+
+// Refrescar: revertir todas y ejecutar de nuevo
+await migrationManager.refresh();
+
+// Ejecutar hasta una versión específica
+await migrationManager.migrateTo(5);
+
+// Ver estado de migraciones
+const status = await migrationManager.status();
+console.log('Migrations status:', status);
+
+// Integración con CLI
+program
+  .command('migrate')
+  .description('Run pending migrations')
+  .action(async () => {
+    try {
+      await migrationManager.migrate();
+      console.log('Migrations completed successfully');
+      process.exit(0);
+    } catch (error) {
+      console.error('Migration failed:', error);
+      process.exit(1);
+    }
+  });
+```
+
+## Semillas (Seeds)
+
+Las semillas permiten poblar la base de datos con datos iniciales o de prueba:
+
+```typescript
+import { Seeder } from 'fox-framework/database/seeds';
+import { User, Role, Post } from '../models';
+
+export class UserSeeder extends Seeder {
+  name = 'user_seeder';
+  
+  async run(): Promise<void> {
+    // Crear roles
+    const roles = await Role.createMany([
+      { name: 'admin', description: 'Administrator' },
+      { name: 'user', description: 'Regular user' },
+      { name: 'guest', description: 'Guest user' }
+    ]);
+    
+    // Crear usuario administrador
+    const admin = await User.create({
+      name: 'Admin User',
+      email: 'admin@example.com',
+      password: await this.hash('admin123'),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    
+    // Asignar rol de administrador
+    await admin.related('roles').attach(roles[0].id);
+    
+    // Crear múltiples usuarios regulares
+    const users = await User.createMany(Array(10).fill(null).map((_, i) => ({
+      name: `User ${i+1}`,
+      email: `user${i+1}@example.com`,
+      password: this.hash(`password${i+1}`),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    })));
+    
+    // Asignar rol de usuario a todos
+    for (const user of users) {
+      await user.related('roles').attach(roles[1].id);
+    }
+    
+    // Crear posts para cada usuario
+    for (const user of [admin, ...users]) {
+      await Post.createMany(Array(3).fill(null).map((_, i) => ({
+        title: `Post ${i+1} by ${user.name}`,
+        content: `This is the content of post ${i+1} by ${user.name}`,
+        userId: user.id,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })));
+    }
+  }
+}
+```
+
+### Ejecución de Seeds
+
+```typescript
+import { SeedManager } from 'fox-framework/database/seeds';
+import { db } from '../database';
+
+// Crear gestor de seeds
+const seedManager = new SeedManager({
+  db,
+  directory: './src/database/seeds',
+});
+
+// Registrar seeds
+await seedManager.registerSeeds();
+
+// Ejecutar todas las seeds
+await seedManager.run();
+
+// Ejecutar seed específica
+await seedManager.run('user_seeder');
+
+// Integración con CLI
+program
+  .command('seed')
+  .description('Run database seeds')
+  .option('-s, --seed <name>', 'Run specific seed')
+  .action(async (options) => {
+    try {
+      if (options.seed) {
+        await seedManager.run(options.seed);
+      } else {
+        await seedManager.run();
+      }
+      console.log('Seeds completed successfully');
+      process.exit(0);
+    } catch (error) {
+      console.error('Seeding failed:', error);
+      process.exit(1);
+    }
+  });
+```
+
+## Transacciones
+
+Las transacciones permiten ejecutar múltiples operaciones como una unidad atómica:
+
+```typescript
+import { db } from '../database';
+import { User, Order, Product } from '../models';
+
+// Función para crear orden
+export async function createOrder(userId: number, items: Array<{productId: number, quantity: number}>) {
+  // Iniciar transacción
+  return await db.transaction(async (trx) => {
+    // Cargar usuario
+    const user = await User.query(trx)
+      .findById(userId);
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    // Crear orden
+    const order = await Order.query(trx)
+      .insert({
+        userId,
+        status: 'pending',
+        totalAmount: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+    
+    let totalAmount = 0;
+    
+    // Procesar items
+    for (const item of items) {
+      // Cargar producto
+      const product = await Product.query(trx)
+        .findById(item.productId);
+      
+      if (!product) {
+        throw new Error(`Product ${item.productId} not found`);
+      }
+      
+      // Verificar stock
+      if (product.stock < item.quantity) {
+        throw new Error(`Insufficient stock for product ${product.name}`);
+      }
+      
+      // Actualizar stock
+      await Product.query(trx)
+        .where('id', product.id)
+        .decrement('stock', item.quantity);
+      
+      // Añadir item a la orden
+      await OrderItem.query(trx)
+        .insert({
+          orderId: order.id,
+          productId: product.id,
+          quantity: item.quantity,
+          price: product.price,
+          subtotal: product.price * item.quantity
+        });
+      
+      totalAmount += product.price * item.quantity;
+    }
+    
+    // Actualizar monto total
+    await Order.query(trx)
+      .where('id', order.id)
+      .update({
+        totalAmount,
+        updatedAt: new Date()
+      });
+    
+    // Si todo está bien, la transacción se commitea automáticamente
+    // Si hay error, hace rollback automáticamente
+    
+    // Cargar orden completa
+    return await Order.query(trx)
+      .findById(order.id)
+      .with('items.product');
+  });
+}
+
+// Uso manual de transacciones
+async function transferFunds(fromAccountId: number, toAccountId: number, amount: number) {
+  const trx = await db.beginTransaction();
+  
+  try {
+    // Verificar balance
+    const fromAccount = await Account.query(trx)
+      .where('id', fromAccountId)
+      .first();
+    
+    if (!fromAccount || fromAccount.balance < amount) {
+      throw new Error('Insufficient funds');
+    }
+    
+    // Restar del origen
+    await Account.query(trx)
+      .where('id', fromAccountId)
+      .decrement('balance', amount);
+    
+    // Sumar al destino
+    await Account.query(trx)
+      .where('id', toAccountId)
+      .increment('balance', amount);
+    
+    // Registrar transacción
+    await Transaction.query(trx)
+      .insert({
+        fromAccountId,
+        toAccountId,
+        amount,
+        type: 'transfer',
+        status: 'completed',
+        createdAt: new Date()
+      });
+    
+    // Commit
+    await trx.commit();
+    
+    return true;
+  } catch (error) {
+    // Rollback en caso de error
+    await trx.rollback();
+    throw error;
+  }
+}
+```
+
+## Sistema de Cache
+
+Fox Framework incluye un sistema de caché para optimizar consultas a la base de datos:
+
+```typescript
+import { db } from '../database';
+import { User } from '../models';
+
+// Configurar caché para la conexión
+db.connection('postgres').cache({
+  // Tiempo de vida en ms (1 hora)
+  ttl: 3600000,
+  
+  // Prefijo para keys de caché
+  prefix: 'db:postgres:',
+  
+  // Adaptor de caché (redis, memory, custom)
+  adapter: 'redis',
+  
+  // Opciones para el adaptor
+  options: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379')
+  }
+});
+
+// Uso de caché en consultas
+const popularPosts = await db
+  .table('posts')
+  .orderBy('views', 'desc')
+  .limit(10)
+  .cache('popular_posts', 300000); // Clave y TTL (5 minutos)
+
+// Caché con modelos
+const topUsers = await User.query()
+  .withCount('posts')
+  .orderBy('posts_count', 'desc')
+  .limit(5)
+  .cache('top_users');
+
+// Invalidar caché específica
+await db.cache().forget('popular_posts');
+
+// Invalidar caché por tags
+await db
+  .table('posts')
+  .orderBy('created_at', 'desc')
+  .limit(10)
+  .cache('recent_posts', null, ['posts', 'home']);
+
+// Al actualizar posts, invalidar por tag
+await db.table('posts').insert({title: 'New Post', content: '...'});
+await db.cache().forgetByTags(['posts']);
+
+// Invalidar toda la caché
+await db.cache().flush();
+
+// Cache remember (obtener de caché o ejecutar y guardar)
+const stats = await db.cache().remember('site_stats', 3600000, async () => {
+  // Esta consulta solo se ejecuta si no existe en caché
+  return await db.table('stats').first();
+});
+```
+
+## Raw SQL y Procedimientos Almacenados
+
+```typescript
+import { db } from '../database';
+
+// Ejecutar query SQL crudo
+const results = await db.raw('SELECT * FROM users WHERE active = ?', [true]);
+
+// En PostgreSQL con parámetros nombrados
+const pgResults = await db.raw(
+  'SELECT * FROM users WHERE email = :email AND active = :active',
+  { email: 'john@example.com', active: true }
+);
+
+// Ejecutar múltiples consultas en una transacción
+await db.transaction(async (trx) => {
+  await trx.raw('UPDATE products SET stock = stock - 1 WHERE id = ?', [productId]);
+  await trx.raw('INSERT INTO stock_movements (product_id, quantity, type) VALUES (?, ?, ?)', 
+    [productId, 1, 'decrease']
+  );
+});
+
+// Procedimientos almacenados (MySQL)
+await db.raw('CALL calculate_statistics()');
+
+// Procedimientos almacenados con parámetros
+await db.raw('CALL transfer_funds(?, ?, ?)', [fromAccount, toAccount, amount]);
+
+// Funciones (PostgreSQL)
+const result = await db.raw('SELECT get_user_role(?) AS role', [userId]);
+const role = result.rows[0].role;
+```
+
+## Conexiones Múltiples
+
+```typescript
+import { db } from '../database';
+
+// Usar conexión por defecto
+const users = await db.table('users').get();
+
+// Usar conexión específica
+const products = await db.connection('mysql').table('products').get();
+
+// Crear modelos para conexión específica
+import { Model } from 'fox-framework/database/orm';
+
+export class Product extends Model {
+  static connection = 'mysql';
+  
+  // Resto de la definición del modelo...
+}
+
+// Modelo con conexión dinámica
+export class Log extends Model {
+  static getConnection() {
+    // Lógica para determinar qué conexión usar
+    return process.env.NODE_ENV === 'production' ? 'logs_prod' : 'logs_dev';
+  }
+}
+
+// Cerrar conexiones
+await db.closeConnections();
+// O cerrar una específica
+await db.connection('mysql').close();
+```
+
+## Testing
+
+Fox Framework facilita el testing de operaciones de base de datos:
+
+```typescript
+import { TestDatabase } from 'fox-framework/database/testing';
+import { User, Post } from '../models';
+
+describe('User Service Tests', () => {
+  // Crear instancia de base de datos para testing
+  const testDb = new TestDatabase({
+    driver: 'sqlite',
+    database: ':memory:',
+    migrationsDirectory: './src/database/migrations',
+    seedsDirectory: './src/database/seeds/testing'
+  });
+  
+  beforeAll(async () => {
+    // Inicializar base de datos
+    await testDb.initialize();
+    
+    // Ejecutar migraciones
+    await testDb.migrate();
+  });
+  
+  beforeEach(async () => {
+    // Limpiar tablas antes de cada test
+    await testDb.truncate(['users', 'posts']);
+    
+    // O recrear esquema
+    // await testDb.refresh();
+    
+    // Ejecutar seeds específicas para testing
+    await testDb.seed(['test_users']);
+  });
+  
+  afterAll(async () => {
+    // Cerrar conexión
+    await testDb.close();
+  });
+  
+  test('should create a user', async () => {
+    const user = await User.create({
+      name: 'Test User',
+      email: 'test@example.com'
+    });
+    
+    expect(user.id).toBeDefined();
+    expect(user.email).toBe('test@example.com');
+    
+    const found = await User.findById(user.id);
+    expect(found).not.toBeNull();
+  });
+  
+  test('should update user post count', async () => {
+    // Crear usuario
+    const user = await User.create({
+      name: 'Blogger',
+      email: 'blogger@example.com'
+    });
+    
+    // Crear posts
+    await Post.createMany([
+      { title: 'Post 1', content: 'Content 1', userId: user.id },
+      { title: 'Post 2', content: 'Content 2', userId: user.id }
+    ]);
+    
+    // Ejecutar servicio a testear
+    await userService.updatePostCounts();
+    
+    // Verificar resultado
+    const updatedUser = await User.findById(user.id);
+    expect(updatedUser.postCount).toBe(2);
+  });
+});
+
+// Mocking de consultas
+test('should handle database errors', async () => {
+  // Mock del query builder
+  jest.spyOn(User, 'query').mockImplementationOnce(() => {
+    return {
+      where: jest.fn().mockReturnThis(),
+      first: jest.fn().mockRejectedValue(new Error('Database error'))
+    };
+  });
+  
+  // Verificar que el servicio maneja el error correctamente
+  await expect(userService.getUserByEmail('test@example.com')).rejects.toThrow();
+});
+```
+
+## Generación de Esquema
+
+Fox Framework permite generar modelos y migraciones a partir de una base de datos existente:
+
+```typescript
+import { SchemaGenerator } from 'fox-framework/database/schema';
+import { db } from '../database';
+
+// Crear generador de esquema
+const generator = new SchemaGenerator({
+  db,
+  connection: 'postgres',
+  outputDirectory: './src/database/generated',
+  options: {
+    // Opciones de generación
+    indentation: 2,
+    generateModels: true,
+    generateMigrations: true,
+    modelNameCase: 'pascal',  // 'pascal', 'camel', 'snake'
+    tablePrefix: 'tbl_',      // Prefijo a eliminar en nombres de modelo
+    includeSchema: true,      // Incluir schema en migraciones
+    generateIndexes: true,    // Incluir índices en migraciones
+    modelNameSingular: true,  // Usar nombres en singular para modelos
+  }
+});
+
+// Generar todo el esquema
+await generator.generateAll();
+
+// O generar solo para tablas específicas
+await generator.generateForTables(['users', 'posts', 'comments']);
+
+// Generar solo modelos
+await generator.generateModels();
+
+// Generar solo migraciones
+await generator.generateMigrations();
+
+// Integración con CLI
+program
+  .command('generate:schema')
+  .description('Generate models and migrations from database schema')
+  .option('-t, --tables <tables>', 'Comma separated list of tables')
+  .option('-m, --models-only', 'Generate only models')
+  .option('-g, --migrations-only', 'Generate only migrations')
+  .action(async (options) => {
+    try {
+      const tables = options.tables ? options.tables.split(',') : undefined;
+      
+      if (options.modelsOnly) {
+        await generator.generateModels(tables);
+      } else if (options.migrationsOnly) {
+        await generator.generateMigrations(tables);
+      } else {
+        await generator.generateAll(tables);
+      }
+      
+      console.log('Schema generation completed successfully');
+      process.exit(0);
+    } catch (error) {
+      console.error('Schema generation failed:', error);
+      process.exit(1);
+    }
+  });
+```
+
+## Schema Builder API
+
+Referencia completa del API para construcción de esquemas en migraciones:
+
+```typescript
+// Tipos de columnas
+table.increments('id');                      // INTEGER PRIMARY KEY AUTO_INCREMENT
+table.bigIncrements('id');                   // BIGINT PRIMARY KEY AUTO_INCREMENT
+table.integer('count');                      // INTEGER
+table.bigInteger('big_num');                 // BIGINT
+table.text('content');                       // TEXT
+table.string('name', 100);                   // VARCHAR(100)
+table.float('amount', 8, 2);                 // FLOAT(8, 2)
+table.decimal('price', 10, 2);               // DECIMAL(10, 2)
+table.boolean('active');                     // BOOLEAN or TINYINT(1)
+table.date('birth_date');                    // DATE
+table.datetime('created_at');                // DATETIME
+table.timestamp('updated_at');               // TIMESTAMP
+table.time('start_time');                    // TIME
+table.binary('data');                        // BLOB/BINARY
+table.enum('status', ['on', 'off']);         // ENUM
+table.json('metadata');                      // JSON
+table.jsonb('settings');                     // JSONB (PostgreSQL)
+table.uuid('id');                            // UUID/CHAR(36)
+table.ipAddress('last_ip');                  // VARCHAR(45)
+table.macAddress('mac');                     // VARCHAR(17)
+table.geometry('position');                  // GEOMETRY (MySQL/PostgreSQL)
+table.point('coordinates');                  // POINT (MySQL/PostgreSQL)
+table.lineString('path');                    // LINESTRING (MySQL/PostgreSQL)
+table.polygon('area');                       // POLYGON (MySQL/PostgreSQL)
+
+// Modificadores de columnas
+table.string('email').notNull();             // NOT NULL
+table.string('name').nullable();             // NULL
+table.integer('price').unsigned();           // UNSIGNED
+table.integer('position').default(0);        // DEFAULT 0
+table.increments('id').primary();            // PRIMARY KEY
+table.string('email').unique();              // UNIQUE
+table.timestamp('created_at').useCurrent();  // DEFAULT CURRENT_TIMESTAMP
+table.integer('user_id').references('id').on('users');  // FOREIGN KEY
+
+// Índices
+table.index('email');                        // CREATE INDEX
+table.index(['first_name', 'last_name']);    // Índice compuesto
+table.unique('username');                    // UNIQUE INDEX
+table.unique(['email', 'tenant_id']);        // UNIQUE compuesto
+table.primary('id');                         // PRIMARY KEY
+table.primary(['id', 'tenant_id']);          // PRIMARY KEY compuesto
+table.spatialIndex('coordinates');           // Índice espacial (MySQL/PostgreSQL)
+
+// Claves foráneas
+table.integer('user_id').unsigned().notNull();
+table.foreign('user_id')
+  .references('id')         // Columna referenciada
+  .on('users')              // Tabla referenciada
+  .onDelete('CASCADE')      // ON DELETE CASCADE
+  .onUpdate('CASCADE');     // ON UPDATE CASCADE
+
+// Otras opciones ON DELETE/UPDATE
+table.foreign('category_id').references('id').on('categories').onDelete('SET NULL');
+table.foreign('status_id').references('id').on('statuses').onDelete('RESTRICT');
+table.foreign('parent_id').references('id').on('items').onDelete('NO ACTION');
+
+// Comentarios
+table.string('code').comment('Unique product code');
+table.text('description').comment('Product full description');
+```
+
+## Patrones y Buenas Prácticas
+
+### Repositorios
+
+```typescript
+import { BaseRepository } from 'fox-framework/database/patterns';
+import { User } from '../models/User';
+
+// Definir repositorio
+export class UserRepository extends BaseRepository<User> {
+  // Especificar el modelo
+  protected model = User;
+  
+  // Método personalizado para buscar por email
+  async findByEmail(email: string): Promise<User | null> {
+    return this.query()
+      .where('email', email)
+      .first();
+  }
+  
+  // Buscar por criterios específicos
+  async findActive(criteria: any = {}): Promise<User[]> {
+    return this.query()
+      .where('active', true)
+      .where(criteria)
+      .orderBy('name')
+      .get();
+  }
+  
+  // Métodos personalizados con relaciones
+  async findWithPosts(id: number): Promise<User | null> {
+    return this.query()
+      .where('id', id)
+      .with('posts')
+      .first();
+  }
+  
+  // Actualización segura
+  async updateProfile(id: number, data: Partial<User>): Promise<User> {
+    // Solo permitir campos seguros
+    const allowedFields = ['name', 'bio', 'avatar', 'preferences'];
+    const safeData = Object.keys(data)
+      .filter(key => allowedFields.includes(key))
+      .reduce((obj, key) => {
+        obj[key] = data[key];
+        return obj;
+      }, {} as Partial<User>);
+    
+    await this.update(id, safeData);
+    return this.findById(id);
+  }
+  
+  // Métodos de paginación avanzados
+  async paginate(page = 1, perPage = 15, filters = {}): Promise<PaginationResult<User>> {
+    const query = this.query();
+    
+    // Aplicar filtros
+    if (filters.search) {
+      query.where(q => {
+        q.where('name', 'like', `%${filters.search}%`)
+          .orWhere('email', 'like', `%${filters.search}%`);
+      });
+    }
+    
+    if (filters.role) {
+      query.whereHas('roles', q => {
+        q.where('name', filters.role);
+      });
+    }
+    
+    // Ordenar
+    const sortField = filters.sortBy || 'created_at';
+    const sortDir = filters.sortDir || 'desc';
+    query.orderBy(sortField, sortDir);
+    
+    // Ejecutar paginación
+    return query.paginate(page, perPage);
+  }
+}
+
+// Uso del repositorio
+const userRepository = new UserRepository();
+
+// Encontrar usuarios
+const user = await userRepository.findById(1);
+const users = await userRepository.findMany({ active: true });
+const adminUser = await userRepository.findByEmail('admin@example.com');
+
+// Crear usuario
+const newUser = await userRepository.create({
+  name: 'New User',
+  email: 'new@example.com',
+  active: true
+});
+
+// Actualizar
+await userRepository.update(user.id, { name: 'Updated Name' });
+
+// Eliminar
+await userRepository.delete(user.id);
+```
+
+### Unit of Work
+
+```typescript
+import { UnitOfWork } from 'fox-framework/database/patterns';
+import { UserRepository } from '../repositories/UserRepository';
+import { PostRepository } from '../repositories/PostRepository';
+import { db } from '../database';
+
+// Servicio utilizando Unit of Work
+export class BlogService {
+  private uow: UnitOfWork;
+  private userRepo: UserRepository;
+  private postRepo: PostRepository;
+  
+  constructor() {
+    this.uow = new UnitOfWork(db);
+    this.userRepo = new UserRepository();
+    this.postRepo = new PostRepository();
+  }
+  
+  async createPost(userId: number, postData: any): Promise<any> {
+    return this.uow.execute(async (trx) => {
+      // Obtener usuario en la transacción
+      const user = await this.userRepo.findById(userId, trx);
+      
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
+      // Crear post en la transacción
+      const post = await this.postRepo.create({
+        userId,
+        title: postData.title,
+        content: postData.content,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }, trx);
+      
+      // Actualizar contador de posts del usuario
+      await this.userRepo.update(userId, {
+        postCount: (user.postCount || 0) + 1,
+        lastPostedAt: new Date()
+      }, trx);
+      
+      // Crear tags si es necesario
+      if (postData.tags && Array.isArray(postData.tags)) {
+        for (const tagName of postData.tags) {
+          // Buscar o crear tag
+          let tag = await this.tagRepo.findOne({ name: tagName }, trx);
+          
+          if (!tag) {
+            tag = await this.tagRepo.create({ name: tagName }, trx);
+          }
+          
+          // Asociar tag al post
+          await this.postTagRepo.create({
+            postId: post.id,
+            tagId: tag.id
+          }, trx);
+        }
+      }
+      
+      // Todo se ejecuta en una sola transacción
+      // Si falla cualquier operación, se hace rollback automáticamente
+      
+      return post;
+    });
+  }
+}
+```
+
+### Query Scopes
+
+```typescript
+import { Model, scope } from 'fox-framework/database/orm';
+
+@table('users')
+export class User extends Model {
+  // Campos y relaciones
+  
+  // Scope para usuarios activos
+  @scope
+  static active(query) {
+    return query.where('active', true);
+  }
+  
+  // Scope para roles específicos
+  @scope
+  static byRole(query, role: string) {
+    return query.whereHas('roles', q => q.where('name', role));
+  }
+  
+  // Scope para búsqueda
+  @scope
+  static search(query, term: string) {
+    return query.where(q => {
+      q.where('name', 'like', `%${term}%`)
+        .orWhere('email', 'like', `%${term}%`);
+    });
+  }
+  
+  // Scope con relaciones
+  @scope
+  static withPostCount(query) {
+    return query.withCount('posts as post_count');
+  }
+}
+
+// Uso de scopes
+const activeAdmins = await User.query()
+  .active()
+  .byRole('admin')
+  .orderBy('name')
+  .get();
+
+const searchResults = await User.query()
+  .search('john')
+  .withPostCount()
+  .paginate(1, 20);
+```
+
+## Integración con Validación
+
+Fox Framework permite integrar la validación con la capa de base de datos:
+
+```typescript
+import { Model, field, validate } from 'fox-framework/database/orm';
+import { Schema, Validators } from 'fox-framework/validation';
+
+// Definir esquema de validación
+const userSchema = new Schema({
+  name: Validators.string().required().min(3).max(100),
+  email: Validators.email().required(),
+  age: Validators.number().min(18).optional(),
+  active: Validators.boolean().default(true)
+});
+
+@table('users')
+export class User extends Model {
+  // Modelo con validación integrada
+  @field()
+  @validate(userSchema.fields.name)
+  name: string;
+  
+  @field()
+  @validate(userSchema.fields.email)
+  email: string;
+  
+  @field()
+  @validate(userSchema.fields.age)
+  age?: number;
+  
+  @field({ name: 'is_active' })
+  @validate(userSchema.fields.active)
+  active: boolean;
+  
+  // Método para validar antes de guardar
+  @beforeSave()
+  async validate() {
+    const { name, email, age, active } = this;
+    
+    try {
+      await userSchema.validateAsync({
+        name, email, age, active
+      });
+    } catch (error) {
+      throw new ValidationError('Validation failed', error.details);
+    }
+  }
+}
+
+// Uso
+try {
+  const user = new User();
+  user.name = 'Jo'; // Muy corto, no pasa validación
+  user.email = 'not-an-email';
+  user.age = 15; // Menor de 18
+  
+  await user.save();
+} catch (error) {
+  console.error('Validation error:', error.details);
+}
+```
+
+## Hooks y Eventos
+
+```typescript
+import { Model, table, field, hooks } from 'fox-framework/database/orm';
+
+@table('users')
+@hooks({
+  // Hooks a nivel de modelo
+  beforeCreate: async function(user) {
+    user.createdAt = new Date();
+    user.updatedAt = new Date();
+  },
+  afterCreate: async function(user) {
+    await NotificationService.notifyAdmins('New user created', { userId: user.id });
+  },
+  beforeUpdate: async function(user) {
+    user.updatedAt = new Date();
+  },
+  beforeSave: async function(user) {
+    // Se ejecuta antes de crear o actualizar
+    if (user.email) {
+      user.email = user.email.toLowerCase();
+    }
+  },
+  afterDelete: async function(user) {
+    await AuditService.log('user_deleted', { userId: user.id });
+  }
+})
+export class User extends Model {
+  // Campos
+  @field({ primaryKey: true, autoIncrement: true })
+  id: number;
+  
+  @field()
+  name: string;
+  
+  @field()
+  email: string;
+  
+  // Hooks a nivel de método
+  @beforeCreate()
+  generateApiKey() {
+    this.apiKey = crypto.randomUUID();
+  }
+  
+  @afterFind()
+  loadSettings() {
+    if (this.id) {
+      this.settings = cache.get(`user_settings:${this.id}`);
+    }
+  }
+}
+
+// También se pueden usar eventos para reaccionar a cambios en modelos
+Model.events.on('user.created', async (user) => {
+  // Lógica adicional tras crear usuario
+  await WelcomeMailer.send(user.email);
+});
+
+Model.events.on('user.deleted', async (userId) => {
+  // Limpiar recursos asociados
+  await cleanupUserResources(userId);
+});
+```
+
+## Registro y Monitoreo
+
+```typescript
+import { db } from '../database';
+
+// Configurar logging
+db.setLogLevel('debug'); // 'debug', 'info', 'warn', 'error'
+
+// Registro de queries (útil en desarrollo)
+db.onQuery((query, bindings, connectionName) => {
+  console.log(`[${connectionName}] ${query}`, bindings);
+});
+
+// Monitorear queries lentas
+db.onSlowQuery((query, bindings, time, connectionName) => {
+  console.warn(`[SLOW QUERY] ${time}ms - ${query}`, bindings);
+  // Reportar a sistema de monitoreo
+  metrics.recordSlowQuery(query, time, connectionName);
+});
+
+// Monitorear errores
+db.onError((error, query, bindings, connectionName) => {
+  console.error(`[DB ERROR] ${error.message}`, {
+    query, bindings, connectionName
+  });
+  // Reportar a sistema de monitoreo de errores
+  errorReporting.captureException(error, {
+    extra: { query, bindings, connectionName }
+  });
+});
+
+// Integración con sistemas de monitoreo
+db.use({
+  name: 'prometheus',
+  onQuery: (query, time, connectionName) => {
+    metrics.dbQueryCount.inc({ connection: connectionName });
+    metrics.dbQueryTime.observe({ connection: connectionName }, time);
+  }
+});
+
+// Performance monitoring
+db.profileQuery('slow_queries', async () => {
+  // Ejecutar consulta compleja
+  return await db.table('large_table')
+    .join('other_table', 'large_table.id', 'other_table.large_id')
+    .where('status', 'active')
+    .orderBy('created_at', 'desc')
+    .limit(1000)
+    .get();
+});
+```
+
+## Conclusión
+
+La capa de abstracción de base de datos de Fox Framework proporciona una API completa y flexible para trabajar con diferentes motores de bases de datos, simplificando operaciones comunes y proporcionando herramientas avanzadas para consultas, migraciones, semillas y más.

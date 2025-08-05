@@ -1,0 +1,864 @@
+# Sistema de Rutas
+
+El sistema de rutas de Fox Framework proporciona una forma flexible y potente de definir los puntos de acceso a tu aplicación. Permite mapear URLs a controladores o funciones específicas, gestionar parámetros dinámicos, aplicar middleware y organizar tu aplicación de manera modular.
+
+## Características Principales
+
+- **Enrutamiento declarativo**: Define rutas con una API clara y expresiva
+- **Rutas anidadas**: Organiza tus rutas de forma jerárquica
+- **Parámetros dinámicos**: Extrae valores de las URLs con patrones de captura
+- **Middleware**: Aplica funciones intermedias para procesamiento previo/posterior
+- **Agrupamiento**: Agrupa rutas con características comunes
+- **Prefijos**: Establece prefijos para grupos de rutas
+- **Tipado completo**: Aprovecha TypeScript para rutas tipadas
+- **Lazy loading**: Carga controladores bajo demanda
+- **Generación de URL**: Genera URLs a partir de nombres de ruta
+- **Testing**: Facilita el testing de rutas
+
+## Configuración Básica
+
+Una configuración básica del sistema de rutas se vería así:
+
+```typescript
+import { FoxFactory, Router, RequestMethod } from 'fox-framework/core';
+import { UserController } from './controllers/user.controller';
+import { AuthMiddleware } from './middleware/auth.middleware';
+
+// Crear el router
+const router = new Router();
+
+// Definir rutas
+router.get('/hello', (ctx) => {
+  return { message: 'Hello World!' };
+});
+
+router.post('/users', (ctx) => {
+  const userData = ctx.body;
+  // Crear usuario...
+  return { id: '123', ...userData };
+});
+
+// Rutas con parámetros
+router.get('/users/:id', (ctx) => {
+  const { id } = ctx.params;
+  // Buscar usuario por id
+  return { id, name: `User ${id}` };
+});
+
+// Integrar el router con el servidor
+const server = FoxFactory.createServer({
+  port: 3000,
+  router
+});
+
+// Iniciar el servidor
+server.start();
+```
+
+## Definición de Rutas
+
+### Métodos HTTP Básicos
+
+El router proporciona métodos para todos los verbos HTTP comunes:
+
+```typescript
+router.get('/products', getProductsHandler);
+router.post('/products', createProductHandler);
+router.put('/products/:id', updateProductHandler);
+router.delete('/products/:id', deleteProductHandler);
+router.patch('/products/:id', partialUpdateHandler);
+router.options('/api', optionsHandler);
+router.head('/status', headStatusHandler);
+```
+
+### Rutas con Controladores
+
+```typescript
+import { UserController } from './controllers/user.controller';
+import { ProductController } from './controllers/product.controller';
+
+// Registrar controladores completos
+router.controller('/users', UserController);
+router.controller('/products', ProductController);
+
+// Registrar método específico de un controlador
+router.get('/dashboard', DashboardController, 'showDashboard');
+router.post('/login', AuthController, 'login');
+```
+
+### Rutas con Parámetros
+
+```typescript
+// Parámetros simples
+router.get('/users/:id', (ctx) => {
+  const { id } = ctx.params; // "id" es un string
+  // ...
+});
+
+// Múltiples parámetros
+router.get('/blog/:year/:month/:slug', (ctx) => {
+  const { year, month, slug } = ctx.params;
+  // ...
+});
+
+// Parámetros opcionales (con ?)
+router.get('/articles/:category?', (ctx) => {
+  const { category } = ctx.params; // undefined si no se proporciona
+  // ...
+});
+
+// Parámetros con restricciones (expresiones regulares)
+router.get('/users/:id(\\d+)', (ctx) => {
+  const { id } = ctx.params; // Solo coincide si id contiene solo dígitos
+  // ...
+});
+
+// Parámetros con comodín
+router.get('/files/*path', (ctx) => {
+  const { path } = ctx.params; // Captura toda la ruta después de /files/
+  // ...
+});
+```
+
+### Definición de Rutas Avanzada
+
+```typescript
+// Ruta con opciones
+router.add({
+  path: '/api/products',
+  method: RequestMethod.GET,
+  handler: productController.getProducts,
+  middleware: [authMiddleware],
+  name: 'products.list',
+  meta: {
+    description: 'Get all products',
+    isPublic: true,
+    version: 'v1'
+  }
+});
+
+// Ruta con múltiples métodos
+router.match(['GET', 'HEAD'], '/status', statusHandler);
+
+// Ruta comodín (404)
+router.all('*', notFoundHandler);
+```
+
+## Grupos de Rutas
+
+Los grupos permiten organizar rutas relacionadas con propiedades compartidas:
+
+```typescript
+// Grupo básico con prefijo
+router.group('/api', (group) => {
+  group.get('/users', getAllUsers);
+  group.post('/users', createUser);
+  group.get('/users/:id', getUserById);
+  
+  // Subgrupo
+  group.group('/admin', (admin) => {
+    admin.get('/stats', getAdminStats);
+    admin.get('/logs', viewLogs);
+  });
+});
+
+// Grupo con middleware
+router.group({ prefix: '/admin', middleware: [authMiddleware, adminRoleMiddleware] }, (group) => {
+  group.get('/dashboard', showDashboard);
+  group.get('/users', listUsers);
+  group.post('/settings', updateSettings);
+});
+
+// Grupo con nombre de ruta
+router.group({ name: 'api.' }, (group) => {
+  group.get('/users', getAllUsers, { name: 'users.index' }); // nombre completo: "api.users.index"
+  group.post('/users', createUser, { name: 'users.create' });
+});
+
+// Grupo con controlador
+router.group('/products', (group) => {
+  group.controller(ProductController);
+});
+```
+
+## Middleware en Rutas
+
+```typescript
+// Middleware en una ruta
+router.get('/profile', authMiddleware, profileController.show);
+
+// Múltiples middleware
+router.post('/admin/users', [authMiddleware, adminMiddleware, validateUserMiddleware], adminController.createUser);
+
+// Middleware en grupo
+router.group({ middleware: [authMiddleware] }, (group) => {
+  group.get('/profile', profileController.show);
+  group.get('/settings', settingsController.show);
+  group.post('/settings', validateSettingsMiddleware, settingsController.update);
+});
+
+// Middleware condicional
+router.get('/content', (req, next) => {
+  if (process.env.FEATURE_FLAG_ENABLED === 'true') {
+    return next(); // Continúa al siguiente handler
+  }
+  return { error: 'Feature not available' };
+}, contentController.show);
+
+// Middleware de ruta específico
+router.get('/users/:id', userExistsMiddleware, userController.show);
+```
+
+## Organización de Rutas
+
+Para mantener tu aplicación organizada, puedes dividir las rutas en múltiples archivos:
+
+### Estructura de Archivos
+
+```
+src/
+  routes/
+    index.ts         # Punto de entrada principal
+    api.routes.ts    # Rutas de API
+    web.routes.ts    # Rutas web
+    admin.routes.ts  # Rutas de administración
+```
+
+### Implementación
+
+```typescript
+// src/routes/api.routes.ts
+import { Router } from 'fox-framework/core';
+import { authMiddleware } from '../middleware';
+import { UserController } from '../controllers/user.controller';
+
+export function registerApiRoutes(router: Router): void {
+  router.group('/api', (api) => {
+    // Rutas públicas
+    api.post('/login', AuthController, 'login');
+    api.post('/register', AuthController, 'register');
+    
+    // Rutas protegidas
+    api.group({ middleware: [authMiddleware] }, (auth) => {
+      auth.controller('/users', UserController);
+      auth.controller('/products', ProductController);
+    });
+  });
+}
+
+// src/routes/web.routes.ts
+import { Router } from 'fox-framework/core';
+
+export function registerWebRoutes(router: Router): void {
+  router.get('/', HomeController, 'index');
+  router.get('/about', HomeController, 'about');
+  router.get('/contact', HomeController, 'contact');
+  
+  // Rutas de blog
+  router.group('/blog', (blog) => {
+    blog.get('/', BlogController, 'index');
+    blog.get('/:slug', BlogController, 'show');
+  });
+}
+
+// src/routes/index.ts
+import { Router } from 'fox-framework/core';
+import { registerApiRoutes } from './api.routes';
+import { registerWebRoutes } from './web.routes';
+import { registerAdminRoutes } from './admin.routes';
+
+export function registerRoutes(): Router {
+  const router = new Router();
+  
+  // Registrar todas las rutas
+  registerApiRoutes(router);
+  registerWebRoutes(router);
+  registerAdminRoutes(router);
+  
+  // Fallback para rutas no encontradas
+  router.all('*', (ctx) => {
+    return ctx.response.notFound('Ruta no encontrada');
+  });
+  
+  return router;
+}
+
+// src/server/index.ts
+import { FoxFactory } from 'fox-framework/core';
+import { registerRoutes } from '../routes';
+
+const router = registerRoutes();
+const server = FoxFactory.createServer({
+  port: 3000,
+  router
+});
+
+server.start();
+```
+
+## Rutas con Nombre y Generación de URL
+
+```typescript
+// Definir rutas con nombre
+router.get('/users/:id', userController.show, { name: 'users.show' });
+router.post('/users', userController.create, { name: 'users.create' });
+
+// Usar nombres para generar URLs
+import { url } from 'fox-framework/core/router';
+
+// En controladores o middlewares
+const profileUrl = url('users.show', { id: 123 }); // "/users/123"
+const newUserUrl = url('users.create'); // "/users"
+
+// Con parámetros de query
+const searchUrl = url('users.index', {}, { search: 'john', sort: 'name' }); 
+// "/users?search=john&sort=name"
+```
+
+## Rutas con Dominio
+
+```typescript
+// Rutas específicas de dominio
+router.domain('api.example.com', (domain) => {
+  domain.get('/users', apiController.getUsers);
+  domain.post('/users', apiController.createUser);
+});
+
+router.domain('admin.example.com', (domain) => {
+  domain.get('/dashboard', adminController.dashboard);
+  domain.group('/users', (users) => {
+    users.get('/', adminController.listUsers);
+    users.get('/:id', adminController.showUser);
+  });
+});
+```
+
+## Inspección de Rutas
+
+Fox Framework permite examinar todas las rutas registradas:
+
+```typescript
+// Obtener todas las rutas
+const routes = router.getRoutes();
+
+// Mostrar tabla de rutas
+console.table(routes.map(route => ({
+  method: route.method,
+  path: route.path,
+  name: route.name || 'unnamed',
+  middleware: (route.middleware || []).map(m => m.name).join(', ')
+})));
+
+// Encontrar una ruta por nombre
+const userShowRoute = router.findByName('users.show');
+
+// Verificar si existe una ruta
+const hasLoginRoute = router.hasRoute('/login', 'POST');
+```
+
+## Rutas con Versiones
+
+```typescript
+// Rutas con prefijo de versión
+router.group('/api/v1', (v1) => {
+  v1.get('/users', apiv1.getUsersV1);
+});
+
+router.group('/api/v2', (v2) => {
+  v2.get('/users', apiv2.getUsersV2);
+});
+
+// Rutas con cabecera de versión
+router.group((router) => {
+  router.get('/api/users', apiv1.getUsersV1);
+}, {
+  middleware: [
+    (ctx, next) => {
+      if (ctx.headers['api-version'] === '1') {
+        return next();
+      }
+      return ctx.response.notFound();
+    }
+  ]
+});
+
+router.group((router) => {
+  router.get('/api/users', apiv2.getUsersV2);
+}, {
+  middleware: [
+    (ctx, next) => {
+      if (ctx.headers['api-version'] === '2') {
+        return next();
+      }
+      return ctx.response.notFound();
+    }
+  ]
+});
+```
+
+## Redirecciones
+
+```typescript
+// Redirección simple
+router.redirect('/old-path', '/new-path');
+
+// Redirección con código de estado personalizado
+router.redirect('/legacy', '/modern', 301); // Movido permanentemente
+
+// Redirección a ruta nombrada
+router.redirectToRoute('/profile', 'users.show', { id: 'me' });
+
+// Redirección basada en lógica
+router.get('/go/:place', (ctx) => {
+  const { place } = ctx.params;
+  
+  if (place === 'home') {
+    return ctx.response.redirect('/');
+  } else if (place === 'login') {
+    return ctx.response.redirect('/auth/login');
+  } else {
+    return ctx.response.redirect('/dashboard');
+  }
+});
+```
+
+## Rutas con Restricciones
+
+```typescript
+// Restricciones en parámetros de ruta
+router.get('/users/:id', userController.show)
+  .where('id', '[0-9]+');
+
+router.get('/articles/:year/:month/:day/:slug', articleController.show)
+  .where('year', '[0-9]{4}')
+  .where('month', '0[1-9]|1[0-2]')
+  .where('day', '0[1-9]|[12][0-9]|3[01]');
+
+// Múltiples restricciones
+router.get('/products/:category/:id', productController.show)
+  .where({
+    category: '[a-z0-9-]+',
+    id: '[0-9]+'
+  });
+
+// Restricciones personalizadas
+router.pattern('uuid', '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
+
+router.get('/orders/:id', orderController.show)
+  .where('id', 'uuid');
+```
+
+## Fallbacks y Manejo de Errores
+
+```typescript
+// Ruta para 404 (no encontrado)
+router.all('*', (ctx) => {
+  return ctx.response.notFound('Página no encontrada');
+});
+
+// Manejo personalizado de errores
+router.setErrorHandler((error, ctx) => {
+  console.error('Error de ruta:', error);
+  
+  if (error.code === 'VALIDATION_ERROR') {
+    return ctx.response.badRequest(error.details);
+  }
+  
+  if (error.code === 'UNAUTHORIZED') {
+    return ctx.response.unauthorized('Acceso denegado');
+  }
+  
+  // Error por defecto
+  return ctx.response.error('Error interno del servidor', 500);
+});
+```
+
+## Rutas con Rate Limiting
+
+```typescript
+import { rateLimiter } from 'fox-framework/middleware';
+
+// Limitar una ruta específica
+router.post('/login', 
+  rateLimiter({ max: 5, windowMs: 60 * 1000 }), // 5 intentos por minuto
+  authController.login
+);
+
+// Limitar un grupo de rutas
+router.group('/api', { 
+  middleware: [
+    rateLimiter({ max: 100, windowMs: 60 * 1000 }) // 100 peticiones por minuto
+  ] 
+}, (api) => {
+  api.get('/users', userController.index);
+  api.get('/products', productController.index);
+});
+
+// Rate limiting personalizado por usuario
+router.group('/api', {
+  middleware: [
+    authMiddleware,
+    (ctx, next) => {
+      const limit = ctx.auth.user.isPremium ? 1000 : 100;
+      return rateLimiter({ 
+        max: limit, 
+        windowMs: 60 * 1000,
+        keyGenerator: (ctx) => ctx.auth.user.id
+      })(ctx, next);
+    }
+  ]
+}, (api) => {
+  // Rutas protegidas
+});
+```
+
+## Rutas con Caché
+
+```typescript
+import { cacheMiddleware } from 'fox-framework/middleware';
+
+// Caché básica
+router.get('/products', 
+  cacheMiddleware({ ttl: 60 }), // 60 segundos
+  productController.index
+);
+
+// Caché con clave personalizada
+router.get('/users/:id', 
+  cacheMiddleware({ 
+    ttl: 300, // 5 minutos
+    key: (ctx) => `user-${ctx.params.id}`
+  }),
+  userController.show
+);
+
+// Caché condicional
+router.get('/dashboard',
+  (ctx, next) => {
+    if (ctx.query.refresh === 'true') {
+      ctx.state.skipCache = true;
+    }
+    return next();
+  },
+  cacheMiddleware({ 
+    ttl: 60,
+    skip: (ctx) => ctx.state.skipCache === true
+  }),
+  dashboardController.show
+);
+```
+
+## Rutas para Archivos Estáticos
+
+```typescript
+import { staticFiles } from 'fox-framework/middleware';
+
+// Servir archivos estáticos
+router.use('/assets', staticFiles('./public/assets'));
+
+// Opciones personalizadas
+router.use('/uploads', staticFiles('./storage/uploads', {
+  maxAge: 86400000, // 1 día en ms
+  index: false, // Deshabilitar listado de índice
+  etag: true // Habilitar etags
+}));
+
+// Múltiples directorios
+router.use('/public', staticFiles(['./public', './assets']));
+```
+
+## Rutas para Autenticación
+
+```typescript
+import { auth } from 'fox-framework/middleware';
+
+// Rutas de autenticación
+router.group('/auth', (auth) => {
+  auth.get('/login', authController.showLogin);
+  auth.post('/login', authController.login);
+  auth.post('/logout', authController.logout);
+  auth.get('/forgot-password', authController.showForgotPassword);
+  auth.post('/forgot-password', authController.forgotPassword);
+  auth.get('/reset-password/:token', authController.showResetPassword);
+  auth.post('/reset-password', authController.resetPassword);
+});
+
+// Rutas protegidas
+router.group({ middleware: [authMiddleware] }, (protected) => {
+  protected.get('/profile', userController.profile);
+  protected.put('/profile', userController.updateProfile);
+  
+  // Solo para admin
+  protected.group({ middleware: [roleMiddleware(['admin'])] }, (admin) => {
+    admin.get('/admin/dashboard', adminController.dashboard);
+    admin.resource('/admin/users', AdminUserController);
+  });
+});
+```
+
+## Rutas para API RESTful
+
+```typescript
+// Definir un recurso completo (CRUD)
+router.resource('/users', UserController);
+
+// Esto genera automáticamente:
+// GET     /users            - index
+// GET     /users/create     - create
+// POST    /users            - store
+// GET     /users/:id        - show
+// GET     /users/:id/edit   - edit
+// PUT     /users/:id        - update
+// DELETE  /users/:id        - destroy
+
+// Recurso con solo algunas acciones
+router.resource('/posts', PostController, {
+  only: ['index', 'show', 'store']
+});
+
+// Recurso excluyendo acciones
+router.resource('/comments', CommentController, {
+  except: ['create', 'edit']
+});
+
+// Recursos anidados
+router.resource('/posts/:postId/comments', CommentController);
+
+// Recursos personalizados
+router.resource('/products', ProductController, {
+  middleware: {
+    index: [cacheMiddleware({ ttl: 60 })],
+    store: [validateProductMiddleware],
+    update: [validateProductMiddleware, checkOwnershipMiddleware]
+  }
+});
+
+// Acciones personalizadas en recursos
+router.resource('/orders', OrderController);
+router.get('/orders/:id/invoice', OrderController, 'generateInvoice');
+router.post('/orders/:id/refund', OrderController, 'processRefund');
+```
+
+## Rutas para API GraphQL
+
+```typescript
+import { graphqlHandler } from 'fox-framework/graphql';
+import { schema } from '../graphql/schema';
+
+// Ruta GraphQL principal
+router.post('/graphql', graphqlHandler({ schema }));
+
+// Opcional: Interfaz GraphiQL para desarrollo
+if (process.env.NODE_ENV === 'development') {
+  router.get('/graphiql', graphqlHandler({ 
+    schema,
+    graphiql: true
+  }));
+}
+```
+
+## Testing de Rutas
+
+```typescript
+import { createTestRouter } from 'fox-framework/testing';
+
+describe('User Routes', () => {
+  let router;
+  let mockUserController;
+  
+  beforeEach(() => {
+    // Mock del controlador
+    mockUserController = {
+      index: jest.fn().mockImplementation(ctx => {
+        return ctx.response.success([
+          { id: 1, name: 'User 1' },
+          { id: 2, name: 'User 2' }
+        ]);
+      }),
+      show: jest.fn().mockImplementation(ctx => {
+        const { id } = ctx.params;
+        if (id === '1') {
+          return ctx.response.success({ id: 1, name: 'User 1' });
+        }
+        return ctx.response.notFound('Usuario no encontrado');
+      })
+    };
+    
+    // Crear router de prueba
+    router = createTestRouter();
+    
+    // Registrar rutas
+    router.get('/users', mockUserController.index);
+    router.get('/users/:id', mockUserController.show);
+  });
+  
+  test('GET /users devuelve lista de usuarios', async () => {
+    // Simular petición
+    const response = await router.handle({
+      method: 'GET',
+      url: '/users'
+    });
+    
+    // Verificar respuesta
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(2);
+    expect(mockUserController.index).toHaveBeenCalled();
+  });
+  
+  test('GET /users/1 devuelve usuario específico', async () => {
+    const response = await router.handle({
+      method: 'GET',
+      url: '/users/1'
+    });
+    
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ id: 1, name: 'User 1' });
+  });
+  
+  test('GET /users/999 devuelve 404', async () => {
+    const response = await router.handle({
+      method: 'GET',
+      url: '/users/999'
+    });
+    
+    expect(response.status).toBe(404);
+  });
+});
+```
+
+## Rutas para WebSockets
+
+```typescript
+import { WebSocketRouter } from 'fox-framework/websockets';
+import { authMiddleware } from '../middleware';
+import { ChatController } from '../controllers/chat.controller';
+
+// Crear router de WebSocket
+const wsRouter = new WebSocketRouter();
+
+// Definir rutas WebSocket
+wsRouter.route('/chat', (socket, ctx) => {
+  socket.on('message', (data) => {
+    // Broadcast a todos los clientes
+    socket.broadcast.emit('message', {
+      user: ctx.auth.user.name,
+      text: data.text,
+      timestamp: new Date()
+    });
+  });
+});
+
+// Rutas con middleware
+wsRouter.route('/secure-chat', authMiddleware, (socket, ctx) => {
+  // Solo usuarios autenticados
+});
+
+// Usar controladores
+wsRouter.controller('/chat-room', ChatController);
+
+// Integrar con el servidor
+const server = FoxFactory.createServer({
+  port: 3000,
+  router,
+  wsRouter
+});
+```
+
+## Patrones y Buenas Prácticas
+
+### Organización por Dominio
+
+```
+src/
+  modules/
+    users/
+      controllers/
+        user.controller.ts
+      routes/
+        user.routes.ts
+      services/
+        user.service.ts
+    products/
+      controllers/
+        product.controller.ts
+      routes/
+        product.routes.ts
+      services/
+        product.service.ts
+  routes/
+    index.ts        # Registra todas las rutas de los módulos
+```
+
+### Agrupación por Responsabilidades
+
+```typescript
+// src/routes/index.ts
+export function registerRoutes(router: Router): void {
+  // Rutas públicas
+  registerPublicRoutes(router);
+  
+  // Rutas autenticadas
+  router.group({ middleware: [authMiddleware] }, (auth) => {
+    registerUserRoutes(auth);
+    registerProductRoutes(auth);
+    registerOrderRoutes(auth);
+    
+    // Rutas de administrador
+    auth.group({ middleware: [adminMiddleware], prefix: '/admin' }, (admin) => {
+      registerAdminRoutes(admin);
+    });
+  });
+  
+  // API
+  router.group('/api', (api) => {
+    registerApiV1Routes(api.group('/v1'));
+    registerApiV2Routes(api.group('/v2'));
+  });
+  
+  // Fallback
+  router.all('*', notFoundHandler);
+}
+```
+
+### Separación de Definición y Lógica
+
+```typescript
+// Separar definición de rutas (qué) de la implementación (cómo)
+
+// src/routes/user.routes.ts
+export function registerUserRoutes(router: Router): void {
+  router.get('/profile', userController.profile);
+  router.put('/profile', userController.updateProfile);
+}
+
+// src/controllers/user.controller.ts
+export class UserController {
+  async profile(ctx: HttpContext) {
+    // Implementación
+  }
+  
+  async updateProfile(ctx: HttpContext) {
+    // Implementación
+  }
+}
+```
+
+### Rutas Descriptivas
+
+```typescript
+// Convención REST
+router.get('/posts', postController.index);          // Listar
+router.get('/posts/:id', postController.show);       // Ver detalle
+router.post('/posts', postController.store);         // Crear
+router.put('/posts/:id', postController.update);     // Actualizar
+router.delete('/posts/:id', postController.destroy); // Eliminar
+
+// Acciones no CRUD claras
+router.post('/posts/:id/publish', postController.publish);
+router.post('/users/:id/verify-email', userController.verifyEmail);
+router.post('/orders/:id/cancel', orderController.cancelOrder);
+```
+
+## Conclusión
+
+El sistema de rutas de Fox Framework ofrece una API flexible y potente para definir la estructura de navegación de tu aplicación. Con soporte para grupos, middleware, parámetros dinámicos y más, te permite organizar tus rutas de manera clara y mantenible a medida que tu aplicación crece. Ya sea que estés construyendo una API RESTful, una aplicación web tradicional o un sistema híbrido, las herramientas de enrutamiento del framework te ayudarán a estructurar tu código de manera efectiva.

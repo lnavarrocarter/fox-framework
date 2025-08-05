@@ -1,0 +1,536 @@
+# Preguntas Frecuentes (FAQ)
+
+Esta sección contiene respuestas a las preguntas más comunes sobre Fox Framework. Si no encuentras la respuesta que buscas, no dudes en consultar nuestra documentación completa o contactar con la comunidad.
+
+## 🚀 Primeros Pasos
+
+### ¿Qué es Fox Framework?
+
+Fox Framework es un framework web moderno para TypeScript/Node.js que proporciona una arquitectura escalable y herramientas integradas para desarrollar aplicaciones web robustas. Incluye sistema de routing, motor de templates, CLI, cache, logging y mucho más.
+
+### ¿Por qué elegir Fox Framework sobre Express?
+
+Fox Framework construye sobre Express pero agrega:
+- **Estructura organizada**: Arquitectura predefinida y mejores prácticas
+- **TypeScript first**: Tipado completo y mejor experiencia de desarrollo
+- **Herramientas integradas**: CLI, cache, logging, validación sin configuración extra
+- **Escalabilidad**: Patrones de diseño para aplicaciones grandes
+- **Monitoreo**: Métricas y observabilidad incluidas
+
+### ¿Fox Framework es compatible con el ecosistema de Express?
+
+Sí, completamente. Fox Framework está construido sobre Express, por lo que puedes usar cualquier middleware, librería o herramienta del ecosistema de Express sin problemas.
+
+### ¿Qué versión de Node.js necesito?
+
+Fox Framework requiere Node.js 16.0 o superior. Recomendamos usar la versión LTS más reciente para mejor estabilidad y rendimiento.
+
+## 📦 Instalación y Configuración
+
+### ¿Cómo instalo Fox Framework?
+
+```bash
+# Instalación global del CLI
+npm install -g @fox-framework/cli
+
+# Crear nuevo proyecto
+fox new mi-proyecto
+cd mi-proyecto
+npm install
+
+# Iniciar servidor de desarrollo
+npm run dev
+```
+
+### ¿Puedo usar Fox Framework en un proyecto existente?
+
+Sí, puedes agregar Fox Framework a un proyecto existente:
+
+```bash
+npm install fox-framework
+```
+
+Luego configura tu servidor:
+
+```typescript
+import { FoxFactory } from 'fox-framework';
+
+const app = FoxFactory.createServer({
+  port: 3000,
+  // tu configuración
+});
+
+app.listen();
+```
+
+### ¿Cómo configuro la base de datos?
+
+Fox Framework soporta múltiples bases de datos:
+
+```typescript
+const server = FoxFactory.createServer({
+  database: {
+    type: 'postgresql', // postgresql, mysql, sqlite, mongodb
+    url: 'postgresql://user:pass@localhost:5432/mydb',
+    // opciones adicionales
+  }
+});
+```
+
+## 🏗️ Arquitectura y Desarrollo
+
+### ¿Debo seguir una estructura de carpetas específica?
+
+Recomendamos esta estructura, pero es flexible:
+
+```
+src/
+├── controllers/     # Lógica de controladores
+├── services/       # Lógica de negocio
+├── models/         # Modelos de datos
+├── middleware/     # Middleware personalizado
+├── routes/         # Definición de rutas
+├── config/         # Configuración
+└── utils/          # Utilidades
+```
+
+### ¿Cómo manejo la autenticación?
+
+Fox Framework incluye middleware de autenticación:
+
+```typescript
+import { AuthMiddleware } from 'fox-framework/auth';
+
+// Configurar JWT
+const authConfig = {
+  jwt: {
+    secret: 'tu-secreto',
+    expiresIn: '7d'
+  }
+};
+
+// Usar en rutas
+router.get('/protected', AuthMiddleware.jwt(authConfig), controller.method);
+```
+
+### ¿Puedo usar otros ORMs además del incluido?
+
+Sí, Fox Framework es ORM-agnóstico. Puedes usar:
+- Prisma
+- TypeORM
+- Sequelize
+- Mongoose (para MongoDB)
+- O cualquier otro ORM/ODM
+
+### ¿Cómo implemento validación de datos?
+
+Fox Framework incluye validación integrada:
+
+```typescript
+import { ValidationMiddleware, Schema } from 'fox-framework/validation';
+
+const userSchema = Schema.object({
+  name: Schema.string().min(2).max(50),
+  email: Schema.string().email(),
+  age: Schema.number().min(18)
+});
+
+router.post('/users', 
+  ValidationMiddleware.body(userSchema), 
+  userController.create
+);
+```
+
+## 🔧 Funcionalidades Específicas
+
+### ¿Cómo funciona el sistema de cache?
+
+Fox Framework incluye múltiples estrategias de cache:
+
+```typescript
+import { Cache } from 'fox-framework/cache';
+
+// Cache en memoria
+const memoryCache = Cache.memory();
+
+// Cache con Redis
+const redisCache = Cache.redis({
+  url: 'redis://localhost:6379'
+});
+
+// Uso
+await cache.set('key', 'value', 3600); // TTL 1 hora
+const value = await cache.get('key');
+```
+
+### ¿Puedo usar WebSockets?
+
+Sí, Fox Framework soporta WebSockets:
+
+```typescript
+import { SocketController } from 'fox-framework/websockets';
+
+class ChatController extends SocketController {
+  onConnection(socket: Socket) {
+    socket.on('message', (data) => {
+      this.broadcast('message', data);
+    });
+  }
+}
+```
+
+### ¿Cómo implemento background jobs?
+
+Usa el sistema de jobs integrado:
+
+```typescript
+import { JobQueue } from 'fox-framework/jobs';
+
+const emailQueue = new JobQueue('email-queue');
+
+// Agregar job
+await emailQueue.add('send-welcome-email', {
+  userId: 123,
+  email: 'user@example.com'
+});
+
+// Procesar jobs
+emailQueue.process('send-welcome-email', async (job) => {
+  await emailService.sendWelcomeEmail(job.data);
+});
+```
+
+## 🚀 Despliegue y Producción
+
+### ¿Cómo despliego mi aplicación?
+
+Fox Framework soporta múltiples plataformas:
+
+```bash
+# Docker
+fox build:docker
+docker run -p 3000:3000 mi-app
+
+# Vercel
+fox deploy:vercel
+
+# AWS
+fox deploy:aws
+
+# Heroku
+fox deploy:heroku
+```
+
+### ¿Qué configuraciones necesito para producción?
+
+Configuración mínima para producción:
+
+```env
+NODE_ENV=production
+DATABASE_URL=tu-url-de-bd
+REDIS_URL=tu-url-de-redis
+JWT_SECRET=secreto-ultra-seguro
+LOG_LEVEL=info
+```
+
+### ¿Cómo monitoreo mi aplicación?
+
+Fox Framework incluye métricas automáticas:
+
+```typescript
+// Métricas automáticas disponibles en /metrics
+- http_requests_total
+- http_request_duration_seconds
+- nodejs_memory_usage
+- database_connections_active
+
+// Health check en /health
+```
+
+## 🐛 Debugging y Troubleshooting
+
+### Mi aplicación es lenta, ¿cómo optimizo?
+
+1. **Habilita el profiler**:
+```typescript
+import { Profiler } from 'fox-framework/profiler';
+Profiler.enable();
+```
+
+2. **Verifica queries de BD**:
+```typescript
+// Habilita logging de queries lentas
+database: {
+  logging: true,
+  slowQueryThreshold: 1000 // ms
+}
+```
+
+3. **Optimiza cache**:
+```typescript
+// Usa cache para datos frecuentes
+const cachedData = await cache.remember('users:active', 3600, async () => {
+  return await userService.getActiveUsers();
+});
+```
+
+### ¿Cómo debuggeo errores en producción?
+
+1. **Configura logging estructurado**:
+```typescript
+logging: {
+  level: 'info',
+  format: 'json',
+  transports: ['console', 'file']
+}
+```
+
+2. **Usa correlation IDs**:
+```typescript
+import { CorrelationMiddleware } from 'fox-framework/logging';
+app.use(CorrelationMiddleware());
+```
+
+3. **Monitorea errores**:
+```typescript
+import { ErrorTracker } from 'fox-framework/monitoring';
+ErrorTracker.configure({
+  sentry: { dsn: 'tu-sentry-dsn' }
+});
+```
+
+### Mi aplicación usa mucha memoria, ¿qué hago?
+
+1. **Analiza memory leaks**:
+```bash
+fox analyze:memory
+```
+
+2. **Configura límites**:
+```typescript
+server: {
+  maxMemory: '512mb',
+  memoryWarningThreshold: 0.8
+}
+```
+
+3. **Optimiza cache**:
+```typescript
+cache: {
+  maxMemory: '128mb',
+  evictionPolicy: 'allkeys-lru'
+}
+```
+
+## 🔌 Extensibilidad
+
+### ¿Puedo crear plugins para Fox Framework?
+
+Sí, Fox Framework es altamente extensible:
+
+```typescript
+import { Plugin } from 'fox-framework/plugins';
+
+class MiPlugin extends Plugin {
+  name = 'mi-plugin';
+  version = '1.0.0';
+
+  async install(app: FoxApplication) {
+    // Lógica de instalación
+    app.use(this.middleware);
+  }
+
+  private middleware = (req, res, next) => {
+    // Tu middleware personalizado
+    next();
+  };
+}
+
+// Registrar plugin
+app.use(new MiPlugin());
+```
+
+### ¿Cómo extiendo el CLI?
+
+Puedes agregar comandos personalizados:
+
+```typescript
+// commands/mi-comando.ts
+import { Command } from 'fox-framework/cli';
+
+export class MiComando extends Command {
+  signature = 'mi-comando {nombre}';
+  description = 'Mi comando personalizado';
+
+  async handle() {
+    const nombre = this.argument('nombre');
+    this.info(`Hola ${nombre}!`);
+  }
+}
+```
+
+### ¿Puedo usar Fox Framework con GraphQL?
+
+Sí, Fox Framework es compatible con GraphQL:
+
+```typescript
+import { GraphQLModule } from 'fox-framework/graphql';
+
+const server = FoxFactory.createServer({
+  graphql: {
+    typeDefs: './schema.graphql',
+    resolvers: './resolvers',
+    playground: true
+  }
+});
+```
+
+## 🔄 Migración
+
+### ¿Cómo migro desde Express?
+
+La migración es gradual:
+
+1. **Instala Fox Framework**
+2. **Reemplaza el servidor gradualmente**:
+```typescript
+// Antes (Express)
+const express = require('express');
+const app = express();
+
+// Después (Fox Framework)
+import { FoxFactory } from 'fox-framework';
+const app = FoxFactory.createServer();
+```
+
+3. **Migra rutas una por una**
+4. **Adopta nuevas funcionalidades gradualmente**
+
+### ¿Puedo usar mis middlewares de Express existentes?
+
+Sí, todos los middlewares de Express son compatibles:
+
+```typescript
+import cors from 'cors';
+import morgan from 'morgan';
+
+const server = FoxFactory.createServer();
+server.use(cors());
+server.use(morgan('combined'));
+```
+
+## 🌟 Mejores Prácticas
+
+### ¿Cuáles son las mejores prácticas para estructurar mi código?
+
+1. **Separación de responsabilidades**:
+   - Controllers: Manejo de HTTP
+   - Services: Lógica de negocio
+   - Repositories: Acceso a datos
+
+2. **Inyección de dependencias**:
+```typescript
+class UserController {
+  constructor(
+    private userService: UserService,
+    private emailService: EmailService
+  ) {}
+}
+```
+
+3. **Validación de entrada**:
+```typescript
+router.post('/users', ValidationMiddleware.body(userSchema), controller.create);
+```
+
+### ¿Cómo manejo errores de manera consistente?
+
+Usa el manejador de errores global:
+
+```typescript
+import { ErrorHandler } from 'fox-framework/errors';
+
+app.use(ErrorHandler.global({
+  // No mostrar stack traces en producción
+  showStack: process.env.NODE_ENV === 'development',
+  
+  // Log todos los errores
+  logErrors: true,
+  
+  // Transformar errores para la API
+  transformError: (error) => ({
+    message: error.message,
+    code: error.code || 'INTERNAL_ERROR'
+  })
+}));
+```
+
+### ¿Cómo testseo mi aplicación?
+
+Fox Framework incluye helpers para testing:
+
+```typescript
+import { TestingModule } from 'fox-framework/testing';
+
+describe('UserController', () => {
+  let app: TestApplication;
+
+  beforeAll(async () => {
+    app = await TestingModule.createTestApp();
+  });
+
+  it('should create user', async () => {
+    const response = await app
+      .post('/api/users')
+      .send({ name: 'John', email: 'john@example.com' })
+      .expect(201);
+
+    expect(response.body.success).toBe(true);
+  });
+});
+```
+
+## 📚 Recursos Adicionales
+
+### ¿Dónde encuentro más ejemplos?
+
+- [Repositorio de ejemplos](https://github.com/fox-framework/examples)
+- [Documentación completa](/docs)
+- [Tutorials paso a paso](/guides)
+
+### ¿Cómo contribuyo al framework?
+
+1. **Fork del repositorio**
+2. **Crea una branch para tu feature**
+3. **Escribe tests**
+4. **Envía un Pull Request**
+
+Ver [Guía de contribución](/docs/contributing) para más detalles.
+
+### ¿Dónde reporto bugs?
+
+- [GitHub Issues](https://github.com/fox-framework/fox-framework/issues)
+- [Discord Community](https://discord.gg/fox-framework)
+- [Stack Overflow](https://stackoverflow.com/questions/tagged/fox-framework)
+
+### ¿Hay soporte comercial disponible?
+
+Sí, ofrecemos diferentes niveles de soporte:
+- **Community**: Gratis, a través de GitHub y Discord
+- **Professional**: Soporte por email con SLA
+- **Enterprise**: Soporte dedicado y consultoría
+
+Contacta con nosotros en [support@fox-framework.com](mailto:support@fox-framework.com)
+
+---
+
+## 💡 ¿No encontraste tu respuesta?
+
+Si tu pregunta no está aquí:
+
+1. **Busca en la [documentación completa](/docs)**
+2. **Revisa [GitHub Issues](https://github.com/fox-framework/fox-framework/issues)**
+3. **Pregunta en [Discord](https://discord.gg/fox-framework)**
+4. **Crea un nuevo issue en GitHub**
+
+¡La comunidad de Fox Framework está aquí para ayudarte!

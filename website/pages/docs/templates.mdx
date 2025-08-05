@@ -1,0 +1,449 @@
+# Motor de Templates
+
+El motor de templates de Fox Framework proporciona una forma potente y flexible para generar vistas HTML dinámicas en tus aplicaciones. Diseñado para ser extensible, rápido y compatible con múltiples sistemas de plantillas, este componente te permite separar claramente la lógica de presentación de la lógica de negocio.
+
+## Características Principales
+
+- **Sistema modular**: Soporte para múltiples motores de plantillas
+- **Extensible**: Fácil integración de nuevos motores de templates
+- **Caché integrada**: Optimización de rendimiento para plantillas
+- **Layouts y partials**: Composición de interfaces reutilizables
+- **Helpers**: Funciones de ayuda para manipulación de datos en vistas
+- **Integración con datos**: Paso sencillo de datos desde controladores a vistas
+- **Tipado completo**: Aprovecha TypeScript para detectar errores temprano
+- **Compilación**: Compila plantillas para máximo rendimiento
+
+## Configuración Básica
+
+### Configuración del Motor
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+import { TemplateEngineFactory } from 'fox-framework/templates';
+
+// Crear el servidor con motor de templates
+const server = FoxFactory.createServer({
+  port: 3000,
+  views: {
+    // Motor por defecto
+    engine: 'ejs',
+    
+    // Directorio de plantillas
+    directory: './src/views',
+    
+    // Configuración adicional
+    options: {
+      // Extensión de archivos de plantilla
+      extension: 'ejs',
+      
+      // Caché de plantillas en producción
+      cache: process.env.NODE_ENV === 'production',
+      
+      // Variables globales disponibles en todas las vistas
+      globals: {
+        appName: 'Mi Aplicación',
+        version: '1.0.0'
+      }
+    }
+  },
+  router
+});
+```
+
+### Estructura de Directorios Recomendada
+
+```
+src/
+  views/
+    layouts/
+      main.ejs
+      admin.ejs
+    partials/
+      header.ejs
+      footer.ejs
+      navbar.ejs
+    pages/
+      home.ejs
+      about.ejs
+      contact.ejs
+    errors/
+      404.ejs
+      500.ejs
+```
+
+## Motores de Templates Soportados
+
+Fox Framework incluye soporte para varios motores de plantillas populares:
+
+### EJS (Engine por Defecto)
+
+```typescript
+// Configuración EJS
+const server = FoxFactory.createServer({
+  views: {
+    engine: 'ejs',
+    directory: './src/views',
+    options: {
+      extension: 'ejs',
+      delimiter: '%',
+      openDelimiter: '<',
+      closeDelimiter: '>',
+      cache: true
+    }
+  }
+});
+```
+
+### Handlebars
+
+```typescript
+// Configuración Handlebars
+const server = FoxFactory.createServer({
+  views: {
+    engine: 'handlebars',
+    directory: './src/views',
+    options: {
+      extension: 'hbs',
+      layoutsDir: './src/views/layouts',
+      partialsDir: './src/views/partials',
+      defaultLayout: 'main'
+    }
+  }
+});
+```
+
+### Pug
+
+```typescript
+// Configuración Pug
+const server = FoxFactory.createServer({
+  views: {
+    engine: 'pug',
+    directory: './src/views',
+    options: {
+      extension: 'pug',
+      pretty: process.env.NODE_ENV === 'development',
+      cache: process.env.NODE_ENV === 'production'
+    }
+  }
+});
+```
+
+## Uso en Controladores
+
+### Renderizar Vistas
+
+```typescript
+import { FoxController, Request, Response } from 'fox-framework/core';
+
+export class HomeController extends FoxController {
+  public async index(req: Request, res: Response): Promise<void> {
+    // Datos para pasar a la vista
+    const data = {
+      title: 'Página Principal',
+      user: req.user,
+      posts: await this.postService.getLatest(10)
+    };
+
+    // Renderizar vista
+    return res.render('pages/home', data);
+  }
+
+  public async about(req: Request, res: Response): Promise<void> {
+    return res.render('pages/about', {
+      title: 'Acerca de',
+      company: 'Mi Empresa'
+    });
+  }
+}
+```
+
+### Renderizar con Layout Específico
+
+```typescript
+export class AdminController extends FoxController {
+  public async dashboard(req: Request, res: Response): Promise<void> {
+    return res.render('admin/dashboard', {
+      title: 'Panel de Administración',
+      stats: await this.statsService.getOverview()
+    }, {
+      layout: 'admin' // Usar layout específico
+    });
+  }
+}
+```
+
+## Layouts y Partials
+
+### Definir un Layout
+
+**layouts/main.ejs**
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %> - <%= appName %></title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <%- include('../partials/header') %>
+    
+    <main class="container">
+        <%- body %>
+    </main>
+    
+    <%- include('../partials/footer') %>
+    
+    <script src="/js/main.js"></script>
+</body>
+</html>
+```
+
+### Crear Partials Reutilizables
+
+**partials/header.ejs**
+```html
+<header class="site-header">
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="/"><%= appName %></a>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="/">Inicio</a></li>
+            <li><a href="/about">Acerca de</a></li>
+            <li><a href="/contact">Contacto</a></li>
+        </ul>
+    </nav>
+</header>
+```
+
+## Helpers y Funciones Auxiliares
+
+### Registrar Helpers Globales
+
+```typescript
+import { TemplateHelpers } from 'fox-framework/templates';
+
+// Registrar helpers personalizados
+TemplateHelpers.register('formatDate', (date: Date) => {
+  return date.toLocaleDateString('es-ES');
+});
+
+TemplateHelpers.register('truncate', (text: string, length: number) => {
+  return text.length > length ? text.substring(0, length) + '...' : text;
+});
+
+TemplateHelpers.register('capitalize', (str: string) => {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+});
+```
+
+### Usar Helpers en Plantillas
+
+```html
+<!-- Usar helpers en EJS -->
+<h1><%= capitalize(title) %></h1>
+<p>Publicado: <%= formatDate(post.createdAt) %></p>
+<p><%= truncate(post.content, 150) %></p>
+```
+
+## Sistema de Caché
+
+### Configuración de Caché
+
+```typescript
+const server = FoxFactory.createServer({
+  views: {
+    engine: 'ejs',
+    directory: './src/views',
+    options: {
+      // Habilitar caché en producción
+      cache: process.env.NODE_ENV === 'production',
+      
+      // Configuración avanzada de caché
+      cacheOptions: {
+        maxSize: 100, // Máximo 100 plantillas en caché
+        ttl: 3600000  // TTL de 1 hora
+      }
+    }
+  }
+});
+```
+
+### Invalidar Caché
+
+```typescript
+import { TemplateCache } from 'fox-framework/templates';
+
+// Invalidar caché de una plantilla específica
+TemplateCache.invalidate('pages/home');
+
+// Limpiar todo el caché
+TemplateCache.clear();
+
+// Obtener estadísticas del caché
+const stats = TemplateCache.getStats();
+console.log(`Plantillas en caché: ${stats.size}`);
+console.log(`Hit ratio: ${stats.hitRatio}%`);
+```
+
+## Motor de Templates Personalizado
+
+### Crear un Motor Personalizado
+
+```typescript
+import { ITemplateEngine, TemplateData } from 'fox-framework/templates';
+
+export class CustomTemplateEngine implements ITemplateEngine {
+  private templates: Map<string, string> = new Map();
+  
+  constructor(private options: any) {}
+
+  public async render(template: string, data: TemplateData): Promise<string> {
+    const templateContent = await this.loadTemplate(template);
+    return this.compile(templateContent, data);
+  }
+
+  private async loadTemplate(templatePath: string): Promise<string> {
+    // Implementar carga de plantilla
+    if (this.templates.has(templatePath)) {
+      return this.templates.get(templatePath)!;
+    }
+    
+    // Cargar desde disco y cachear
+    const content = await fs.readFile(templatePath, 'utf-8');
+    this.templates.set(templatePath, content);
+    return content;
+  }
+
+  private compile(template: string, data: TemplateData): string {
+    // Implementar lógica de compilación personalizada
+    return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+      return data[key] || '';
+    });
+  }
+}
+```
+
+### Registrar Motor Personalizado
+
+```typescript
+import { TemplateEngineRegistry } from 'fox-framework/templates';
+
+// Registrar el motor personalizado
+TemplateEngineRegistry.register('custom', CustomTemplateEngine);
+
+// Usar en la configuración
+const server = FoxFactory.createServer({
+  views: {
+    engine: 'custom',
+    directory: './src/views',
+    options: {
+      // Opciones específicas del motor personalizado
+    }
+  }
+});
+```
+
+## Optimización y Rendimiento
+
+### Precompilación de Plantillas
+
+```typescript
+// Script de build para precompilar plantillas
+import { TemplateCompiler } from 'fox-framework/templates';
+
+const compiler = new TemplateCompiler({
+  inputDir: './src/views',
+  outputDir: './dist/views',
+  engine: 'ejs'
+});
+
+await compiler.compileAll();
+```
+
+### Análisis de Rendimiento
+
+```typescript
+import { TemplateProfiler } from 'fox-framework/templates';
+
+// Habilitar profiling en desarrollo
+if (process.env.NODE_ENV === 'development') {
+  TemplateProfiler.enable();
+}
+
+// Obtener métricas de rendimiento
+const metrics = TemplateProfiler.getMetrics();
+console.log('Plantillas más lentas:', metrics.slowest);
+console.log('Tiempo promedio de renderizado:', metrics.averageTime);
+```
+
+## Mejores Prácticas
+
+### 1. Estructura de Archivos
+- Organiza plantillas por funcionalidad
+- Usa layouts para evitar duplicación
+- Crea partials para componentes reutilizables
+
+### 2. Rendimiento
+- Habilita caché en producción
+- Precompila plantillas cuando sea posible
+- Minimiza el uso de helpers complejos
+
+### 3. Mantenibilidad
+- Usa nombres descriptivos para plantillas
+- Documenta helpers personalizados
+- Mantén la lógica fuera de las vistas
+
+### 4. Seguridad
+- Escapa siempre el contenido dinámico
+- Valida datos antes de renderizar
+- Usa Content Security Policy apropiadas
+
+## Integración con Componentes
+
+### Usar con Sistema de Eventos
+
+```typescript
+import { EventBus } from 'fox-framework/events';
+
+export class TemplateController extends FoxController {
+  public async render(req: Request, res: Response): Promise<void> {
+    // Emitir evento antes del renderizado
+    EventBus.emit('template:before-render', {
+      template: 'pages/home',
+      data: req.templateData
+    });
+
+    const result = await res.render('pages/home', req.templateData);
+
+    // Emitir evento después del renderizado
+    EventBus.emit('template:after-render', {
+      template: 'pages/home',
+      renderTime: result.metrics.renderTime
+    });
+  }
+}
+```
+
+### Integración con Middleware
+
+```typescript
+// Middleware para datos globales de plantillas
+export const templateDataMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  // Agregar datos globales a todas las vistas
+  res.locals = {
+    ...res.locals,
+    currentUser: req.user,
+    requestPath: req.path,
+    csrfToken: req.csrfToken(),
+    flashMessages: req.flash()
+  };
+  
+  next();
+};
+```
+
+El motor de templates de Fox Framework te proporciona todas las herramientas necesarias para crear interfaces de usuario dinámicas y mantenibles, con el rendimiento y la flexibilidad que tu aplicación necesita.

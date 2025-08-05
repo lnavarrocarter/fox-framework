@@ -1,0 +1,15 @@
+{
+  "index": "Referencia API",
+  "core": "Core API",
+  "router": "Router API",
+  "middleware": "Middleware API",
+  "cache": "Cache API",
+  "logging": "Logging API",
+  "events": "Event API",
+  "database": "Database API",
+  "microservices": "Microservices API",
+  "security": "Security API",
+  "cli": "CLI API",
+  "templates": "Templates API",
+  "plugins": "Plugins API"
+}

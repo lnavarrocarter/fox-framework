@@ -1,0 +1,44 @@
+{
+  "index": "Introducción",
+  "getting-started": "Comenzando",
+  "fundamentals": "Conceptos Fundamentales",
+  "architecture": "Arquitectura",
+  "core-features": {
+    "title": "Características Core",
+    "type": "separator"
+  },
+  "controllers": "Controladores",
+  "routing": "Sistema de Rutas",
+  "middleware": "Middleware",
+  "templates": "Motor de Templates",
+  "error-handling": "Manejo de Errores",
+  "validation": "Validación",
+  "advanced-features": {
+    "title": "Características Avanzadas",
+    "type": "separator"
+  },
+  "event-system": "Sistema de Eventos",
+  "database": "Abstracción de Base de Datos",
+  "cache-system": "Sistema de Cache",
+  "microservices": "Microservicios",
+  "security": "Seguridad",
+  "logging": "Logging",
+  "cli": "Herramientas CLI",
+  "plugins": "Sistema de Plugins",
+  "deployment": {
+    "title": "Despliegue y Operaciones",
+    "type": "separator"
+  },
+  "docker": "Integración con Docker",
+  "cloud-deployment": "Despliegue en Cloud",
+  "monitoring": "Monitoreo y Métricas",
+  "production": "Configuración de Producción",
+  "testing": "Testing",
+  "other": {
+    "title": "Otros",
+    "type": "separator"
+  },
+  "faq": "Preguntas Frecuentes",
+  "migration-guide": "Guía de Migración",
+  "contributing": "Contribuir al Framework"
+}

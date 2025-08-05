@@ -1,0 +1,656 @@
+# Testing
+
+Fox Framework incluye un sistema integral de testing que facilita la creación de pruebas unitarias, de integración y end-to-end para tus aplicaciones. Diseñado para trabajar perfectamente con Jest, Vitest y otros frameworks de testing populares.
+
+## Características del Sistema de Testing
+
+- **Testing unitario**: Pruebas aisladas de componentes individuales
+- **Testing de integración**: Pruebas de interacción entre componentes
+- **Testing end-to-end**: Pruebas completas del flujo de la aplicación
+- **Mocking integrado**: Sistema de mocks para dependencias externas
+- **Test fixtures**: Datos de prueba reutilizables
+- **Coverage reporting**: Reportes de cobertura de código
+- **CI/CD integration**: Integración con pipelines de integración continua
+
+## Configuración Inicial
+
+### Instalación de Dependencias
+
+```bash
+npm install --save-dev @fox-framework/testing jest @types/jest supertest @types/supertest
+```
+
+### Configuración de Jest
+
+**jest.config.js**
+```javascript
+module.exports = {
+  preset: '@fox-framework/testing',
+  testEnvironment: 'node',
+  roots: ['<rootDir>/src', '<rootDir>/tests'],
+  testMatch: [
+    '**/__tests__/**/*.ts',
+    '**/?(*.)+(spec|test).ts'
+  ],
+  transform: {
+    '^.+\\.ts$': 'ts-jest'
+  },
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/**/*.d.ts',
+    '!src/**/__tests__/**',
+    '!src/**/index.ts'
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts']
+};
+```
+
+### Configuración del Entorno de Testing
+
+**tests/setup.ts**
+```typescript
+import { TestingModule } from '@fox-framework/testing';
+import { DatabaseTestHelper } from '@fox-framework/testing/database';
+
+// Configuración global para tests
+beforeAll(async () => {
+  await TestingModule.initialize({
+    database: {
+      type: 'sqlite',
+      database: ':memory:',
+      synchronize: true
+    },
+    cache: {
+      type: 'memory'
+    }
+  });
+});
+
+afterAll(async () => {
+  await TestingModule.cleanup();
+});
+
+beforeEach(async () => {
+  await DatabaseTestHelper.clearDatabase();
+});
+```
+
+## Testing de Controladores
+
+### Test Unitario de Controlador
+
+```typescript
+import { TestingModule, MockRequest, MockResponse } from '@fox-framework/testing';
+import { UserController } from '../src/controllers/user.controller';
+import { UserService } from '../src/services/user.service';
+
+describe('UserController', () => {
+  let controller: UserController;
+  let userService: jest.Mocked<UserService>;
+  let req: MockRequest;
+  let res: MockResponse;
+
+  beforeEach(() => {
+    // Crear mocks de dependencias
+    userService = TestingModule.createMock<UserService>({
+      findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn()
+    });
+
+    // Crear instancia del controlador con dependencias mockeadas
+    controller = new UserController(userService);
+    
+    // Crear objetos request y response mockeados
+    req = TestingModule.createMockRequest();
+    res = TestingModule.createMockResponse();
+  });
+
+  describe('getUserById', () => {
+    it('should return user when found', async () => {
+      // Arrange
+      const userId = '123';
+      const expectedUser = { id: userId, name: 'John Doe', email: 'john@example.com' };
+      
+      req.params = { id: userId };
+      userService.findById.mockResolvedValue(expectedUser);
+
+      // Act
+      await controller.getUserById(req, res);
+
+      // Assert
+      expect(userService.findById).toHaveBeenCalledWith(userId);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: expectedUser
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('should return 404 when user not found', async () => {
+      // Arrange
+      const userId = '999';
+      req.params = { id: userId };
+      userService.findById.mockResolvedValue(null);
+
+      // Act
+      await controller.getUserById(req, res);
+
+      // Assert
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'User not found'
+      });
+    });
+
+    it('should handle service errors', async () => {
+      // Arrange
+      const userId = '123';
+      const error = new Error('Database connection failed');
+      
+      req.params = { id: userId };
+      userService.findById.mockRejectedValue(error);
+
+      // Act & Assert
+      await expect(controller.getUserById(req, res)).rejects.toThrow(error);
+    });
+  });
+});
+```
+
+### Test de Integración de Controlador
+
+```typescript
+import { TestingModule, TestServer } from '@fox-framework/testing';
+import request from 'supertest';
+import { Application } from 'express';
+
+describe('User API Integration', () => {
+  let app: Application;
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await TestingModule.createTestServer({
+      controllers: ['src/controllers/**/*.controller.ts'],
+      services: ['src/services/**/*.service.ts']
+    });
+    app = server.getApplication();
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  describe('GET /api/users/:id', () => {
+    it('should return user data', async () => {
+      // Crear usuario de prueba
+      const user = await server.createTestUser({
+        name: 'John Doe',
+        email: 'john@example.com'
+      });
+
+      const response = await request(app)
+        .get(`/api/users/${user.id}`)
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        success: true,
+        data: {
+          id: user.id,
+          name: 'John Doe',
+          email: 'john@example.com'
+        }
+      });
+    });
+  });
+});
+```
+
+## Testing de Servicios
+
+### Test Unitario de Servicio
+
+```typescript
+import { TestingModule } from '@fox-framework/testing';
+import { UserService } from '../src/services/user.service';
+import { UserRepository } from '../src/repositories/user.repository';
+import { EmailService } from '../src/services/email.service';
+
+describe('UserService', () => {
+  let service: UserService;
+  let userRepository: jest.Mocked<UserRepository>;
+  let emailService: jest.Mocked<EmailService>;
+
+  beforeEach(() => {
+    userRepository = TestingModule.createMock<UserRepository>({
+      findById: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn()
+    });
+
+    emailService = TestingModule.createMock<EmailService>({
+      sendWelcomeEmail: jest.fn()
+    });
+
+    service = new UserService(userRepository, emailService);
+  });
+
+  describe('createUser', () => {
+    it('should create user and send welcome email', async () => {
+      // Arrange
+      const userData = { name: 'John Doe', email: 'john@example.com' };
+      const createdUser = { id: '1', ...userData };
+      
+      userRepository.save.mockResolvedValue(createdUser);
+      emailService.sendWelcomeEmail.mockResolvedValue(undefined);
+
+      // Act
+      const result = await service.createUser(userData);
+
+      // Assert
+      expect(userRepository.save).toHaveBeenCalledWith(userData);
+      expect(emailService.sendWelcomeEmail).toHaveBeenCalledWith(createdUser);
+      expect(result).toEqual(createdUser);
+    });
+
+    it('should rollback user creation if email fails', async () => {
+      // Arrange
+      const userData = { name: 'John Doe', email: 'john@example.com' };
+      const createdUser = { id: '1', ...userData };
+      
+      userRepository.save.mockResolvedValue(createdUser);
+      emailService.sendWelcomeEmail.mockRejectedValue(new Error('Email service down'));
+      userRepository.delete.mockResolvedValue(undefined);
+
+      // Act & Assert
+      await expect(service.createUser(userData)).rejects.toThrow('Email service down');
+      expect(userRepository.delete).toHaveBeenCalledWith(createdUser.id);
+    });
+  });
+});
+```
+
+## Testing de Middleware
+
+### Test de Middleware de Autenticación
+
+```typescript
+import { TestingModule, MockRequest, MockResponse, MockNextFunction } from '@fox-framework/testing';
+import { authMiddleware } from '../src/middleware/auth.middleware';
+import { JwtService } from '../src/services/jwt.service';
+
+describe('AuthMiddleware', () => {
+  let jwtService: jest.Mocked<JwtService>;
+  let req: MockRequest;
+  let res: MockResponse;
+  let next: MockNextFunction;
+
+  beforeEach(() => {
+    jwtService = TestingModule.createMock<JwtService>({
+      verify: jest.fn(),
+      decode: jest.fn()
+    });
+
+    req = TestingModule.createMockRequest();
+    res = TestingModule.createMockResponse();
+    next = TestingModule.createMockNext();
+  });
+
+  it('should allow access with valid token', async () => {
+    // Arrange
+    const token = 'valid-jwt-token';
+    const user = { id: '1', email: 'user@example.com' };
+    
+    req.headers = { authorization: `Bearer ${token}` };
+    jwtService.verify.mockResolvedValue(user);
+
+    // Act
+    await authMiddleware(jwtService)(req, res, next);
+
+    // Assert
+    expect(jwtService.verify).toHaveBeenCalledWith(token);
+    expect(req.user).toEqual(user);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('should reject request without token', async () => {
+    // Arrange
+    req.headers = {};
+
+    // Act
+    await authMiddleware(jwtService)(req, res, next);
+
+    // Assert
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      success: false,
+      message: 'No token provided'
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+```
+
+## Testing de Base de Datos
+
+### Test de Repository
+
+```typescript
+import { TestingModule, DatabaseTestHelper } from '@fox-framework/testing';
+import { UserRepository } from '../src/repositories/user.repository';
+import { User } from '../src/entities/user.entity';
+
+describe('UserRepository', () => {
+  let repository: UserRepository;
+
+  beforeAll(async () => {
+    await TestingModule.initializeDatabase();
+    repository = TestingModule.getRepository(UserRepository);
+  });
+
+  beforeEach(async () => {
+    await DatabaseTestHelper.clearTable('users');
+  });
+
+  describe('findByEmail', () => {
+    it('should find user by email', async () => {
+      // Arrange
+      const userData = {
+        name: 'John Doe',
+        email: 'john@example.com',
+        password: 'hashedpassword'
+      };
+      
+      await DatabaseTestHelper.insertUser(userData);
+
+      // Act
+      const user = await repository.findByEmail('john@example.com');
+
+      // Assert
+      expect(user).toBeDefined();
+      expect(user.email).toBe('john@example.com');
+      expect(user.name).toBe('John Doe');
+    });
+
+    it('should return null for non-existent email', async () => {
+      // Act
+      const user = await repository.findByEmail('nonexistent@example.com');
+
+      // Assert
+      expect(user).toBeNull();
+    });
+  });
+});
+```
+
+## Testing End-to-End
+
+### Configuración E2E
+
+```typescript
+import { TestingModule, E2ETestHelper } from '@fox-framework/testing';
+import { Application } from 'express';
+
+describe('User Management E2E', () => {
+  let app: Application;
+  let testHelper: E2ETestHelper;
+
+  beforeAll(async () => {
+    app = await TestingModule.createE2EApp();
+    testHelper = new E2ETestHelper(app);
+  });
+
+  beforeEach(async () => {
+    await testHelper.seedDatabase();
+  });
+
+  afterEach(async () => {
+    await testHelper.cleanDatabase();
+  });
+
+  it('should complete full user registration flow', async () => {
+    // 1. Registrar usuario
+    const registrationData = {
+      name: 'John Doe',
+      email: 'john@example.com',
+      password: 'securepassword'
+    };
+
+    const registerResponse = await testHelper
+      .request()
+      .post('/api/auth/register')
+      .send(registrationData)
+      .expect(201);
+
+    expect(registerResponse.body.success).toBe(true);
+    const userId = registerResponse.body.data.id;
+
+    // 2. Verificar email
+    const verificationToken = await testHelper.getEmailVerificationToken(userId);
+    
+    await testHelper
+      .request()
+      .get(`/api/auth/verify-email?token=${verificationToken}`)
+      .expect(200);
+
+    // 3. Login
+    const loginResponse = await testHelper
+      .request()
+      .post('/api/auth/login')
+      .send({
+        email: 'john@example.com',
+        password: 'securepassword'
+      })
+      .expect(200);
+
+    const authToken = loginResponse.body.data.token;
+
+    // 4. Acceder a recurso protegido
+    await testHelper
+      .request()
+      .get('/api/users/profile')
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+  });
+});
+```
+
+## Test Fixtures y Factories
+
+### Test Factories
+
+```typescript
+import { Factory } from '@fox-framework/testing';
+import { User } from '../src/entities/user.entity';
+import { Post } from '../src/entities/post.entity';
+
+// Factory para usuarios
+export const UserFactory = Factory.define<User>(User, (faker) => ({
+  name: faker.name.fullName(),
+  email: faker.internet.email(),
+  password: faker.internet.password(),
+  createdAt: faker.date.past(),
+  updatedAt: faker.date.recent()
+}));
+
+// Factory para posts
+export const PostFactory = Factory.define<Post>(Post, (faker) => ({
+  title: faker.lorem.sentence(),
+  content: faker.lorem.paragraphs(3),
+  published: faker.datatype.boolean(),
+  authorId: () => UserFactory.create().then(user => user.id),
+  createdAt: faker.date.past(),
+  updatedAt: faker.date.recent()
+}));
+
+// Usar en tests
+describe('Post Service', () => {
+  it('should create post with author', async () => {
+    // Crear usuario y post usando factories
+    const author = await UserFactory.create();
+    const post = await PostFactory.create({ authorId: author.id });
+
+    expect(post.authorId).toBe(author.id);
+  });
+});
+```
+
+### Test Fixtures
+
+```typescript
+export const testFixtures = {
+  users: {
+    admin: {
+      name: 'Admin User',
+      email: 'admin@example.com',
+      role: 'admin',
+      permissions: ['read', 'write', 'delete']
+    },
+    regular: {
+      name: 'Regular User',
+      email: 'user@example.com',
+      role: 'user',
+      permissions: ['read']
+    }
+  },
+  
+  posts: {
+    published: {
+      title: 'Published Post',
+      content: 'This is a published post',
+      published: true
+    },
+    draft: {
+      title: 'Draft Post',
+      content: 'This is a draft post',
+      published: false
+    }
+  }
+};
+```
+
+## Testing de Performance
+
+### Benchmark Tests
+
+```typescript
+import { PerformanceTestHelper } from '@fox-framework/testing';
+
+describe('API Performance', () => {
+  let helper: PerformanceTestHelper;
+
+  beforeAll(async () => {
+    helper = new PerformanceTestHelper();
+    await helper.initialize();
+  });
+
+  it('should handle concurrent users', async () => {
+    const result = await helper.loadTest({
+      url: '/api/users',
+      method: 'GET',
+      concurrency: 100,
+      duration: 30000, // 30 segundos
+      rampUp: 5000     // 5 segundos para alcanzar concurrencia máxima
+    });
+
+    expect(result.averageResponseTime).toBeLessThan(100); // ms
+    expect(result.errorRate).toBeLessThan(0.01); // 1%
+    expect(result.throughput).toBeGreaterThan(1000); // requests/second
+  });
+
+  it('should maintain performance under stress', async () => {
+    const result = await helper.stressTest({
+      url: '/api/users',
+      method: 'POST',
+      payload: { name: 'Test User', email: 'test@example.com' },
+      maxConcurrency: 500,
+      duration: 60000
+    });
+
+    expect(result.breakingPoint).toBeGreaterThan(300);
+  });
+});
+```
+
+## Comandos de Testing
+
+### Scripts de NPM
+
+```json
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest --testMatch='**/*.unit.test.ts'",
+    "test:integration": "jest --testMatch='**/*.integration.test.ts'",
+    "test:e2e": "jest --testMatch='**/*.e2e.test.ts'",
+    "test:performance": "jest --testMatch='**/*.performance.test.ts'"
+  }
+}
+```
+
+### Ejecución de Tests
+
+```bash
+# Ejecutar todos los tests
+npm test
+
+# Ejecutar tests con watch mode
+npm run test:watch
+
+# Ejecutar tests específicos
+npm test -- --testNamePattern="UserController"
+
+# Ejecutar tests de un archivo específico
+npm test -- src/controllers/user.controller.test.ts
+
+# Generar reporte de cobertura
+npm run test:coverage
+
+# Ejecutar solo tests unitarios
+npm run test:unit
+```
+
+## Mejores Prácticas
+
+### 1. Estructura de Tests
+- Organiza tests en carpetas que reflejen la estructura del código
+- Usa naming descriptivo para tests
+- Agrupa tests relacionados con `describe`
+
+### 2. Arranging Tests (AAA Pattern)
+```typescript
+it('should do something', () => {
+  // Arrange - Preparar datos y mocks
+  const input = 'test data';
+  const expected = 'expected result';
+  
+  // Act - Ejecutar la función bajo test
+  const result = functionUnderTest(input);
+  
+  // Assert - Verificar el resultado
+  expect(result).toBe(expected);
+});
+```
+
+### 3. Mocking Strategy
+- Mock dependencias externas (APIs, base de datos)
+- Usa mocks específicos para cada test
+- Verifica que los mocks sean llamados correctamente
+
+### 4. Test Data Management
+- Usa factories para generar datos de test
+- Limpia la base de datos entre tests
+- Usa fixtures para datos estáticos
+
+### 5. Performance
+- Ejecuta tests unitarios frecuentemente
+- Ejecuta tests de integración en CI/CD
+- Monitorea el tiempo de ejecución de tests
+
+El sistema de testing de Fox Framework te proporciona todas las herramientas necesarias para mantener la calidad de tu código y detectar problemas temprano en el desarrollo.

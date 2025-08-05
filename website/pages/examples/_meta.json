@@ -1,0 +1,10 @@
+{
+  "index": "Ejemplos",
+  "api-rest": "API RESTful",
+  "auth-jwt": "Autenticación JWT",
+  "microservices": "Microservicios",
+  "database": "Acceso a Base de Datos",
+  "event-system": "Sistema de Eventos",
+  "docker-deployment": "Despliegue con Docker",
+  "full-app": "Aplicación Completa"
+}

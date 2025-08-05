@@ -1,0 +1,1578 @@
+# Sistema de Microservicios
+
+Fox Framework proporciona un conjunto completo de herramientas y utilidades para implementar arquitecturas de microservicios escalables, resilientes y fáciles de mantener.
+
+## Características Principales
+
+- **Descubrimiento de Servicios**: Registro y descubrimiento automático
+- **Comunicación entre Servicios**: Métodos síncronos y asíncronos
+- **Balanceo de Carga**: Distribución inteligente de tráfico
+- **Circuit Breaker**: Prevención de fallos en cascada
+- **Orquestación de Servicios**: Gestión del ciclo de vida
+- **API Gateway**: Enrutamiento y agregación de servicios
+- **Rastreo Distribuido**: Seguimiento de peticiones entre servicios
+- **Healthchecks**: Monitorización de salud de servicios
+
+## Arquitectura de Microservicios
+
+### Conceptos Básicos
+
+Fox Framework implementa una arquitectura de microservicios moderna que sigue estos principios:
+
+1. **Servicios Independientes**: Cada microservicio es una aplicación autónoma
+2. **Base de Datos Dedicada**: Cada servicio gestiona sus propios datos
+3. **Comunicación mediante APIs**: REST, GraphQL o gRPC
+4. **Resiliencia**: Tolerancia a fallos mediante patrones avanzados
+5. **Despliegue Independiente**: CI/CD por servicio
+6. **Escalabilidad Horizontal**: Capacidad para escalar servicios individualmente
+
+### Topología de Servicios
+
+```
+                           ┌─────────────────┐
+                           │                 │
+                           │  API Gateway    │
+                           │                 │
+                           └────────┬────────┘
+                                    │
+              ┌───────────┬─────────┼─────────┬───────────┐
+              │           │         │         │           │
+    ┌─────────▼─────┐ ┌───▼───┐ ┌───▼───┐ ┌───▼───┐ ┌─────▼─────┐
+    │               │ │       │ │       │ │       │ │           │
+    │ Auth Service  │ │ User  │ │ Order │ │Product│ │ Payment   │
+    │               │ │Service│ │Service│ │Service│ │ Service   │
+    │               │ │       │ │       │ │       │ │           │
+    └───────┬───────┘ └───┬───┘ └───┬───┘ └───┬───┘ └─────┬─────┘
+            │             │         │         │           │
+      ┌─────▼─────┐   ┌───▼───┐ ┌───▼───┐ ┌───▼───┐   ┌───▼───┐
+      │           │   │       │ │       │ │       │   │       │
+      │  Auth DB  │   │User DB│ │Order DB│ │Prod DB│   │Pay DB │
+      │           │   │       │ │       │ │       │   │       │
+      └───────────┘   └───────┘ └───────┘ └───────┘   └───────┘
+```
+
+## Configuración Básica
+
+### Definición de Servicio
+
+```typescript
+import { FoxFactory, MicroserviceConfig } from 'fox-framework';
+
+// Configuración del microservicio
+const serviceConfig: MicroserviceConfig = {
+  // Información básica del servicio
+  name: 'user-service',
+  version: '1.0.0',
+  description: 'User management service',
+  
+  // Puerto para la API HTTP
+  port: parseInt(process.env.PORT || '3001'),
+  
+  // Descubrimiento de servicios
+  discovery: {
+    // Tipo de proveedor: consul, etcd, zookeeper, etc.
+    provider: 'consul',
+    options: {
+      host: process.env.CONSUL_HOST || 'localhost',
+      port: parseInt(process.env.CONSUL_PORT || '8500'),
+      serviceName: 'user-service',
+      serviceId: `user-service-${generateServiceId()}`,
+      // Intervalo de registro en ms
+      ttl: 30000,
+      // Tags para metadatos
+      tags: ['api', 'users', 'v1']
+    }
+  },
+  
+  // Comunicación entre servicios
+  communication: {
+    // Comunicación síncrona
+    http: {
+      enabled: true,
+      // Opciones para balanceo de carga
+      loadBalancing: 'round-robin', // 'round-robin', 'random', 'least-conn'
+    },
+    
+    // Comunicación asíncrona vía eventos
+    events: {
+      enabled: true,
+      transport: 'rabbitmq',
+      options: {
+        url: process.env.RABBITMQ_URL || 'amqp://localhost',
+        exchange: 'fox-events',
+        queue: 'user-service',
+        durable: true
+      },
+      // Eventos publicados por este servicio
+      publications: [
+        'user.created',
+        'user.updated',
+        'user.deleted',
+        'user.login'
+      ],
+      // Eventos consumidos por este servicio
+      subscriptions: [
+        'order.created',
+        'payment.completed'
+      ]
+    },
+    
+    // Soporte para gRPC (opcional)
+    grpc: {
+      enabled: false,
+      port: 50051,
+      protoFile: './proto/user.proto'
+    }
+  },
+  
+  // Patrones de resiliencia
+  resilience: {
+    // Circuit Breaker
+    circuitBreaker: {
+      enabled: true,
+      failureThreshold: 5,      // Número de fallos para abrir el circuito
+      resetTimeout: 30000,      // Tiempo para reset en ms
+      fallbackResponse: { status: 'degraded', message: 'Service temporarily unavailable' }
+    },
+    
+    // Reintentos
+    retry: {
+      enabled: true,
+      maxAttempts: 3,
+      backoff: {
+        type: 'exponential',
+        initialDelay: 100
+      }
+    },
+    
+    // Timeouts
+    timeout: {
+      enabled: true,
+      duration: 5000  // ms
+    }
+  },
+  
+  // Monitorización
+  monitoring: {
+    health: {
+      enabled: true,
+      path: '/health',
+      interval: 10000  // ms
+    },
+    metrics: {
+      enabled: true,
+      provider: 'prometheus',
+      path: '/metrics'
+    },
+    tracing: {
+      enabled: true,
+      provider: 'jaeger',
+      options: {
+        serviceName: 'user-service',
+        endpoint: process.env.JAEGER_ENDPOINT
+      }
+    }
+  },
+  
+  // Configuración de API
+  api: {
+    // Documentación automática
+    docs: {
+      enabled: true,
+      path: '/docs',
+      title: 'User Service API',
+      version: '1.0.0'
+    },
+    
+    // Cors
+    cors: {
+      enabled: true,
+      origins: ['*'],
+      methods: ['GET', 'POST', 'PUT', 'DELETE'],
+      allowedHeaders: ['Content-Type', 'Authorization']
+    }
+  }
+};
+
+// Crear el servicio con FoxFactory
+const service = FoxFactory.createMicroservice(serviceConfig);
+
+// Definir rutas y controladores
+const router = service.router;
+
+router.get('/users', userController.getAll);
+router.get('/users/:id', userController.getById);
+router.post('/users', userController.create);
+router.put('/users/:id', userController.update);
+router.delete('/users/:id', userController.delete);
+
+// Iniciar el servicio
+service.start()
+  .then(() => {
+    console.log(`User service started on port ${service.config.port}`);
+  })
+  .catch(err => {
+    console.error('Failed to start service:', err);
+    process.exit(1);
+  });
+
+// Manejo graceful shutdown
+process.on('SIGTERM', async () => {
+  await service.stop();
+  process.exit(0);
+});
+```
+
+## Comunicación entre Servicios
+
+### Cliente HTTP para Comunicación Síncrona
+
+```typescript
+import { ServiceClient } from 'fox-framework/microservices';
+
+// Crear un cliente para el servicio de productos
+const productClient = new ServiceClient({
+  // Nombre del servicio a consumir
+  serviceName: 'product-service',
+  
+  // Opciones de descubrimiento (mismas que en la configuración del servicio)
+  discovery: {
+    provider: 'consul',
+    options: {
+      host: process.env.CONSUL_HOST || 'localhost',
+      port: parseInt(process.env.CONSUL_PORT || '8500')
+    }
+  },
+  
+  // Circuit Breaker
+  circuitBreaker: {
+    enabled: true,
+    failureThreshold: 3,
+    resetTimeout: 10000
+  },
+  
+  // Retry
+  retry: {
+    enabled: true,
+    maxAttempts: 3
+  },
+  
+  // Timeout
+  timeout: 5000,
+  
+  // Opciones de caché
+  cache: {
+    enabled: true,
+    ttl: 60000, // 1 minuto
+    maxSize: 1000
+  }
+});
+
+// Uso del cliente en servicios
+export class OrderService {
+  async createOrder(userId: string, items: Array<{productId: string, quantity: number}>) {
+    // Verificar productos y precios
+    const productDetails = await Promise.all(
+      items.map(async item => {
+        // Llamada al servicio de productos
+        const product = await productClient.get(`/products/${item.productId}`);
+        
+        if (!product) {
+          throw new Error(`Product not found: ${item.productId}`);
+        }
+        
+        return {
+          ...item,
+          price: product.price,
+          name: product.name
+        };
+      })
+    );
+    
+    // Calcular total
+    const total = productDetails.reduce(
+      (sum, item) => sum + (item.price * item.quantity),
+      0
+    );
+    
+    // Crear orden en la base de datos
+    const order = await orderRepository.create({
+      userId,
+      items: productDetails,
+      total,
+      status: 'pending',
+      createdAt: new Date()
+    });
+    
+    // Emitir evento de orden creada
+    await eventBus.emit('order.created', {
+      orderId: order.id,
+      userId,
+      items: productDetails,
+      total
+    });
+    
+    return order;
+  }
+}
+```
+
+### Comunicación Basada en Eventos
+
+```typescript
+import { EventSubscriber, EventPublisher } from 'fox-framework/microservices/events';
+
+// Subscriber para eventos
+class OrderEventSubscriber extends EventSubscriber {
+  constructor(private orderService: OrderService) {
+    super();
+    
+    // Registrar manejadores de eventos
+    this.on('payment.completed', this.handlePaymentCompleted.bind(this));
+    this.on('shipment.created', this.handleShipmentCreated.bind(this));
+  }
+  
+  async handlePaymentCompleted(event) {
+    const { orderId, paymentId, amount } = event.payload;
+    
+    try {
+      // Actualizar estado de la orden
+      await this.orderService.updateOrderStatus(orderId, 'paid', {
+        paymentId,
+        paidAmount: amount,
+        paidAt: new Date()
+      });
+      
+      console.log(`Order ${orderId} marked as paid`);
+    } catch (error) {
+      console.error(`Error processing payment completion for order ${orderId}:`, error);
+      // Importante: manejar fallos adecuadamente para evitar pérdida de eventos
+    }
+  }
+  
+  async handleShipmentCreated(event) {
+    const { orderId, shipmentId, trackingNumber } = event.payload;
+    
+    try {
+      await this.orderService.updateOrderStatus(orderId, 'shipped', {
+        shipmentId,
+        trackingNumber,
+        shippedAt: new Date()
+      });
+      
+      console.log(`Order ${orderId} marked as shipped`);
+    } catch (error) {
+      console.error(`Error processing shipment for order ${orderId}:`, error);
+    }
+  }
+}
+
+// Publisher para eventos
+class OrderEventPublisher extends EventPublisher {
+  async publishOrderCreated(order) {
+    await this.publish('order.created', {
+      orderId: order.id,
+      userId: order.userId,
+      items: order.items,
+      total: order.total,
+      createdAt: order.createdAt
+    });
+  }
+  
+  async publishOrderStatusChanged(order, prevStatus) {
+    await this.publish('order.status.changed', {
+      orderId: order.id,
+      userId: order.userId,
+      prevStatus,
+      newStatus: order.status,
+      updatedAt: new Date()
+    });
+  }
+  
+  async publishOrderCancelled(order, reason) {
+    await this.publish('order.cancelled', {
+      orderId: order.id,
+      userId: order.userId,
+      reason,
+      cancelledAt: new Date()
+    });
+  }
+}
+
+// Uso en controladores
+export class OrderController {
+  constructor(
+    private orderService: OrderService,
+    private publisher: OrderEventPublisher
+  ) {}
+  
+  async createOrder(req, res) {
+    try {
+      const { userId, items } = req.body;
+      
+      // Crear orden
+      const order = await this.orderService.createOrder(userId, items);
+      
+      // Publicar evento
+      await this.publisher.publishOrderCreated(order);
+      
+      res.status(201).json(order);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+  
+  async cancelOrder(req, res) {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      
+      const order = await this.orderService.getOrderById(id);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Verificar si se puede cancelar
+      if (!['pending', 'processing'].includes(order.status)) {
+        return res.status(400).json({ 
+          error: `Cannot cancel order in status: ${order.status}`
+        });
+      }
+      
+      // Cancelar orden
+      const prevStatus = order.status;
+      await this.orderService.updateOrderStatus(id, 'cancelled', { reason });
+      
+      // Publicar eventos
+      await Promise.all([
+        this.publisher.publishOrderStatusChanged(order, prevStatus),
+        this.publisher.publishOrderCancelled(order, reason)
+      ]);
+      
+      res.json({ message: 'Order cancelled successfully' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+}
+```
+
+### Comunicación gRPC
+
+```typescript
+import { GrpcService } from 'fox-framework/microservices/grpc';
+
+// Definir un servicio gRPC
+class UserGrpcService extends GrpcService {
+  constructor(private userRepository) {
+    super({
+      protoFile: './proto/user.proto',
+      packageName: 'user',
+      serviceName: 'UserService'
+    });
+    
+    // Registrar implementaciones de métodos
+    this.registerMethod('GetUser', this.getUser.bind(this));
+    this.registerMethod('CreateUser', this.createUser.bind(this));
+    this.registerMethod('UpdateUser', this.updateUser.bind(this));
+    this.registerMethod('DeleteUser', this.deleteUser.bind(this));
+    this.registerMethod('ListUsers', this.listUsers.bind(this));
+  }
+  
+  async getUser(call) {
+    const { id } = call.request;
+    
+    try {
+      const user = await this.userRepository.findById(id);
+      
+      if (!user) {
+        return {
+          status: 'NOT_FOUND',
+          message: 'User not found'
+        };
+      }
+      
+      return {
+        status: 'SUCCESS',
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          createdAt: user.createdAt.toISOString()
+        }
+      };
+    } catch (error) {
+      console.error('Error in getUser:', error);
+      return {
+        status: 'ERROR',
+        message: error.message
+      };
+    }
+  }
+  
+  async createUser(call) {
+    const { name, email, password, role } = call.request;
+    
+    try {
+      // Validar datos
+      if (!name || !email || !password) {
+        return {
+          status: 'INVALID_ARGUMENT',
+          message: 'Name, email and password are required'
+        };
+      }
+      
+      // Verificar si el email ya existe
+      const existing = await this.userRepository.findByEmail(email);
+      if (existing) {
+        return {
+          status: 'ALREADY_EXISTS',
+          message: 'Email already registered'
+        };
+      }
+      
+      // Crear usuario
+      const user = await this.userRepository.create({
+        name,
+        email,
+        password, // Asumir que el repository maneja el hash
+        role: role || 'user',
+        createdAt: new Date()
+      });
+      
+      return {
+        status: 'SUCCESS',
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          createdAt: user.createdAt.toISOString()
+        }
+      };
+    } catch (error) {
+      console.error('Error in createUser:', error);
+      return {
+        status: 'ERROR',
+        message: error.message
+      };
+    }
+  }
+  
+  // Otros métodos...
+}
+
+// Cliente gRPC
+import { GrpcClient } from 'fox-framework/microservices/grpc';
+
+// Crear cliente
+const userGrpcClient = new GrpcClient({
+  protoFile: './proto/user.proto',
+  packageName: 'user',
+  serviceName: 'UserService',
+  serverAddress: 'user-service:50051'
+});
+
+// Uso del cliente
+async function getUserDetails(userId) {
+  try {
+    const response = await userGrpcClient.call('GetUser', { id: userId });
+    
+    if (response.status !== 'SUCCESS') {
+      throw new Error(`Failed to get user: ${response.message}`);
+    }
+    
+    return response.user;
+  } catch (error) {
+    console.error('Error calling user service:', error);
+    throw error;
+  }
+}
+```
+
+## API Gateway
+
+Fox Framework proporciona una implementación de API Gateway para centralizar el acceso a los microservicios:
+
+```typescript
+import { ApiGateway, RouteConfig } from 'fox-framework/microservices/gateway';
+
+// Configurar API Gateway
+const gateway = new ApiGateway({
+  // Puerto donde se ejecutará el gateway
+  port: parseInt(process.env.GATEWAY_PORT || '8000'),
+  
+  // Descubrimiento de servicios
+  discovery: {
+    provider: 'consul',
+    options: {
+      host: process.env.CONSUL_HOST || 'localhost',
+      port: parseInt(process.env.CONSUL_PORT || '8500')
+    }
+  },
+  
+  // Autenticación centralizada
+  auth: {
+    enabled: true,
+    provider: 'jwt',
+    options: {
+      secret: process.env.JWT_SECRET,
+      algorithms: ['HS256'],
+      credentialsRequired: false // Algunas rutas pueden ser públicas
+    },
+    // Rutas públicas
+    publicPaths: [
+      '/api/auth/login',
+      '/api/auth/register',
+      '/api/products',
+      { path: '/api/docs', method: 'GET' }
+    ]
+  },
+  
+  // Límite de tasa de peticiones
+  rateLimit: {
+    enabled: true,
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100, // Límite por IP
+    message: 'Too many requests, please try again later'
+  },
+  
+  // CORS
+  cors: {
+    enabled: true,
+    origins: ['*'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  },
+  
+  // Compresión de respuestas
+  compression: true,
+  
+  // Caché
+  cache: {
+    enabled: true,
+    ttl: 60, // segundos
+    maxSize: 100, // máximo número de entradas
+    methods: ['GET'], // solo cachear peticiones GET
+    // Excluir rutas que no deben cachearse
+    excludePaths: [
+      '/api/users/me',
+      '/api/orders/active'
+    ]
+  },
+  
+  // Circuit breaker
+  circuitBreaker: {
+    enabled: true,
+    options: {
+      failureThreshold: 5,
+      resetTimeout: 30000
+    }
+  },
+  
+  // Logging
+  logging: {
+    level: 'info',
+    format: 'json',
+    request: true,
+    response: true
+  }
+});
+
+// Definir rutas y servicios
+gateway.addRoutes([
+  // Rutas para el servicio de autenticación
+  {
+    paths: ['/api/auth/*'],
+    service: 'auth-service',
+    stripPrefix: '/api/auth'
+  },
+  
+  // Rutas para el servicio de usuarios
+  {
+    paths: ['/api/users/*'],
+    service: 'user-service',
+    stripPrefix: '/api/users',
+    // Middleware adicional específico para este servicio
+    middleware: [
+      // Ejemplo: middleware de autorización para rutas específicas
+      (req, res, next) => {
+        if (req.path.includes('/admin') && req.user?.role !== 'admin') {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+        next();
+      }
+    ]
+  },
+  
+  // Rutas para el servicio de productos
+  {
+    paths: ['/api/products/*'],
+    service: 'product-service',
+    stripPrefix: '/api/products',
+    // Caché específica para este servicio
+    cache: {
+      enabled: true,
+      ttl: 300 // 5 minutos
+    }
+  },
+  
+  // Rutas para el servicio de pedidos
+  {
+    paths: ['/api/orders/*'],
+    service: 'order-service',
+    stripPrefix: '/api/orders',
+    // Solo usuarios autenticados
+    requireAuth: true
+  },
+  
+  // Agregación de múltiples servicios
+  {
+    paths: ['/api/dashboard'],
+    aggregation: [
+      { 
+        service: 'user-service',
+        path: '/stats',
+        key: 'users' 
+      },
+      { 
+        service: 'order-service',
+        path: '/stats',
+        key: 'orders'
+      },
+      {
+        service: 'product-service',
+        path: '/stats',
+        key: 'products'
+      }
+    ]
+  }
+]);
+
+// Iniciar gateway
+gateway.start()
+  .then(() => {
+    console.log(`API Gateway running on port ${gateway.config.port}`);
+  })
+  .catch(err => {
+    console.error('Failed to start API Gateway:', err);
+    process.exit(1);
+  });
+```
+
+## Rastreo Distribuido (Tracing)
+
+Fox Framework integra rastreo distribuido para seguir peticiones entre múltiples servicios:
+
+```typescript
+import { TracingService, SpanContext } from 'fox-framework/microservices/tracing';
+
+// Configurar servicio de rastreo
+const tracer = new TracingService({
+  serviceName: 'order-service',
+  provider: 'jaeger',
+  options: {
+    endpoint: process.env.JAEGER_ENDPOINT || 'http://jaeger:14268/api/traces',
+    sampler: {
+      type: 'const',
+      param: 1 // Muestrear todas las peticiones
+    }
+  }
+});
+
+// Middleware para rastreo automático de peticiones HTTP
+app.use(tracer.middleware());
+
+// Uso manual para operaciones personalizadas
+export class OrderService {
+  constructor(
+    private orderRepository,
+    private tracer: TracingService
+  ) {}
+  
+  async createOrder(userId, items) {
+    // Crear un span para esta operación
+    const span = this.tracer.startSpan('createOrder');
+    
+    try {
+      // Añadir información al span
+      span.setTag('userId', userId);
+      span.setTag('itemCount', items.length);
+      
+      // Operación de base de datos
+      const dbSpan = this.tracer.startSpan('database_operation', { childOf: span });
+      const order = await this.orderRepository.create({
+        userId,
+        items,
+        status: 'pending',
+        createdAt: new Date()
+      });
+      dbSpan.finish();
+      
+      // Llamada a otro servicio con propagación del contexto de tracing
+      const context = this.tracer.extract(span.context());
+      await this.notifyInventory(order, context);
+      
+      // Añadir metadatos al resultado
+      span.setTag('orderId', order.id);
+      span.setTag('success', true);
+      
+      return order;
+    } catch (error) {
+      // Registrar error en el span
+      span.setTag('error', true);
+      span.log({
+        event: 'error',
+        'error.message': error.message,
+        stack: error.stack
+      });
+      throw error;
+    } finally {
+      // Finalizar span
+      span.finish();
+    }
+  }
+  
+  async notifyInventory(order, parentContext) {
+    // Crear span como hijo del contexto recibido
+    const span = this.tracer.startSpan('notifyInventory', { 
+      childOf: parentContext
+    });
+    
+    try {
+      // Añadir contexto de tracing a la llamada HTTP
+      const headers = {};
+      this.tracer.inject(span.context(), headers);
+      
+      // Llamada al servicio de inventario con los headers de tracing
+      await axios.post(
+        'http://inventory-service/reserve',
+        { 
+          orderId: order.id,
+          items: order.items.map(item => ({
+            productId: item.productId,
+            quantity: item.quantity
+          }))
+        },
+        { headers }
+      );
+      
+      span.setTag('success', true);
+    } catch (error) {
+      span.setTag('error', true);
+      span.log({
+        event: 'error',
+        message: error.message
+      });
+      throw error;
+    } finally {
+      span.finish();
+    }
+  }
+}
+```
+
+## Monitorización y Métricas
+
+```typescript
+import { MonitoringService, Metrics } from 'fox-framework/microservices/monitoring';
+
+// Configurar servicio de monitorización
+const monitoring = new MonitoringService({
+  serviceName: 'order-service',
+  provider: 'prometheus',
+  endpoint: '/metrics',
+  defaultLabels: {
+    environment: process.env.NODE_ENV,
+    serviceVersion: '1.0.0'
+  }
+});
+
+// Crear métricas personalizadas
+const metrics = {
+  // Contador de órdenes creadas
+  ordersCreated: monitoring.createCounter({
+    name: 'orders_created_total',
+    help: 'Total number of orders created',
+    labelNames: ['status', 'paymentMethod']
+  }),
+  
+  // Histograma para tiempo de procesamiento
+  orderProcessingTime: monitoring.createHistogram({
+    name: 'order_processing_seconds',
+    help: 'Time taken to process orders',
+    buckets: [0.1, 0.5, 1, 2, 5, 10]
+  }),
+  
+  // Gauge para órdenes activas
+  activeOrders: monitoring.createGauge({
+    name: 'active_orders',
+    help: 'Currently active orders'
+  }),
+  
+  // Summary para valor de órdenes
+  orderValue: monitoring.createSummary({
+    name: 'order_value_summary',
+    help: 'Summary of order values',
+    percentiles: [0.5, 0.9, 0.95, 0.99]
+  })
+};
+
+// Uso en el servicio
+export class OrderService {
+  async createOrder(userId, items, paymentMethod) {
+    const startTime = Date.now();
+    
+    try {
+      // Lógica de creación de orden
+      const order = await orderRepository.create({
+        userId,
+        items,
+        status: 'pending',
+        paymentMethod,
+        createdAt: new Date()
+      });
+      
+      // Incrementar contador de órdenes
+      metrics.ordersCreated.inc({
+        status: 'pending',
+        paymentMethod
+      });
+      
+      // Aumentar gauge de órdenes activas
+      metrics.activeOrders.inc();
+      
+      // Registrar valor de la orden
+      metrics.orderValue.observe(order.total);
+      
+      return order;
+    } finally {
+      // Registrar tiempo de procesamiento
+      const processingTime = (Date.now() - startTime) / 1000;
+      metrics.orderProcessingTime.observe(processingTime);
+    }
+  }
+  
+  async completeOrder(orderId) {
+    // Lógica para completar orden
+    await orderRepository.updateStatus(orderId, 'completed');
+    
+    // Decrementar gauge de órdenes activas
+    metrics.activeOrders.dec();
+  }
+}
+
+// Endpoint para exponer métricas
+app.get('/metrics', (req, res) => {
+  res.set('Content-Type', monitoring.contentType);
+  res.end(monitoring.getMetrics());
+});
+```
+
+## Health Checks
+
+```typescript
+import { HealthCheckService } from 'fox-framework/microservices/health';
+
+// Configurar health check
+const healthCheck = new HealthCheckService({
+  serviceName: 'order-service',
+  version: '1.0.0',
+  path: '/health',
+  // Intervalo de verificación en ms
+  checkInterval: 30000
+});
+
+// Añadir checks
+healthCheck.addCheck('database', async () => {
+  try {
+    await db.ping();
+    return {
+      status: 'up',
+      responseTime: 15 // ms
+    };
+  } catch (error) {
+    return {
+      status: 'down',
+      message: error.message
+    };
+  }
+});
+
+healthCheck.addCheck('redis', async () => {
+  try {
+    await redisClient.ping();
+    return {
+      status: 'up'
+    };
+  } catch (error) {
+    return {
+      status: 'down',
+      message: error.message
+    };
+  }
+});
+
+healthCheck.addCheck('product-service', async () => {
+  try {
+    const response = await axios.get('http://product-service/health', {
+      timeout: 2000
+    });
+    
+    return {
+      status: response.data.status === 'ok' ? 'up' : 'down',
+      details: response.data
+    };
+  } catch (error) {
+    return {
+      status: 'down',
+      message: error.message
+    };
+  }
+});
+
+// Registrar middleware
+app.use('/health', healthCheck.middleware());
+
+// También se puede consultar manualmente
+app.get('/admin/system-status', async (req, res) => {
+  const status = await healthCheck.getStatus();
+  
+  // Determinar estado general
+  const isSystemUp = Object.values(status.checks)
+    .every(check => check.status === 'up');
+  
+  res.json({
+    status: isSystemUp ? 'healthy' : 'degraded',
+    timestamp: status.timestamp,
+    checks: status.checks
+  });
+});
+```
+
+## Despliegue y Orquestación
+
+Fox Framework proporciona utilidades para desplegar microservicios en diferentes plataformas:
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  # API Gateway
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=production
+      - PORT=8000
+      - CONSUL_HOST=consul
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - consul
+      - auth-service
+      - user-service
+      - product-service
+      - order-service
+    networks:
+      - microservices-net
+
+  # Servicio de autenticación
+  auth-service:
+    build: ./auth-service
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - CONSUL_HOST=consul
+      - DB_HOST=auth-db
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - consul
+      - auth-db
+    networks:
+      - microservices-net
+
+  # Base de datos del servicio de autenticación
+  auth-db:
+    image: mongo:5
+    volumes:
+      - auth-db-data:/data/db
+    networks:
+      - microservices-net
+
+  # Servicio de usuarios
+  user-service:
+    build: ./user-service
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - CONSUL_HOST=consul
+      - DB_HOST=user-db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - consul
+      - user-db
+      - rabbitmq
+    networks:
+      - microservices-net
+
+  # Base de datos del servicio de usuarios
+  user-db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_DB=users
+      - POSTGRES_USER=appuser
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    networks:
+      - microservices-net
+
+  # Servicio de productos
+  product-service:
+    build: ./product-service
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - CONSUL_HOST=consul
+      - DB_HOST=product-db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - consul
+      - product-db
+      - rabbitmq
+    networks:
+      - microservices-net
+
+  # Base de datos del servicio de productos
+  product-db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_DB=products
+      - POSTGRES_USER=appuser
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - product-db-data:/var/lib/postgresql/data
+    networks:
+      - microservices-net
+
+  # Servicio de órdenes
+  order-service:
+    build: ./order-service
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - CONSUL_HOST=consul
+      - DB_HOST=order-db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - consul
+      - order-db
+      - rabbitmq
+    networks:
+      - microservices-net
+
+  # Base de datos del servicio de órdenes
+  order-db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_DB=orders
+      - POSTGRES_USER=appuser
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - order-db-data:/var/lib/postgresql/data
+    networks:
+      - microservices-net
+
+  # Consul para descubrimiento de servicios
+  consul:
+    image: consul:1.12
+    ports:
+      - "8500:8500"
+    command: agent -server -ui -node=server-1 -bootstrap-expect=1 -client=0.0.0.0
+    networks:
+      - microservices-net
+
+  # RabbitMQ para comunicación asíncrona
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - microservices-net
+
+  # Jaeger para tracing distribuido
+  jaeger:
+    image: jaegertracing/all-in-one:1.35
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=9411
+    networks:
+      - microservices-net
+
+  # Prometheus para métricas
+  prometheus:
+    image: prom/prometheus:v2.36.0
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - microservices-net
+
+  # Grafana para visualización de métricas
+  grafana:
+    image: grafana/grafana:9.0.0
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    networks:
+      - microservices-net
+
+networks:
+  microservices-net:
+    driver: bridge
+
+volumes:
+  auth-db-data:
+  user-db-data:
+  product-db-data:
+  order-db-data:
+  rabbitmq-data:
+  grafana-data:
+```
+
+### Kubernetes
+
+Fox Framework proporciona utilidades para generar archivos de configuración de Kubernetes:
+
+```typescript
+import { KubernetesGenerator } from 'fox-framework/microservices/deployment';
+
+// Configurar generador
+const k8sGenerator = new KubernetesGenerator({
+  // Información del proyecto
+  project: 'ecommerce',
+  namespace: 'ecommerce-app',
+  
+  // Ruta de salida para archivos K8s
+  outputDir: './k8s',
+  
+  // Imagen y registro
+  registry: 'my-registry.com',
+  imagePullSecret: 'registry-credentials',
+  
+  // Etiquetas comunes
+  commonLabels: {
+    app: 'ecommerce',
+    environment: 'production'
+  },
+  
+  // Configuración para ingress
+  ingress: {
+    enabled: true,
+    className: 'nginx',
+    annotations: {
+      'kubernetes.io/tls-acme': 'true',
+      'cert-manager.io/cluster-issuer': 'letsencrypt-prod'
+    },
+    domain: 'api.example.com'
+  },
+  
+  // Configuración global
+  resources: {
+    limits: {
+      cpu: '500m',
+      memory: '512Mi'
+    },
+    requests: {
+      cpu: '100m',
+      memory: '256Mi'
+    }
+  }
+});
+
+// Generar configuración para API Gateway
+k8sGenerator.generateService({
+  name: 'api-gateway',
+  port: 8000,
+  replicas: 2,
+  
+  // Exponer como servicio público
+  expose: true,
+  
+  // Rutas de ingress
+  ingressPaths: ['/'],
+  
+  // Variables de entorno
+  env: [
+    { name: 'NODE_ENV', value: 'production' },
+    { name: 'PORT', value: '8000' },
+    { name: 'CONSUL_HOST', value: 'consul.ecommerce-app.svc.cluster.local' },
+    { name: 'JWT_SECRET', valueFrom: { secretKeyRef: { name: 'api-secrets', key: 'jwt-secret' } } }
+  ],
+  
+  // Sondas de salud
+  healthCheck: {
+    path: '/health',
+    port: 8000,
+    initialDelaySeconds: 30,
+    periodSeconds: 10
+  }
+});
+
+// Generar configuración para servicio de autenticación
+k8sGenerator.generateService({
+  name: 'auth-service',
+  port: 3000,
+  replicas: 2,
+  
+  // No exponer públicamente
+  expose: false,
+  
+  // Variables de entorno
+  env: [
+    { name: 'NODE_ENV', value: 'production' },
+    { name: 'PORT', value: '3000' },
+    { name: 'DB_HOST', value: 'auth-db.ecommerce-app.svc.cluster.local' },
+    { name: 'CONSUL_HOST', value: 'consul.ecommerce-app.svc.cluster.local' },
+    { name: 'JWT_SECRET', valueFrom: { secretKeyRef: { name: 'api-secrets', key: 'jwt-secret' } } }
+  ],
+  
+  // Sondas de salud
+  healthCheck: {
+    path: '/health',
+    port: 3000
+  },
+  
+  // Base de datos asociada
+  database: {
+    type: 'mongodb',
+    version: '5.0',
+    storage: '1Gi',
+    resources: {
+      limits: {
+        cpu: '1',
+        memory: '1Gi'
+      },
+      requests: {
+        cpu: '500m',
+        memory: '512Mi'
+      }
+    }
+  }
+});
+
+// Generar configuración para otros servicios...
+
+// Generar infraestructura compartida
+k8sGenerator.generateInfrastructure({
+  consul: {
+    enabled: true,
+    version: '1.12'
+  },
+  rabbitmq: {
+    enabled: true,
+    version: '3.9',
+    storage: '2Gi'
+  },
+  jaeger: {
+    enabled: true
+  },
+  prometheus: {
+    enabled: true
+  },
+  grafana: {
+    enabled: true,
+    adminPassword: { secretKeyRef: { name: 'monitoring-secrets', key: 'grafana-password' } }
+  }
+});
+
+// Generar todos los archivos
+k8sGenerator.generate();
+```
+
+## Simulación de Microservicios para Desarrollo
+
+Fox Framework incluye un simulador de microservicios para desarrollo local:
+
+```typescript
+import { MicroserviceSimulator } from 'fox-framework/microservices/simulator';
+
+// Crear simulador
+const simulator = new MicroserviceSimulator({
+  // Puerto para interfaz web del simulador
+  port: 9000,
+  
+  // Directorio para almacenar datos simulados
+  dataDir: './.simulator',
+  
+  // Servicios a simular
+  services: [
+    {
+      name: 'user-service',
+      port: 3001,
+      routes: [
+        {
+          path: '/users',
+          method: 'GET',
+          response: { statusCode: 200, body: 'users' }
+        },
+        {
+          path: '/users/:id',
+          method: 'GET',
+          handler: (req, res) => {
+            const userId = req.params.id;
+            
+            if (userId === '123') {
+              return res.json({
+                id: '123',
+                name: 'John Doe',
+                email: 'john@example.com'
+              });
+            }
+            
+            res.status(404).json({ error: 'User not found' });
+          }
+        }
+      ]
+    },
+    {
+      name: 'product-service',
+      port: 3002,
+      routes: [
+        {
+          path: '/products',
+          method: 'GET',
+          response: { statusCode: 200, body: 'products' }
+        }
+      ]
+    },
+    // Más servicios simulados...
+  ],
+  
+  // Simular latencia en milisegundos
+  latency: {
+    min: 50,
+    max: 200
+  },
+  
+  // Simular errores ocasionales
+  faults: {
+    // Probabilidad de error (0-1)
+    probability: 0.05,
+    // Tipos de error a simular
+    types: ['timeout', 'error500', 'error503']
+  },
+  
+  // Persistencia de datos
+  persistence: true,
+  
+  // Dashboard web para monitorizar y controlar
+  dashboard: {
+    enabled: true,
+    path: '/simulator'
+  }
+});
+
+// Iniciar simulador
+simulator.start()
+  .then(() => {
+    console.log(`Microservice Simulator running on port ${simulator.config.port}`);
+    console.log(`Dashboard available at http://localhost:${simulator.config.port}/simulator`);
+  })
+  .catch(err => {
+    console.error('Failed to start simulator:', err);
+    process.exit(1);
+  });
+
+// Opcional: registrar simulador en Consul para desarrollo local
+simulator.registerInConsul({
+  host: 'localhost',
+  port: 8500
+});
+```
+
+## Versionado de APIs
+
+```typescript
+import { ApiVersion } from 'fox-framework/microservices';
+
+// Configurar versionado de API
+const apiVersioning = new ApiVersion({
+  // Tipo de versionado
+  type: 'header', // 'header', 'url', 'accept-header', 'query'
+  
+  // Nombre del header o param
+  headerName: 'X-API-Version',
+  paramName: 'version',
+  
+  // Versión por defecto
+  defaultVersion: '1',
+  
+  // Estrategia para URLs
+  urlType: 'path', // 'path' (/v1/users) o 'subdomain' (v1.api.example.com)
+});
+
+// Aplicar middleware
+app.use(apiVersioning.middleware());
+
+// Definir rutas versionadas
+app.get('/users', apiVersioning.route('1', (req, res) => {
+  // Implementación v1
+  res.json({ version: '1', users: [...] });
+}));
+
+app.get('/users', apiVersioning.route('2', (req, res) => {
+  // Implementación v2
+  res.json({ 
+    version: '2',
+    data: { users: [...] },
+    meta: { count: 100 }
+  });
+}));
+
+// O usar router versionado
+const v1Router = apiVersioning.router('1');
+const v2Router = apiVersioning.router('2');
+
+v1Router.get('/products', productControllerV1.getAll);
+v2Router.get('/products', productControllerV2.getAll);
+
+app.use(v1Router);
+app.use(v2Router);
+```
+
+## Mejores Prácticas
+
+Fox Framework recomienda las siguientes mejores prácticas para arquitecturas de microservicios:
+
+1. **Service Boundaries**: Definir límites claros de servicios basados en dominios de negocio
+2. **API First**: Diseñar APIs antes de implementar servicios
+3. **Error Handling**: Implementar patrones de resiliencia como Circuit Breaker y Retry
+4. **Idempotencia**: Asegurar que las operaciones se pueden repetir sin efectos secundarios
+5. **Comunicación Asíncrona**: Favorecer eventos para comunicación entre servicios
+6. **Testing Independiente**: Probar cada servicio de forma aislada
+7. **Diseño para Fallos**: Asumir que los servicios pueden fallar y diseñar en consecuencia
+8. **Monitorización**: Implementar métricas, logs y traces distribuidos
+9. **Despliegue Independiente**: Cada servicio debe poder desplegarse por separado
+10. **CI/CD**: Automatizar pruebas y despliegue
+
+## Conclusión
+
+El sistema de microservicios de Fox Framework proporciona todas las herramientas necesarias para implementar arquitecturas distribuidas modernas, con un enfoque en la resiliencia, escalabilidad y mantenibilidad.

@@ -1,0 +1,604 @@
+# Guía de Migración
+
+Esta guía te ayudará a migrar desde diferentes frameworks y versiones hacia Fox Framework, minimizando el esfuerzo y asegurando una transición suave.
+
+## 🔄 Migración desde Express.js
+
+### Evaluación Pre-Migración
+
+Antes de comenzar, evalúa tu proyecto actual:
+
+```bash
+# Analiza tu proyecto Express existente
+npx @fox-framework/analyzer analyze ./src
+
+# Genera reporte de migración
+npx @fox-framework/analyzer migration-report
+```
+
+### Paso 1: Preparación del Entorno
+
+```bash
+# Instalar Fox Framework en proyecto existente
+npm install fox-framework @fox-framework/migration-tools
+
+# Backup del proyecto
+git checkout -b migration-to-fox-framework
+```
+
+### Paso 2: Migración Gradual del Servidor
+
+**Antes (Express):**
+```javascript
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+
+const app = express();
+
+app.use(cors());
+app.use(helmet());
+app.use(express.json());
+
+// Rutas
+app.get('/api/users', (req, res) => {
+  // lógica
+});
+
+app.listen(3000, () => {
+  console.log('Server running on port 3000');
+});
+```
+
+**Después (Fox Framework):**
+```typescript
+import { FoxFactory } from 'fox-framework';
+import { corsMiddleware, helmetMiddleware } from 'fox-framework/middleware';
+
+const server = FoxFactory.createServer({
+  port: 3000,
+  middleware: [
+    corsMiddleware(),
+    helmetMiddleware()
+  ]
+});
+
+// Mantener rutas Express temporalmente
+server.express.get('/api/users', (req, res) => {
+  // misma lógica
+});
+
+server.listen();
+```
+
+### Paso 3: Migrar Rutas a Controllers
+
+**Crear estructura de Fox Framework:**
+```bash
+# Generar controllers desde rutas Express
+npx fox generate:from-express ./routes
+
+# Estructura generada:
+src/
+├── controllers/
+│   ├── user.controller.ts
+│   └── auth.controller.ts
+├── services/
+│   └── user.service.ts
+└── routes/
+    └── index.ts
+```
+
+**Ruta Express original:**
+```javascript
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ success: true, data: user });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+```
+
+**Controller Fox Framework:**
+```typescript
+import { FoxController, Request, Response } from 'fox-framework';
+import { UserService } from '../services/user.service';
+
+export class UserController extends FoxController {
+  constructor(private userService: UserService) {
+    super();
+  }
+
+  async getUser(req: Request, res: Response): Promise<void> {
+    try {
+      const user = await this.userService.findById(req.params.id);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      res.json({ success: true, data: user });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+}
+```
+
+### Paso 4: Migrar Middleware Personalizado
+
+**Express Middleware:**
+```javascript
+const authMiddleware = (req, res, next) => {
+  const token = req.headers.authorization;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+  
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    req.user = decoded;
+    next();
+  });
+};
+```
+
+**Fox Framework Middleware:**
+```typescript
+import { Middleware, Request, Response, NextFunction } from 'fox-framework';
+
+export class AuthMiddleware extends Middleware {
+  async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const token = req.headers.authorization;
+    
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+    
+    try {
+      const decoded = await this.jwtService.verify(token);
+      req.user = decoded;
+      next();
+    } catch (error) {
+      res.status(401).json({ error: 'Invalid token' });
+    }
+  }
+}
+```
+
+### Paso 5: Actualizar Configuración
+
+**package.json scripts:**
+```json
+{
+  "scripts": {
+    "dev": "fox dev",
+    "build": "fox build",
+    "start": "fox start",
+    "test": "fox test"
+  }
+}
+```
+
+## 🔄 Migración desde Fastify
+
+### Comparación de Conceptos
+
+| Fastify | Fox Framework |
+|---------|---------------|
+| `fastify.register()` | `app.use()` |
+| `fastify.addHook()` | `middleware` |
+| `routes/` | `controllers/` |
+| `plugins/` | `plugins/` |
+
+### Migración de Plugins Fastify
+
+**Plugin Fastify:**
+```javascript
+async function myPlugin(fastify, opts) {
+  fastify.decorate('myUtility', () => {
+    // utility logic
+  });
+}
+
+fastify.register(myPlugin);
+```
+
+**Plugin Fox Framework:**
+```typescript
+import { Plugin } from 'fox-framework/plugins';
+
+export class MyPlugin extends Plugin {
+  name = 'my-utility';
+  
+  async install(app: FoxApplication) {
+    app.addUtility('myUtility', () => {
+      // utility logic
+    });
+  }
+}
+
+app.use(new MyPlugin());
+```
+
+### Migración de Hooks
+
+**Fastify Hooks:**
+```javascript
+fastify.addHook('preHandler', async (request, reply) => {
+  // logic before handler
+});
+
+fastify.addHook('onResponse', async (request, reply) => {
+  // logic after response
+});
+```
+
+**Fox Framework Middleware:**
+```typescript
+export class RequestLifecycleMiddleware extends Middleware {
+  async preHandler(req: Request, res: Response, next: NextFunction) {
+    // logic before handler
+    next();
+  }
+
+  async postHandler(req: Request, res: Response) {
+    // logic after response
+  }
+}
+```
+
+## 🔄 Migración desde NestJS
+
+### Conceptos Equivalentes
+
+| NestJS | Fox Framework |
+|--------|---------------|
+| `@Controller()` | `FoxController` |
+| `@Injectable()` | `@Service()` |
+| `@Module()` | `Plugin` |
+| `Guards` | `Middleware` |
+| `Interceptors` | `Middleware` |
+
+### Migración de Controllers
+
+**NestJS Controller:**
+```typescript
+@Controller('users')
+export class UsersController {
+  constructor(private usersService: UsersService) {}
+
+  @Get(':id')
+  async findOne(@Param('id') id: string): Promise<User> {
+    return this.usersService.findOne(id);
+  }
+
+  @Post()
+  @UsePipes(ValidationPipe)
+  async create(@Body() createUserDto: CreateUserDto): Promise<User> {
+    return this.usersService.create(createUserDto);
+  }
+}
+```
+
+**Fox Framework Controller:**
+```typescript
+import { FoxController, Route, Validate } from 'fox-framework';
+import { CreateUserDto } from '../dto/create-user.dto';
+
+export class UsersController extends FoxController {
+  constructor(private usersService: UsersService) {
+    super();
+  }
+
+  @Route.Get(':id')
+  async findOne(req: Request, res: Response): Promise<void> {
+    const user = await this.usersService.findOne(req.params.id);
+    res.json({ success: true, data: user });
+  }
+
+  @Route.Post()
+  @Validate.Body(CreateUserDto)
+  async create(req: Request, res: Response): Promise<void> {
+    const user = await this.usersService.create(req.body);
+    res.status(201).json({ success: true, data: user });
+  }
+}
+```
+
+### Migración de Servicios
+
+**NestJS Service:**
+```typescript
+@Injectable()
+export class UsersService {
+  constructor(
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
+  ) {}
+
+  async findOne(id: string): Promise<User> {
+    return this.usersRepository.findOne({ where: { id } });
+  }
+}
+```
+
+**Fox Framework Service:**
+```typescript
+import { Service } from 'fox-framework';
+
+@Service()
+export class UsersService {
+  constructor(private usersRepository: UsersRepository) {}
+
+  async findOne(id: string): Promise<User> {
+    return this.usersRepository.findOne({ where: { id } });
+  }
+}
+```
+
+## 🔄 Migración desde Koa.js
+
+### Migración de Middleware
+
+**Koa Middleware:**
+```javascript
+app.use(async (ctx, next) => {
+  const start = Date.now();
+  await next();
+  const ms = Date.now() - start;
+  console.log(`${ctx.method} ${ctx.url} - ${ms}ms`);
+});
+```
+
+**Fox Framework Middleware:**
+```typescript
+export class LoggingMiddleware extends Middleware {
+  async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const start = Date.now();
+    
+    res.on('finish', () => {
+      const ms = Date.now() - start;
+      console.log(`${req.method} ${req.url} - ${ms}ms`);
+    });
+    
+    next();
+  }
+}
+```
+
+### Migración de Context
+
+**Koa Context:**
+```javascript
+app.use(async ctx => {
+  ctx.body = { message: 'Hello World' };
+  ctx.status = 200;
+});
+```
+
+**Fox Framework Response:**
+```typescript
+export class HelloController extends FoxController {
+  async hello(req: Request, res: Response): Promise<void> {
+    res.status(200).json({ message: 'Hello World' });
+  }
+}
+```
+
+## 🔄 Migración entre Versiones de Fox Framework
+
+### De Fox Framework 0.x a 1.x
+
+#### Cambios Breaking
+
+1. **API de Controllers**:
+```typescript
+// v0.x
+class UserController {
+  async getUser(context: FoxContext) {
+    return context.json({ user: context.params.id });
+  }
+}
+
+// v1.x
+class UserController extends FoxController {
+  async getUser(req: Request, res: Response): Promise<void> {
+    res.json({ user: req.params.id });
+  }
+}
+```
+
+2. **Sistema de Routing**:
+```typescript
+// v0.x
+router.route('/users/:id').get(UserController, 'getUser');
+
+// v1.x
+router.get('/users/:id', userController.getUser.bind(userController));
+```
+
+3. **Configuración**:
+```typescript
+// v0.x
+const app = new FoxApp({
+  port: 3000,
+  database: 'postgresql://...'
+});
+
+// v1.x
+const app = FoxFactory.createServer({
+  port: 3000,
+  database: {
+    url: 'postgresql://...'
+  }
+});
+```
+
+#### Script de Migración Automática
+
+```bash
+# Ejecutar herramienta de migración
+npx @fox-framework/migrate v0-to-v1
+
+# Revisar cambios
+git diff
+
+# Ejecutar tests para verificar
+npm test
+```
+
+## 🔧 Herramientas de Migración
+
+### Analizador de Código
+
+```bash
+# Instalar herramientas de migración
+npm install -g @fox-framework/migration-tools
+
+# Analizar proyecto actual
+fox-migrate analyze
+
+# Generar plan de migración
+fox-migrate plan
+
+# Ejecutar migración por pasos
+fox-migrate step 1  # Configuración base
+fox-migrate step 2  # Controllers
+fox-migrate step 3  # Middleware
+fox-migrate step 4  # Testing
+```
+
+### Asistente de Migración Interactivo
+
+```bash
+# Ejecutar asistente
+fox-migrate interactive
+
+# Proceso guiado:
+? ¿Desde qué framework migras? Express
+? ¿Versión de Express? 4.18.0
+? ¿Tienes tests? Sí
+? ¿Usas TypeScript? No
+? ¿Migrar a TypeScript? Sí
+```
+
+## 📋 Lista de Verificación Post-Migración
+
+### ✅ Funcionalidad
+- [ ] Todas las rutas funcionan correctamente
+- [ ] Middleware personalizado migrado
+- [ ] Autenticación funciona
+- [ ] Base de datos conecta correctamente
+- [ ] Cache funciona (si aplica)
+
+### ✅ Testing
+- [ ] Tests unitarios pasan
+- [ ] Tests de integración pasan  
+- [ ] Coverage mantenido o mejorado
+- [ ] Tests E2E funcionan
+
+### ✅ Performance
+- [ ] Tiempo de respuesta similar o mejor
+- [ ] Uso de memoria optimizado
+- [ ] Throughput mantenido
+- [ ] Métricas configuradas
+
+### ✅ Desarrollo
+- [ ] Hot reload funciona
+- [ ] TypeScript compila sin errores
+- [ ] Linting configurado
+- [ ] CI/CD actualizado
+
+### ✅ Documentación
+- [ ] README actualizado
+- [ ] Documentación API actualizada
+- [ ] Changelog creado
+- [ ] Equipo entrenado
+
+## 🚨 Problemas Comunes y Soluciones
+
+### Error: "Cannot find module"
+
+```bash
+# Verificar instalación
+npm list fox-framework
+
+# Re-instalar si es necesario
+npm uninstall fox-framework
+npm install fox-framework@latest
+```
+
+### Middleware no funciona
+
+```typescript
+// Verificar orden de middleware
+const server = FoxFactory.createServer({
+  middleware: [
+    corsMiddleware(),      // Debe ir antes que
+    authMiddleware(),      // middleware de auth
+    validationMiddleware() // y validación
+  ]
+});
+```
+
+### Performance degradada
+
+```typescript
+// Habilitar profiling temporalmente
+import { Profiler } from 'fox-framework/profiler';
+
+if (process.env.NODE_ENV === 'development') {
+  Profiler.enable();
+}
+```
+
+### Tests fallan después de migración
+
+```typescript
+// Actualizar helpers de testing
+import { TestingModule } from '@fox-framework/testing';
+
+// Reemplazar supertest directo
+const app = await TestingModule.createTestApp();
+```
+
+## 📚 Recursos de Apoyo
+
+### Documentación Específica
+- [Guía de Express a Fox Framework](/docs/migration/express)
+- [Guía de NestJS a Fox Framework](/docs/migration/nestjs)
+- [Migración de Bases de Datos](/docs/migration/database)
+
+### Soporte de la Comunidad
+- [Discord - Canal #migration](https://discord.gg/fox-framework)
+- [GitHub Discussions](https://github.com/fox-framework/fox-framework/discussions)
+- [Stack Overflow](https://stackoverflow.com/questions/tagged/fox-framework-migration)
+
+### Soporte Profesional
+- **Migration Consulting**: Ayuda profesional para migraciones complejas
+- **Code Review**: Revisión de código post-migración
+- **Training**: Entrenamiento para tu equipo
+
+Contacta: [migration@fox-framework.com](mailto:migration@fox-framework.com)
+
+---
+
+## 🎯 Próximos Pasos
+
+Después de completar la migración:
+
+1. **Optimiza tu aplicación** con las nuevas características de Fox Framework
+2. **Implementa monitoreo** avanzado
+3. **Explora plugins** adicionales
+4. **Contribuye** a la comunidad compartiendo tu experiencia
+
+¡Bienvenido a Fox Framework! 🦊

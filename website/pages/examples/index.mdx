@@ -1,0 +1,177 @@
+# Ejemplos de Fox Framework
+
+Esta sección contiene ejemplos prácticos que muestran cómo implementar diferentes características y patrones utilizando Fox Framework.
+
+## API RESTful Básica
+
+Un ejemplo simple de API RESTful con controladores, rutas y middleware.
+
+```typescript
+// src/controllers/todo.controller.ts
+import { Request, Response } from 'fox-framework';
+
+export class TodoController {
+  private todos = [
+    { id: 1, title: 'Aprender Fox Framework', completed: false },
+    { id: 2, title: 'Crear un API REST', completed: false }
+  ];
+
+  getAll = (req: Request, res: Response): void => {
+    res.json(this.todos);
+  };
+
+  getById = (req: Request, res: Response): void => {
+    const id = parseInt(req.params.id);
+    const todo = this.todos.find(t => t.id === id);
+    
+    if (!todo) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+    
+    res.json(todo);
+  };
+
+  create = (req: Request, res: Response): void => {
+    const { title } = req.body;
+    
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    
+    const newTodo = {
+      id: this.todos.length + 1,
+      title,
+      completed: false
+    };
+    
+    this.todos.push(newTodo);
+    res.status(201).json(newTodo);
+  };
+
+  update = (req: Request, res: Response): void => {
+    const id = parseInt(req.params.id);
+    const todoIndex = this.todos.findIndex(t => t.id === id);
+    
+    if (todoIndex === -1) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+    
+    this.todos[todoIndex] = {
+      ...this.todos[todoIndex],
+      ...req.body
+    };
+    
+    res.json(this.todos[todoIndex]);
+  };
+
+  delete = (req: Request, res: Response): void => {
+    const id = parseInt(req.params.id);
+    const todoIndex = this.todos.findIndex(t => t.id === id);
+    
+    if (todoIndex === -1) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+    
+    const deletedTodo = this.todos[todoIndex];
+    this.todos.splice(todoIndex, 1);
+    
+    res.json(deletedTodo);
+  };
+}
+```
+
+```typescript
+// src/routes/todo.routes.ts
+import { Router } from 'fox-framework';
+import { TodoController } from '../controllers/todo.controller';
+
+const todoController = new TodoController();
+const router = Router.create();
+
+router.get('/todos', todoController.getAll);
+router.get('/todos/:id', todoController.getById);
+router.post('/todos', todoController.create);
+router.put('/todos/:id', todoController.update);
+router.delete('/todos/:id', todoController.delete);
+
+export default router;
+```
+
+```typescript
+// src/server/index.ts
+import { FoxFactory, ServerConfig } from 'fox-framework';
+import todoRouter from '../routes/todo.routes';
+
+const config: ServerConfig = {
+  port: 3000,
+  cors: {
+    origin: '*'
+  },
+  bodyParser: {
+    json: true
+  }
+};
+
+const app = FoxFactory.createInstance(config);
+
+// Registrar las rutas
+app.use('/api', todoRouter);
+
+app.start();
+console.log('Todo API server running on port 3000');
+```
+
+## Aplicación con Cache System
+
+Este ejemplo muestra cómo implementar un sistema de caché para mejorar el rendimiento:
+
+```typescript
+// src/controllers/product.controller.ts
+import { Request, Response } from 'fox-framework';
+import { CacheFactory, ICache } from 'fox-framework/cache';
+
+export class ProductController {
+  private cache: ICache;
+  
+  constructor() {
+    this.cache = CacheFactory.create({
+      provider: 'memory',
+      ttl: 3600 // 1 hora
+    });
+  }
+  
+  async getProducts(req: Request, res: Response): Promise<void> {
+    const cacheKey = 'products:all';
+    
+    // Intentar obtener del caché
+    const cachedProducts = await this.cache.get(cacheKey);
+    
+    if (cachedProducts) {
+      console.log('Returning products from cache');
+      return res.json(cachedProducts);
+    }
+    
+    // Simular obtención de base de datos
+    console.log('Fetching products from database');
+    const products = await this.fetchProductsFromDB();
+    
+    // Guardar en caché
+    await this.cache.set(cacheKey, products);
+    
+    res.json(products);
+  }
+  
+  private async fetchProductsFromDB(): Promise<any[]> {
+    // Simular tiempo de consulta a la base de datos
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    return [
+      { id: 1, name: 'Laptop', price: 999.99 },
+      { id: 2, name: 'Smartphone', price: 699.99 },
+      { id: 3, name: 'Headphones', price: 199.99 }
+    ];
+  }
+}
+```
+
+Vea más ejemplos completos en nuestro [repositorio de ejemplos en GitHub](https://github.com/lnavarrocarter/fox-framework/examples).

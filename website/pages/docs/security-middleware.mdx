@@ -1,0 +1,1319 @@
+# Seguridad y Middleware
+
+Fox Framework proporciona un sistema completo y extensible de seguridad y middleware para proteger aplicaciones web y APIs. Esta documentación cubre todas las características y opciones de seguridad disponibles.
+
+## Características Principales
+
+- **Middleware de Seguridad**: Protección contra ataques comunes
+- **Autenticación**: Múltiples estrategias (JWT, OAuth, API Keys)
+- **Autorización**: Control de acceso basado en roles y permisos
+- **CORS**: Configuración detallada para comunicación cross-origin
+- **Encriptación**: Utilidades para encriptar datos sensibles
+- **Rate Limiting**: Protección contra ataques de fuerza bruta
+- **CSP**: Content Security Policy para mitigar XSS
+- **Auditoría**: Registro de actividad y eventos de seguridad
+
+## Middleware Básico
+
+### Creación de Middleware
+
+```typescript
+import { Middleware, Request, Response, NextFunction } from 'fox-framework';
+
+// Middleware simple
+const loggerMiddleware: Middleware = (req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+};
+
+// Middleware con opciones
+function corsMiddleware(options?: CorsOptions): Middleware {
+  return (req, res, next) => {
+    const origin = req.headers.origin;
+    
+    // Aplicar configuración CORS según opciones
+    if (origin && options?.origins?.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', options?.methods || 'GET,POST,PUT,DELETE');
+      res.setHeader('Access-Control-Allow-Headers', options?.headers || 'Content-Type,Authorization');
+    }
+    
+    // Responder inmediatamente para solicitudes OPTIONS
+    if (req.method === 'OPTIONS') {
+      return res.status(204).end();
+    }
+    
+    next();
+  };
+}
+```
+
+### Aplicación de Middleware
+
+```typescript
+import { FoxFactory, Router } from 'fox-framework';
+import { securityMiddleware } from 'fox-framework/security';
+
+// Crear router
+const router = new Router();
+
+// Middleware global (se aplica a todas las rutas)
+router.use(loggerMiddleware);
+router.use(securityMiddleware());
+
+// Middleware en grupos de rutas
+const apiRouter = new Router();
+apiRouter.use(corsMiddleware({
+  origins: ['https://myapp.com'],
+  methods: 'GET,POST,PUT,DELETE',
+  headers: 'Content-Type,Authorization'
+}));
+
+// Middleware en rutas específicas
+router.get('/admin/dashboard', 
+  authMiddleware({ role: 'admin' }),
+  (req, res) => {
+    res.render('admin/dashboard');
+  }
+);
+
+// Encadenamiento de middleware
+router.post('/api/documents',
+  authMiddleware(),
+  validateBody(documentSchema),
+  rateLimiter({ max: 10, windowMs: 60000 }),
+  async (req, res) => {
+    // Lógica del controlador
+  }
+);
+
+// Crear servidor con el router
+const server = FoxFactory.createServer({
+  router,
+  port: 3000
+});
+
+server.start();
+```
+
+## Middleware de Seguridad
+
+Fox Framework incluye un conjunto completo de middleware de seguridad para proteger aplicaciones:
+
+### Security Headers
+
+```typescript
+import { securityHeaders } from 'fox-framework/security';
+
+router.use(securityHeaders({
+  // Prevenir que el navegador MIME-sniff la respuesta
+  noSniff: true,
+  
+  // Habilitar la protección XSS del navegador
+  xssFilter: true,
+  
+  // Prevenir clicjacking estableciendo X-Frame-Options
+  frameOptions: 'DENY', // o 'SAMEORIGIN'
+  
+  // Habilitar HTTP Strict Transport Security
+  hsts: {
+    maxAge: 63072000, // 2 años en segundos
+    includeSubDomains: true,
+    preload: true
+  },
+  
+  // Content-Security-Policy
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'", 'trusted-cdn.com'],
+    styleSrc: ["'self'", "'unsafe-inline'", 'trusted-cdn.com'],
+    imgSrc: ["'self'", 'data:', 'trusted-cdn.com'],
+    connectSrc: ["'self'", 'api.myservice.com'],
+    fontSrc: ["'self'", 'fonts.googleapis.com', 'fonts.gstatic.com'],
+    objectSrc: ["'none'"],
+    mediaSrc: ["'self'"],
+    frameSrc: ["'none'"]
+  },
+  
+  // Referrer-Policy
+  referrerPolicy: 'same-origin', // o 'strict-origin-when-cross-origin'
+  
+  // Feature-Policy / Permissions-Policy
+  permissionsPolicy: {
+    camera: ['none'],
+    microphone: ['none'],
+    geolocation: ['self'],
+    payment: ['self'],
+    usb: ['none']
+  }
+}));
+```
+
+### CORS (Cross-Origin Resource Sharing)
+
+```typescript
+import { cors } from 'fox-framework/security';
+
+router.use(cors({
+  // Orígenes permitidos
+  origins: ['https://app.example.com', 'https://admin.example.com'],
+  // o usar '*' para permitir cualquier origen (no recomendado en producción)
+  // origins: '*',
+  
+  // Métodos HTTP permitidos
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  
+  // Headers permitidos
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  
+  // Headers expuestos al cliente
+  exposeHeaders: ['Content-Range', 'X-RateLimit-Limit'],
+  
+  // Permitir enviar cookies en solicitudes cross-origin
+  credentials: true,
+  
+  // Tiempo máximo para cachear el pre-flight
+  maxAge: 86400, // 24 horas
+  
+  // Función para determinar origen dinámicamente
+  originValidator: (origin, req) => {
+    // Lógica personalizada para validar origen
+    return origin?.endsWith('.example.com') || false;
+  },
+  
+  // Función para personalizar respuesta CORS
+  preflightHandler: (req, res) => {
+    // Personalizar respuesta OPTIONS
+    res.setHeader('X-CORS-Custom', 'Fox Framework');
+  }
+}));
+```
+
+### CSRF Protection (Cross-Site Request Forgery)
+
+```typescript
+import { csrfProtection } from 'fox-framework/security';
+
+// Configuración básica
+router.use(csrfProtection({
+  // Nombre de la cookie que almacena el token
+  cookie: {
+    name: '_csrf',
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production'
+  },
+  
+  // Nombre del campo en formularios/peticiones
+  fieldName: '_csrf',
+  
+  // También se puede enviar en headers con este nombre
+  headerName: 'X-CSRF-Token',
+  
+  // Duración del token
+  ttl: 86400, // 24 horas
+  
+  // Rutas a excluir
+  ignorePaths: ['/api/webhook', '/public'],
+  
+  // Métodos a proteger
+  safeMethods: ['GET', 'HEAD', 'OPTIONS'], // estos no requieren token
+  
+  // Función para enviar error
+  onFailure: (req, res, next, error) => {
+    res.status(403).json({ error: 'Token CSRF inválido' });
+  }
+}));
+
+// En la vista (con pug/ejs/etc)
+// <form action="/profile" method="post">
+//   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+//   <!-- resto del formulario -->
+// </form>
+
+// Incluir el token en la respuesta para SPA
+router.get('/csrf-token', (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
+});
+
+// En el cliente JavaScript/SPA
+// fetch('/api/data', {
+//   method: 'POST',
+//   headers: {
+//     'Content-Type': 'application/json',
+//     'X-CSRF-Token': csrfToken
+//   },
+//   body: JSON.stringify(data)
+// });
+```
+
+### Rate Limiting
+
+```typescript
+import { rateLimit } from 'fox-framework/security';
+
+// Limitar solicitudes por IP
+router.use('/api', rateLimit({
+  // Número máximo de solicitudes permitidas
+  max: 100,
+  
+  // Ventana de tiempo en milisegundos
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  
+  // Clave para identificar al cliente (por defecto es IP)
+  keyGenerator: (req) => req.ip,
+  
+  // O usar una función personalizada para extraer identificador
+  // keyGenerator: (req) => req.headers['x-api-key'] || req.ip,
+  
+  // Almacenamiento para contadores
+  // Por defecto usa memoria, pero se puede usar Redis u otro store
+  store: new RedisStore({
+    client: redisClient,
+    prefix: 'rl:'
+  }),
+  
+  // Mensaje de error
+  message: 'Demasiadas solicitudes, por favor intenta más tarde',
+  
+  // Código de estado
+  statusCode: 429,
+  
+  // Headers en respuesta
+  headers: true, // incluir X-RateLimit-* headers
+  
+  // Función para determinar si se debe saltar la limitación
+  skip: (req) => {
+    // Por ejemplo, no limitar para usuarios administradores
+    return req.user?.role === 'admin';
+  },
+  
+  // Función para personalizar respuesta
+  handler: (req, res, next, options) => {
+    res.status(options.statusCode).json({
+      error: options.message,
+      retryAfter: Math.ceil(options.windowMs / 1000)
+    });
+  }
+}));
+
+// Diferentes límites para diferentes rutas
+router.post('/auth/login', rateLimit({
+  max: 5,
+  windowMs: 5 * 60 * 1000, // 5 minutos
+  message: 'Demasiados intentos de inicio de sesión'
+}), authController.login);
+```
+
+### Helmet (Seguridad en Cabeceras HTTP)
+
+```typescript
+import { helmet } from 'fox-framework/security';
+
+// Configuración completa
+router.use(helmet({
+  // Content Security Policy
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
+      imgSrc: ["'self'", 'data:'],
+      fontSrc: ["'self'", 'fonts.gstatic.com'],
+      connectSrc: ["'self'", 'api.example.com'],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  
+  // Cross-Origin-Embedder-Policy
+  crossOriginEmbedderPolicy: {
+    policy: 'require-corp'
+  },
+  
+  // Cross-Origin-Opener-Policy
+  crossOriginOpenerPolicy: {
+    policy: 'same-origin'
+  },
+  
+  // Cross-Origin-Resource-Policy
+  crossOriginResourcePolicy: {
+    policy: 'same-origin'
+  },
+  
+  // Desactivar características específicas
+  noSniff: true,
+  xssFilter: true,
+  dnsPrefetchControl: {
+    allow: false
+  },
+  
+  // Strict-Transport-Security
+  hsts: {
+    maxAge: 15552000, // 180 días
+    includeSubDomains: true,
+    preload: true
+  },
+  
+  // Referrer Policy
+  referrerPolicy: {
+    policy: 'strict-origin-when-cross-origin'
+  },
+  
+  // X-Frame-Options
+  frameguard: {
+    action: 'deny'
+  }
+}));
+
+// O usar configuración predeterminada
+router.use(helmet());
+```
+
+## Autenticación
+
+Fox Framework proporciona un sistema flexible para implementar diferentes estrategias de autenticación:
+
+### JWT (JSON Web Tokens)
+
+```typescript
+import { jwtAuth } from 'fox-framework/security';
+
+// Configuración de JWT
+const jwtMiddleware = jwtAuth({
+  // Clave secreta para firmar tokens
+  secretKey: process.env.JWT_SECRET_KEY,
+  
+  // Algoritmo de firma
+  algorithm: 'HS256', // o RS256 para claves públicas/privadas
+  
+  // Duración del token
+  expiresIn: '1d', // 1 día
+  
+  // Fuente del token (header, cookie, query)
+  tokenSource: {
+    header: 'Authorization', // Formato: "Bearer <token>"
+    headerFormat: 'Bearer',  // Extraer con formato específico
+    cookie: 'auth_token',    // Nombre de cookie alternativa
+    query: 'token'           // Parámetro de consulta alternativo
+  },
+  
+  // Validación personalizada
+  verifyToken: async (decoded, req) => {
+    // Verificar si el usuario aún existe o está activo
+    const user = await userService.findById(decoded.sub);
+    if (!user || !user.active) {
+      return false;
+    }
+    
+    // Añadir usuario al request
+    req.user = user;
+    return true;
+  },
+  
+  // Manejo de errores
+  onError: (err, req, res, next) => {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expirado' });
+    }
+    
+    res.status(401).json({ error: 'No autorizado' });
+  }
+});
+
+// Aplicar a todas las rutas de API
+router.use('/api', jwtMiddleware);
+
+// Aplicar a rutas específicas
+router.get('/api/protected', jwtMiddleware, (req, res) => {
+  res.json({ user: req.user });
+});
+
+// Generar token durante inicio de sesión
+router.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  try {
+    // Validar credenciales
+    const user = await userService.authenticate(email, password);
+    if (!user) {
+      return res.status(401).json({ error: 'Credenciales inválidas' });
+    }
+    
+    // Generar token JWT
+    const token = jwt.sign(
+      { 
+        sub: user.id,
+        name: user.name,
+        role: user.role 
+      },
+      process.env.JWT_SECRET_KEY,
+      { expiresIn: '1d' }
+    );
+    
+    // Enviar token
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+### Autenticación con Sesiones
+
+```typescript
+import { sessionAuth } from 'fox-framework/security';
+
+// Configuración de sesiones
+const sessionMiddleware = sessionAuth({
+  // Clave secreta para firmar cookies de sesión
+  secret: process.env.SESSION_SECRET,
+  
+  // Configuración de cookies
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000, // 1 día
+    sameSite: 'strict'
+  },
+  
+  // Store para sesiones
+  store: new RedisStore({
+    client: redisClient,
+    prefix: 'sess:'
+  }),
+  
+  // Prevenir ataques de fijación de sesión
+  resave: false,
+  
+  // Ahorrar espacio no guardando sesiones vacías
+  saveUninitialized: false,
+  
+  // Nombre de la cookie
+  name: 'fox.sid',
+  
+  // Opciones para rolling sessions
+  rolling: true,   // Renovar cookie en cada respuesta
+  
+  // Función para cargar el usuario
+  loadUser: async (req) => {
+    if (req.session.userId) {
+      req.user = await userService.findById(req.session.userId);
+    }
+  }
+});
+
+// Aplicar middleware de sesión global
+router.use(sessionMiddleware);
+
+// Ruta de login
+router.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  try {
+    const user = await userService.authenticate(email, password);
+    if (!user) {
+      return res.status(401).json({ error: 'Credenciales inválidas' });
+    }
+    
+    // Guardar ID de usuario en sesión
+    req.session.userId = user.id;
+    req.session.role = user.role;
+    
+    res.json({
+      message: 'Login exitoso',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Ruta de logout
+router.post('/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Error al cerrar sesión' });
+    }
+    
+    res.clearCookie('fox.sid');
+    res.json({ message: 'Sesión cerrada correctamente' });
+  });
+});
+
+// Middleware para proteger rutas
+function requireAuth(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+  
+  next();
+}
+
+router.get('/profile', requireAuth, (req, res) => {
+  res.json({ user: req.user });
+});
+```
+
+### Autenticación con API Keys
+
+```typescript
+import { apiKeyAuth } from 'fox-framework/security';
+
+// Configuración de API Keys
+const apiKeyMiddleware = apiKeyAuth({
+  // Fuentes donde buscar la API key
+  sources: [
+    { header: 'X-API-Key' },
+    { query: 'api_key' }
+  ],
+  
+  // Función para validar la API key
+  validator: async (apiKey, req) => {
+    // Buscar la key en la base de datos
+    const keyData = await apiKeyService.findByKey(apiKey);
+    
+    // Verificar si es válida
+    if (!keyData || !keyData.active) {
+      return false;
+    }
+    
+    // Verificar si no ha expirado
+    if (keyData.expiresAt && new Date(keyData.expiresAt) < new Date()) {
+      return false;
+    }
+    
+    // Guardar información asociada en el request
+    req.apiClient = {
+      id: keyData.clientId,
+      name: keyData.clientName,
+      permissions: keyData.permissions || []
+    };
+    
+    return true;
+  },
+  
+  // Manejo de errores
+  onError: (req, res) => {
+    res.status(401).json({
+      error: 'API key inválida o faltante'
+    });
+  }
+});
+
+// Aplicar a todas las rutas de API
+router.use('/api', apiKeyMiddleware);
+```
+
+### OAuth 2.0 / OpenID Connect
+
+```typescript
+import { oauth2Auth } from 'fox-framework/security';
+
+// Configuración OAuth2
+const oauth2Middleware = oauth2Auth({
+  // Configuración del proveedor
+  provider: {
+    name: 'google',
+    authorizationURL: 'https://accounts.google.com/o/oauth2/auth',
+    tokenURL: 'https://oauth2.googleapis.com/token',
+    userInfoURL: 'https://www.googleapis.com/oauth2/v3/userinfo',
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: 'https://myapp.com/auth/google/callback',
+    scope: ['profile', 'email']
+  },
+  
+  // Función para manejar el perfil del usuario
+  userProfileHandler: async (profile, tokens) => {
+    // Buscar usuario existente o crear uno nuevo
+    let user = await userService.findByEmail(profile.email);
+    
+    if (!user) {
+      // Crear nuevo usuario
+      user = await userService.create({
+        email: profile.email,
+        name: profile.name,
+        avatarUrl: profile.picture,
+        authProvider: 'google',
+        authProviderId: profile.sub
+      });
+    }
+    
+    return user;
+  },
+  
+  // Opciones de sesión
+  session: {
+    create: true, // Crear sesión automáticamente
+    key: 'userId'  // Clave en sesión para guardar ID de usuario
+  },
+  
+  // Manejo de éxito
+  successRedirect: '/dashboard',
+  
+  // Manejo de error
+  failureRedirect: '/login',
+  
+  // Estado para prevenir CSRF
+  state: true
+});
+
+// Rutas de autenticación
+router.get('/auth/google', oauth2Middleware.authorize());
+router.get('/auth/google/callback', oauth2Middleware.callback());
+
+// Ruta para iniciar sesión
+router.get('/login', (req, res) => {
+  res.render('login', {
+    googleAuthUrl: oauth2Middleware.getAuthorizationUrl()
+  });
+});
+```
+
+## Autorización
+
+Fox Framework proporciona múltiples estrategias para implementar control de acceso basado en roles y permisos:
+
+### RBAC (Role-Based Access Control)
+
+```typescript
+import { rbac } from 'fox-framework/security';
+
+// Definir roles y permisos
+const rbacMiddleware = rbac({
+  // Definición de roles y permisos
+  roles: {
+    guest: {
+      permissions: ['read:public']
+    },
+    user: {
+      inherits: ['guest'],
+      permissions: ['read:own', 'write:own']
+    },
+    editor: {
+      inherits: ['user'],
+      permissions: ['read:any', 'write:any']
+    },
+    admin: {
+      inherits: ['editor'],
+      permissions: ['delete:any', 'manage:users']
+    }
+  },
+  
+  // Función para obtener el rol del usuario
+  getUserRole: (req) => {
+    return req.user?.role || 'guest';
+  },
+  
+  // Función para verificar la propiedad del recurso
+  resourceOwnership: async (req, permission) => {
+    if (!permission.includes(':own')) {
+      return true; // No se requiere verificar propiedad
+    }
+    
+    const resourceId = req.params.id;
+    const userId = req.user?.id;
+    
+    if (!resourceId || !userId) {
+      return false;
+    }
+    
+    // Verificar si el recurso pertenece al usuario
+    const resource = await getResourceById(resourceId);
+    return resource?.userId === userId;
+  }
+});
+
+// Middleware para verificar permisos
+function checkPermission(permission) {
+  return (req, res, next) => {
+    rbacMiddleware.can(req, permission)
+      .then(allowed => {
+        if (!allowed) {
+          return res.status(403).json({
+            error: 'No tienes permiso para realizar esta acción'
+          });
+        }
+        next();
+      })
+      .catch(next);
+  };
+}
+
+// Aplicar a rutas específicas
+router.get('/posts/:id', checkPermission('read:any'), postController.getPost);
+router.put('/posts/:id', checkPermission('write:own'), postController.updatePost);
+router.delete('/posts/:id', checkPermission('delete:any'), postController.deletePost);
+
+// Control de acceso en rutas de administración
+router.use('/admin', checkPermission('manage:users'), adminRouter);
+```
+
+### ABAC (Attribute-Based Access Control)
+
+```typescript
+import { abac } from 'fox-framework/security';
+
+// Configurar ABAC
+const abacMiddleware = abac({
+  // Políticas de acceso
+  policies: {
+    // Política para editar post
+    'edit-post': {
+      // Función para evaluar la política
+      evaluate: async (context) => {
+        const { user, resource, action } = context;
+        
+        // Administradores siempre pueden editar
+        if (user.role === 'admin') {
+          return true;
+        }
+        
+        // Editores pueden editar cualquier post no publicado
+        if (user.role === 'editor' && !resource.published) {
+          return true;
+        }
+        
+        // Usuarios normales solo pueden editar sus propios posts
+        if (user.role === 'user') {
+          return resource.authorId === user.id;
+        }
+        
+        return false;
+      }
+    },
+    
+    // Política para ver posts
+    'view-post': {
+      evaluate: async (context) => {
+        const { user, resource } = context;
+        
+        // Posts publicados son públicos
+        if (resource.published) {
+          return true;
+        }
+        
+        // Solo autor y administradores pueden ver posts no publicados
+        return user?.role === 'admin' || resource.authorId === user?.id;
+      }
+    }
+  },
+  
+  // Función para obtener datos del usuario actual
+  getUserContext: (req) => {
+    return req.user || { role: 'guest' };
+  },
+  
+  // Cargar recursos según el tipo y ID
+  getResource: async (req, resourceType) => {
+    if (resourceType === 'post') {
+      const postId = req.params.id;
+      return postService.findById(postId);
+    }
+    return null;
+  }
+});
+
+// Middleware para verificar políticas
+function checkPolicy(policyName, resourceType) {
+  return async (req, res, next) => {
+    try {
+      const allowed = await abacMiddleware.check(req, {
+        policy: policyName,
+        resourceType,
+        action: req.method
+      });
+      
+      if (!allowed) {
+        return res.status(403).json({
+          error: 'Acceso denegado según la política de seguridad'
+        });
+      }
+      
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+// Aplicar a rutas
+router.get('/posts/:id', checkPolicy('view-post', 'post'), postController.getPost);
+router.put('/posts/:id', checkPolicy('edit-post', 'post'), postController.updatePost);
+```
+
+## Detección de Amenazas
+
+Fox Framework incluye herramientas para detectar y prevenir amenazas de seguridad comunes:
+
+### XSS Protection (Cross-Site Scripting)
+
+```typescript
+import { xssProtection } from 'fox-framework/security';
+
+// Configuración XSS
+router.use(xssProtection({
+  // Sanitización de entrada
+  sanitizeInput: true,
+  
+  // Sanitizar los siguientes campos
+  sanitizeFields: ['name', 'description', 'content', 'comment'],
+  
+  // Opciones avanzadas
+  sanitizeOptions: {
+    allowedTags: ['h1', 'h2', 'p', 'a', 'ul', 'ol', 'li', 'b', 'i', 'strong', 'em'],
+    allowedAttributes: {
+      'a': ['href', 'target', 'rel'],
+      '*': ['class', 'id']
+    },
+    selfClosing: ['img', 'br', 'hr'],
+    allowedSchemesByTag: {
+      'a': ['http', 'https', 'mailto']
+    }
+  },
+  
+  // Sanitizar cuerpo JSON
+  sanitizeBody: true,
+  
+  // Sanitizar query params
+  sanitizeQuery: true,
+  
+  // Sanitizar headers
+  sanitizeHeaders: ['user-agent', 'referer'],
+  
+  // Respuesta XSS
+  setXSSHeaders: true
+}));
+```
+
+### SQL Injection Prevention
+
+```typescript
+import { sqlInjectionProtection } from 'fox-framework/security';
+
+// Configuración de protección contra SQL Injection
+router.use(sqlInjectionProtection({
+  // Campos a monitorear
+  fields: ['search', 'query', 'filter', 'sort'],
+  
+  // Patrones peligrosos
+  patterns: [
+    /(\b)(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)(\b)/i,
+    /(\b)(UNION|JOIN|OR|AND)(\s+)(SELECT)/i,
+    /--/,
+    /;/,
+    /\/\*/,
+    /\*\//
+  ],
+  
+  // Función para manejar detecciones
+  onDetection: (req, res, next, details) => {
+    console.error('Posible SQL Injection detectada:', details);
+    
+    // Registrar el intento
+    securityLogger.warn('SQL Injection attempt', {
+      ip: req.ip,
+      path: req.path,
+      pattern: details.pattern,
+      value: details.value,
+      user: req.user?.id
+    });
+    
+    // Responder con error
+    res.status(403).json({
+      error: 'Caracteres no permitidos en la consulta'
+    });
+  }
+}));
+```
+
+## Auditoría y Logging
+
+### Security Audit Logging
+
+```typescript
+import { securityAudit } from 'fox-framework/security';
+
+// Configuración del log de auditoría de seguridad
+router.use(securityAudit({
+  // Eventos a registrar
+  events: {
+    // Autenticación
+    authentication: true, // Login, logout, fallos de autenticación
+    
+    // Autorización
+    authorization: true,  // Intentos de acceso denegados
+    
+    // Cambios de datos sensibles
+    dataAccess: {
+      enabled: true,
+      resources: ['users', 'payments', 'settings']
+    },
+    
+    // Cambios de configuración
+    configuration: true,
+    
+    // Detección de amenazas
+    threats: true
+  },
+  
+  // Niveles de detalle
+  detailLevel: 'high', // 'low', 'medium', 'high'
+  
+  // Dónde guardar los logs
+  storage: {
+    // Consola
+    console: process.env.NODE_ENV !== 'production',
+    
+    // Archivo
+    file: {
+      enabled: true,
+      path: './logs/security.log',
+      rotation: {
+        size: '10M',
+        interval: '1d',
+        maxFiles: 30
+      }
+    },
+    
+    // Base de datos
+    database: {
+      enabled: true,
+      model: 'SecurityLog',
+      batchSize: 10, // Guardar en lotes para mejor rendimiento
+      ttl: 365 // días de retención
+    },
+    
+    // Servicio externo
+    remote: {
+      enabled: process.env.NODE_ENV === 'production',
+      url: process.env.SECURITY_LOG_SERVICE,
+      token: process.env.SECURITY_LOG_TOKEN,
+      batchInterval: 60000 // Enviar cada 1 minuto
+    }
+  },
+  
+  // Enmascaramiento de datos sensibles
+  sensitiveFields: ['password', 'token', 'creditCard', 'ssn'],
+  
+  // Incluir estos campos en cada log
+  includeFields: {
+    request: ['method', 'path', 'query', 'ip', 'headers.user-agent'],
+    response: ['statusCode'],
+    user: ['id', 'username', 'role']
+  }
+}));
+
+// Registrar eventos manualmente
+router.post('/settings/update', (req, res) => {
+  try {
+    // Actualizar configuración
+    const result = settingsService.update(req.body);
+    
+    // Registrar en auditoría
+    req.audit('settings.update', {
+      before: result.previousSettings,
+      after: result.newSettings,
+      importance: 'high'
+    });
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+## Encriptación y Manejo de Datos Sensibles
+
+### Encriptación de Datos
+
+```typescript
+import { encryptionService } from 'fox-framework/security';
+
+// Inicializar servicio de encriptación
+const encryption = encryptionService({
+  // Clave maestra para encriptación
+  masterKey: process.env.ENCRYPTION_MASTER_KEY,
+  
+  // Algoritmo a usar
+  algorithm: 'aes-256-gcm', // Algoritmo recomendado
+  
+  // Función para derivar claves
+  keyDerivation: {
+    iterations: 10000,
+    digest: 'sha512'
+  },
+  
+  // Rotación de claves
+  keyRotation: {
+    enabled: true,
+    interval: '90d', // Rotar cada 90 días
+    previousKeys: 2  // Mantener 2 claves anteriores para descifrado
+  }
+});
+
+// Ejemplo de uso
+router.post('/users', async (req, res) => {
+  try {
+    const user = req.body;
+    
+    // Encriptar datos sensibles
+    if (user.taxId) {
+      user.taxId = await encryption.encrypt(user.taxId);
+    }
+    
+    if (user.phone) {
+      user.phone = await encryption.encrypt(user.phone);
+    }
+    
+    // Guardar usuario
+    const result = await userService.create(user);
+    
+    res.status(201).json({
+      id: result.id,
+      name: result.name,
+      email: result.email
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Descifrado
+router.get('/users/:id', async (req, res) => {
+  try {
+    const user = await userService.findById(req.params.id);
+    
+    // Desencriptar datos sensibles
+    if (user.taxId) {
+      user.taxId = await encryption.decrypt(user.taxId);
+    }
+    
+    if (user.phone) {
+      user.phone = await encryption.decrypt(user.phone);
+    }
+    
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+### Password Hashing
+
+```typescript
+import { passwordService } from 'fox-framework/security';
+
+// Inicializar servicio de contraseñas
+const password = passwordService({
+  // Algoritmo para hash
+  algorithm: 'argon2id', // 'argon2id' o 'bcrypt'
+  
+  // Opciones para Argon2id
+  argon2: {
+    memoryCost: 65536, // 64 MB
+    timeCost: 3,       // 3 iteraciones
+    parallelism: 4     // 4 hilos
+  },
+  
+  // Opciones para bcrypt
+  bcrypt: {
+    rounds: 12  // Factor de trabajo
+  },
+  
+  // Opciones de pepper (secreto adicional)
+  pepper: {
+    enabled: true,
+    secret: process.env.PASSWORD_PEPPER,
+    encoding: 'hex'
+  }
+});
+
+// Crear hash
+router.post('/auth/register', async (req, res) => {
+  try {
+    const { email, password: plainPassword, name } = req.body;
+    
+    // Hash de contraseña
+    const passwordHash = await password.hash(plainPassword);
+    
+    // Crear usuario
+    const user = await userService.create({
+      email,
+      password: passwordHash,
+      name
+    });
+    
+    res.status(201).json({
+      id: user.id,
+      name: user.name,
+      email: user.email
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Verificar contraseña
+router.post('/auth/login', async (req, res) => {
+  try {
+    const { email, password: plainPassword } = req.body;
+    
+    // Buscar usuario
+    const user = await userService.findByEmail(email);
+    if (!user) {
+      return res.status(401).json({ error: 'Credenciales inválidas' });
+    }
+    
+    // Verificar contraseña
+    const passwordMatch = await password.verify(plainPassword, user.password);
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Credenciales inválidas' });
+    }
+    
+    // Verificar si el hash necesita actualización
+    if (password.needsRehash(user.password)) {
+      // Generar nuevo hash y actualizar
+      const newHash = await password.hash(plainPassword);
+      await userService.updatePassword(user.id, newHash);
+    }
+    
+    // Generar sesión/token
+    // ...
+    
+    res.json({
+      message: 'Login exitoso'
+      // Resto de la respuesta
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+## Configuración de Seguridad para Entornos de Producción
+
+Fox Framework proporciona herramientas para configurar correctamente la seguridad en entornos de producción:
+
+```typescript
+import { FoxFactory, securityConfig } from 'fox-framework';
+import { 
+  securityHeaders, 
+  cors, 
+  csrfProtection, 
+  rateLimit,
+  sessionAuth,
+  securityAudit
+} from 'fox-framework/security';
+
+// Crear configuración de seguridad para producción
+const security = securityConfig({
+  // Entorno
+  environment: process.env.NODE_ENV,
+  
+  // Claves secretas
+  secrets: {
+    session: process.env.SESSION_SECRET,
+    csrf: process.env.CSRF_SECRET,
+    jwt: process.env.JWT_SECRET
+  },
+  
+  // Configuración CORS
+  cors: {
+    origins: [
+      'https://app.example.com',
+      'https://admin.example.com'
+    ],
+    credentials: true
+  },
+  
+  // Cabeceras de seguridad
+  headers: {
+    hsts: true,
+    noSniff: true,
+    xssFilter: true,
+    frameOptions: 'DENY',
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"]
+      // ...otras opciones CSP
+    }
+  },
+  
+  // Prevención de amenazas
+  threatProtection: {
+    xss: true,
+    sqlInjection: true,
+    clickjacking: true
+  },
+  
+  // Rate limiting
+  rateLimit: {
+    enabled: true,
+    maxRequests: 100,
+    timeWindow: 60 * 1000, // 1 minuto
+    whitelistedIPs: ['192.168.1.1']
+  },
+  
+  // CSRF
+  csrf: {
+    enabled: true,
+    ignorePaths: ['/api/webhook', '/api/external']
+  },
+  
+  // Auditoría
+  audit: {
+    enabled: true,
+    logPath: './logs/security',
+    detailLevel: 'high'
+  }
+});
+
+// Aplicar configuración de seguridad al servidor
+const server = FoxFactory.createServer({
+  router: router,
+  port: process.env.PORT || 3000,
+  security: security
+});
+
+server.start();
+```
+
+## Mejores Prácticas de Seguridad
+
+Fox Framework fomenta las siguientes mejores prácticas:
+
+1. **Defense in Depth**: Implementar múltiples capas de seguridad
+2. **Principle of Least Privilege**: Otorgar solo los permisos necesarios
+3. **Fail Securely**: Los errores no deben comprometer la seguridad
+4. **Secure by Default**: Configuraciones seguras por defecto
+5. **Keep Security Simple**: Evitar complejidad innecesaria
+6. **Fix Security Issues Correctly**: Resolver problemas correctamente, no solo síntomas
+7. **Establish Secure Defaults**: Establecer valores predeterminados seguros
+8. **Positive Security Model**: Permitir solo lo conocido como seguro
+
+## Resumen
+
+El sistema de seguridad y middleware de Fox Framework proporciona herramientas completas para proteger aplicaciones web modernas:
+
+- **Headers de Seguridad**: Protección contra ataques comunes
+- **Autenticación**: Múltiples estrategias (JWT, OAuth, API Keys, sesiones)
+- **Autorización**: Control de acceso basado en roles y atributos
+- **Auditoría**: Registro detallado de eventos de seguridad
+- **Encriptación**: Protección de datos sensibles
+- **Prevención**: Mitigación de ataques XSS, CSRF, SQL Injection
+
+Estas herramientas permiten a los desarrolladores implementar prácticas de seguridad robustas con configuración mínima, siguiendo los estándares y recomendaciones más recientes de la industria.

@@ -1,0 +1,1488 @@
+# Sistema de Plugins
+
+El Sistema de Plugins de Fox Framework proporciona una arquitectura extensible que permite añadir funcionalidades, modificar el comportamiento existente e integrar herramientas de terceros sin modificar el código central del framework. Esta arquitectura modular facilita la reutilización de código, mejora la mantenibilidad y permite personalizar las aplicaciones según las necesidades específicas.
+
+## Características Principales
+
+- **Arquitectura modular**: Extensión del framework sin modificar su núcleo
+- **Carga dinámica**: Plugins cargados bajo demanda
+- **Ciclo de vida definido**: Hooks para inicialización, configuración y limpieza
+- **Inyección de dependencias**: Integración natural con el contenedor DI
+- **Configuración centralizada**: Gestión unificada de opciones
+- **API estable**: Interfaz consistente para desarrollar plugins
+- **Descubrimiento automático**: Detección y carga automática de plugins disponibles
+- **Versionado semántico**: Compatibilidad controlada entre versiones
+- **Documentación integrada**: Sistema de metadatos y autodocumentación
+
+## Uso Básico
+
+### Instalación de Plugins
+
+Los plugins pueden instalarse a través de npm:
+
+```bash
+# Instalar un plugin
+npm install fox-plugin-cache
+
+# O a través de la CLI de Fox
+fox plugin:install cache
+```
+
+### Registro de Plugins
+
+Una vez instalado, el plugin debe registrarse en la aplicación:
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+import { CachePlugin } from 'fox-plugin-cache';
+
+// Crear servidor con plugins
+const server = FoxFactory.createServer({
+  // ... configuración básica
+  
+  // Registro de plugins
+  plugins: [
+    // Plugin sin configuración
+    new CachePlugin(),
+    
+    // Plugin con opciones
+    new AuthPlugin({
+      secretKey: process.env.JWT_SECRET,
+      expiresIn: '1d',
+      refreshToken: true
+    }),
+    
+    // Registro condicional
+    process.env.NODE_ENV === 'development' 
+      ? new DevToolsPlugin() 
+      : undefined,
+  ].filter(Boolean) // Filtrar valores undefined
+});
+
+// Iniciar servidor con plugins cargados
+server.start();
+```
+
+### Configuración de Plugins
+
+La configuración de plugins también puede hacerse a través de un archivo dedicado:
+
+```typescript
+// plugins.config.ts
+import { PluginRegistry } from 'fox-framework/core';
+import { CachePlugin } from 'fox-plugin-cache';
+import { AuthPlugin } from 'fox-plugin-auth';
+import { LogPlugin } from 'fox-plugin-log';
+
+export default PluginRegistry.configure([
+  {
+    plugin: CachePlugin,
+    config: {
+      driver: 'redis',
+      host: process.env.REDIS_HOST,
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      ttl: 3600
+    },
+    enabled: true
+  },
+  {
+    plugin: AuthPlugin,
+    config: {
+      secretKey: process.env.JWT_SECRET,
+      expiresIn: '1d',
+      refreshToken: true
+    },
+    enabled: true
+  },
+  {
+    plugin: LogPlugin,
+    config: {
+      level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+      format: 'json',
+      transports: ['file', 'console']
+    },
+    enabled: process.env.NODE_ENV !== 'test'
+  }
+]);
+
+// En server.ts
+import { FoxFactory } from 'fox-framework/core';
+import pluginsConfig from './plugins.config';
+
+const server = FoxFactory.createServer({
+  // ... otras configuraciones
+  plugins: pluginsConfig
+});
+```
+
+## Creación de Plugins
+
+### Estructura Básica
+
+Un plugin en Fox Framework sigue esta estructura básica:
+
+```typescript
+import { Plugin, PluginContext, PluginConfig } from 'fox-framework/core/plugin';
+
+// Definición de opciones del plugin
+export interface CachePluginOptions extends PluginConfig {
+  driver: 'memory' | 'redis' | 'memcached';
+  ttl?: number;
+  host?: string;
+  port?: number;
+  prefix?: string;
+}
+
+// Implementación del plugin
+export class CachePlugin implements Plugin<CachePluginOptions> {
+  // Metadatos del plugin
+  public readonly name = 'cache';
+  public readonly version = '1.0.0';
+  public readonly dependencies = [];
+  
+  // Opciones con valores por defecto
+  private options: CachePluginOptions = {
+    driver: 'memory',
+    ttl: 3600,
+    prefix: 'fox:'
+  };
+  
+  // Driver de caché
+  private driver: CacheDriver;
+  
+  constructor(options?: Partial<CachePluginOptions>) {
+    // Combinar opciones proporcionadas con defaults
+    this.options = { ...this.options, ...options };
+  }
+  
+  // Método de instalación - ejecutado durante la inicialización del servidor
+  async install(context: PluginContext): Promise<void> {
+    // Inicializar driver según configuración
+    this.driver = await this.createDriver();
+    
+    // Registrar servicios en el contenedor de DI
+    context.container.register('cache', this.driver);
+    context.container.register('cacheManager', this);
+    
+    // Registrar middleware si es necesario
+    if (this.options.enableMiddleware) {
+      context.server.use(this.createMiddleware());
+    }
+    
+    // Extender el contexto HTTP
+    context.server.extendContext('cache', (ctx) => this.driver);
+    
+    // Registrar comandos en la CLI
+    context.cli?.registerCommand('cache:clear', this.clearCacheCommand);
+    
+    // Log de instalación exitosa
+    context.logger.info(`Cache plugin installed with ${this.options.driver} driver`);
+  }
+  
+  // Método de arranque - ejecutado justo antes de iniciar el servidor
+  async boot(context: PluginContext): Promise<void> {
+    // Conectar con servicios externos si es necesario
+    if (this.options.driver !== 'memory') {
+      await this.driver.connect();
+    }
+    
+    // Registrar hooks para eventos del ciclo de vida
+    context.server.onShutdown(async () => {
+      await this.driver.disconnect();
+    });
+  }
+  
+  // Método de limpieza - ejecutado cuando se detiene el servidor
+  async uninstall(context: PluginContext): Promise<void> {
+    // Liberar recursos
+    await this.driver.disconnect();
+    
+    // Log de desinstalación
+    context.logger.info('Cache plugin uninstalled');
+  }
+  
+  // Métodos públicos del plugin
+  async get<T>(key: string): Promise<T | null> {
+    return this.driver.get(this.buildKey(key));
+  }
+  
+  async set<T>(key: string, value: T, ttl?: number): Promise<void> {
+    return this.driver.set(this.buildKey(key), value, ttl || this.options.ttl);
+  }
+  
+  async delete(key: string): Promise<void> {
+    return this.driver.delete(this.buildKey(key));
+  }
+  
+  async clear(): Promise<void> {
+    return this.driver.clear();
+  }
+  
+  // Métodos privados
+  private buildKey(key: string): string {
+    return `${this.options.prefix}${key}`;
+  }
+  
+  private async createDriver(): Promise<CacheDriver> {
+    switch (this.options.driver) {
+      case 'redis':
+        return new RedisCacheDriver(this.options);
+      case 'memcached':
+        return new MemcachedCacheDriver(this.options);
+      case 'memory':
+      default:
+        return new MemoryCacheDriver(this.options);
+    }
+  }
+  
+  private createMiddleware() {
+    return async (ctx, next) => {
+      // Implementación de middleware
+      const key = `http:${ctx.method}:${ctx.url}`;
+      
+      // Verificar si la respuesta está en caché
+      const cached = await this.get(key);
+      if (cached) {
+        return cached;
+      }
+      
+      // Ejecutar el resto del pipeline
+      await next();
+      
+      // Almacenar respuesta en caché
+      await this.set(key, ctx.body);
+    };
+  }
+  
+  private clearCacheCommand = async (args) => {
+    await this.clear();
+    return { message: 'Cache cleared successfully' };
+  }
+}
+```
+
+### Plugin con Decoradores
+
+Los plugins también pueden implementarse utilizando decoradores para una sintaxis más declarativa:
+
+```typescript
+import { Plugin, PluginMeta, Inject, Hook, Command } from 'fox-framework/core/plugin';
+
+@PluginMeta({
+  name: 'auth',
+  version: '1.0.0',
+  description: 'Authentication plugin for Fox Framework',
+  dependencies: ['cache']
+})
+export class AuthPlugin implements Plugin<AuthPluginOptions> {
+  private options: AuthPluginOptions;
+  
+  @Inject('cache')
+  private cacheService: CacheService;
+  
+  @Inject('config')
+  private config: ConfigService;
+  
+  constructor(options?: Partial<AuthPluginOptions>) {
+    this.options = { ...DEFAULT_OPTIONS, ...options };
+  }
+  
+  @Hook('install')
+  async onInstall(context: PluginContext): Promise<void> {
+    // Registrar servicios
+    context.container.register('auth', new AuthService(this.options));
+    
+    // Registrar middleware
+    context.server.use(this.createAuthMiddleware());
+    
+    // Registrar rutas
+    this.registerRoutes(context.server);
+  }
+  
+  @Hook('boot')
+  async onBoot(context: PluginContext): Promise<void> {
+    // Inicializar servicios
+    await this.migrateIfNeeded();
+    
+    // Registrar estrategias de autenticación
+    await this.registerStrategies();
+  }
+  
+  @Command('auth:create-user')
+  async createUserCommand(args): Promise<void> {
+    // Implementación del comando
+    const { username, password, role } = args;
+    const authService = this.container.get('auth');
+    await authService.createUser({ username, password, role });
+    return { message: `User ${username} created successfully` };
+  }
+  
+  // Otros métodos del plugin...
+}
+```
+
+## API del Sistema de Plugins
+
+### Interfaz Plugin
+
+La interfaz principal que todos los plugins deben implementar:
+
+```typescript
+interface Plugin<T extends PluginConfig = PluginConfig> {
+  // Propiedades requeridas
+  readonly name: string;
+  readonly version: string;
+  
+  // Propiedades opcionales
+  readonly description?: string;
+  readonly dependencies?: string[];
+  readonly optionalDependencies?: string[];
+  
+  // Métodos del ciclo de vida
+  install?(context: PluginContext): Promise<void> | void;
+  boot?(context: PluginContext): Promise<void> | void;
+  uninstall?(context: PluginContext): Promise<void> | void;
+  
+  // Método para validar configuración
+  validateConfig?(config: Partial<T>): boolean | Promise<boolean>;
+}
+```
+
+### Contexto del Plugin
+
+El contexto proporcionado a los plugins durante la inicialización:
+
+```typescript
+interface PluginContext {
+  // Acceso al servidor
+  server: FoxServerInterface;
+  
+  // Contenedor de inyección de dependencias
+  container: Container;
+  
+  // Acceso a servicios básicos
+  logger: LoggerInterface;
+  config: ConfigInterface;
+  events: EventEmitterInterface;
+  
+  // Acceso a otros plugins ya instalados
+  plugins: Map<string, Plugin>;
+  
+  // Herramientas CLI (si disponible)
+  cli?: CliInterface;
+  
+  // Entorno y metadatos
+  env: string;
+  rootPath: string;
+}
+```
+
+### Hooks del Ciclo de Vida
+
+Los plugins pueden implementar estos métodos para integrarse en el ciclo de vida de la aplicación:
+
+1. **install**: Ejecutado durante la inicialización del servidor, antes de arrancar
+2. **boot**: Ejecutado justo antes de comenzar a escuchar conexiones
+3. **uninstall**: Ejecutado cuando el servidor se está cerrando
+
+```typescript
+// En server.ts
+const server = FoxFactory.createServer({ plugins: [...] });
+
+// 1. Se ejecuta Plugin.install() para cada plugin en orden de dependencias
+await server.initialize();
+
+// 2. Se ejecuta Plugin.boot() para cada plugin
+await server.start();
+
+// 3. Se ejecuta Plugin.uninstall() cuando la aplicación se detiene
+await server.stop();
+```
+
+## Categorías de Plugins
+
+### Plugins Oficiales
+
+Fox Framework proporciona plugins oficiales para funcionalidades comunes:
+
+```typescript
+// Plugin de caché
+import { CachePlugin } from 'fox-framework/plugins/cache';
+const server = FoxFactory.createServer({
+  plugins: [
+    new CachePlugin({
+      driver: 'redis',
+      host: 'localhost',
+      port: 6379
+    })
+  ]
+});
+
+// Plugin de autenticación
+import { AuthPlugin } from 'fox-framework/plugins/auth';
+const server = FoxFactory.createServer({
+  plugins: [
+    new AuthPlugin({
+      jwt: {
+        secret: 'your-secret-key',
+        expiresIn: '1d'
+      },
+      providers: ['local', 'oauth']
+    })
+  ]
+});
+
+// Plugin de validación
+import { ValidationPlugin } from 'fox-framework/plugins/validation';
+const server = FoxFactory.createServer({
+  plugins: [
+    new ValidationPlugin({
+      mode: 'strict',
+      customValidators: {
+        isBusinessEmail: (value) => {
+          return /^[\w.-]+@(?!gmail\.com)(?!hotmail\.com)(?!yahoo\.com).+\.\w+$/.test(value);
+        }
+      }
+    })
+  ]
+});
+```
+
+### Plugins de Terceros
+
+Los plugins de terceros siguen la misma interfaz y se pueden instalar desde npm:
+
+```bash
+# Instalar plugin de terceros
+npm install fox-plugin-stripe
+```
+
+```typescript
+import { StripePlugin } from 'fox-plugin-stripe';
+
+const server = FoxFactory.createServer({
+  plugins: [
+    new StripePlugin({
+      apiKey: process.env.STRIPE_API_KEY,
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET
+    })
+  ]
+});
+
+// Uso en un controlador
+@Controller('/payments')
+export class PaymentController {
+  @Inject('stripe')
+  private stripeService: StripeService;
+  
+  @Post('/charge')
+  async createCharge(ctx: HttpContext) {
+    const { amount, token, currency = 'usd' } = ctx.body;
+    
+    const charge = await this.stripeService.createCharge({
+      amount,
+      currency,
+      source: token,
+      description: 'Cargo desde mi aplicación'
+    });
+    
+    return { success: true, charge };
+  }
+}
+```
+
+### Plugins Personalizados
+
+Puedes crear plugins personalizados para tu aplicación:
+
+```typescript
+// src/plugins/analytics/index.ts
+import { Plugin, PluginContext } from 'fox-framework/core/plugin';
+import { AnalyticsService } from './services/analytics.service';
+import { analyticsMiddleware } from './middleware/analytics.middleware';
+
+export interface AnalyticsPluginOptions {
+  provider: 'google' | 'mixpanel' | 'custom';
+  trackingId?: string;
+  apiKey?: string;
+  sampleRate?: number;
+  customEvents?: string[];
+}
+
+export class AnalyticsPlugin implements Plugin<AnalyticsPluginOptions> {
+  public readonly name = 'analytics';
+  public readonly version = '1.0.0';
+  public readonly dependencies = ['logger'];
+  
+  private options: AnalyticsPluginOptions;
+  private service: AnalyticsService;
+  
+  constructor(options?: Partial<AnalyticsPluginOptions>) {
+    this.options = {
+      provider: 'google',
+      sampleRate: 100,
+      customEvents: [],
+      ...options
+    };
+  }
+  
+  async install(context: PluginContext): Promise<void> {
+    // Crear servicio de analytics
+    this.service = new AnalyticsService(this.options);
+    
+    // Registrar en el contenedor
+    context.container.register('analytics', this.service);
+    
+    // Middleware para tracking automático
+    context.server.use(analyticsMiddleware(this.options));
+    
+    // Extender contexto HTTP
+    context.server.extendContext('track', (ctx) => 
+      (event: string, properties?: Record<string, any>) => 
+        this.service.trackEvent(event, { 
+          userId: ctx.auth?.user?.id,
+          sessionId: ctx.cookies.get('sessionId'),
+          ip: ctx.ip,
+          userAgent: ctx.headers['user-agent'],
+          ...properties
+        })
+    );
+    
+    context.logger.info('Analytics plugin installed');
+  }
+  
+  async boot(context: PluginContext): Promise<void> {
+    // Iniciar conexión con el proveedor
+    await this.service.connect();
+    
+    // Registrar evento de inicio de aplicación
+    this.service.trackEvent('app_started', {
+      environment: context.env,
+      serverTime: new Date().toISOString()
+    });
+  }
+  
+  async uninstall(context: PluginContext): Promise<void> {
+    // Enviar eventos pendientes antes de cerrar
+    await this.service.flush();
+  }
+}
+```
+
+Uso del plugin personalizado:
+
+```typescript
+// server.ts
+import { FoxFactory } from 'fox-framework/core';
+import { AnalyticsPlugin } from './plugins/analytics';
+
+const server = FoxFactory.createServer({
+  plugins: [
+    new AnalyticsPlugin({
+      provider: 'mixpanel',
+      apiKey: process.env.MIXPANEL_API_KEY,
+      customEvents: ['purchase_completed', 'signup_success']
+    })
+  ]
+});
+
+// En un controlador
+@Controller('/products')
+export class ProductController {
+  @Post('/:id/purchase')
+  async purchaseProduct(ctx: HttpContext) {
+    const { id } = ctx.params;
+    const { quantity, paymentMethod } = ctx.body;
+    
+    // Lógica de compra...
+    const purchase = await this.productService.purchase(id, quantity, paymentMethod);
+    
+    // Tracking del evento con el plugin de analytics
+    ctx.track('purchase_completed', {
+      productId: id,
+      quantity,
+      revenue: purchase.total,
+      paymentMethod
+    });
+    
+    return { success: true, purchase };
+  }
+}
+```
+
+## Gestión de Dependencias entre Plugins
+
+### Declaración de Dependencias
+
+Los plugins pueden declarar dependencias de otros plugins:
+
+```typescript
+export class PaymentPlugin implements Plugin {
+  public readonly name = 'payment';
+  public readonly version = '1.0.0';
+  
+  // Este plugin requiere que estén instalados los plugins de auth y cache
+  public readonly dependencies = ['auth', 'cache'];
+  
+  // Estos plugins se usarán si están disponibles, pero no son obligatorios
+  public readonly optionalDependencies = ['analytics', 'notification'];
+  
+  // Resto de implementación...
+}
+```
+
+### Resolución de Dependencias
+
+El sistema de plugins resolverá automáticamente las dependencias y las cargará en el orden correcto:
+
+```typescript
+// Registro de múltiples plugins con dependencias
+const server = FoxFactory.createServer({
+  plugins: [
+    new CachePlugin(),
+    new AuthPlugin(),
+    new PaymentPlugin(), // Depende de auth y cache
+    new NotificationPlugin() // Opcional para PaymentPlugin
+  ]
+});
+
+// El sistema cargará en este orden:
+// 1. CachePlugin
+// 2. AuthPlugin
+// 3. PaymentPlugin
+// 4. NotificationPlugin
+```
+
+Si hay dependencias circulares o faltantes, el sistema arrojará un error:
+
+```
+Error: Unresolved plugin dependencies:
+- Plugin 'payment' depends on 'logging' which is not installed
+- Circular dependency detected: auth -> rbac -> auth
+```
+
+### Acceso a Otros Plugins
+
+Un plugin puede acceder a otros plugins a través del contexto:
+
+```typescript
+export class NotificationPlugin implements Plugin {
+  async install(context: PluginContext): Promise<void> {
+    // Acceder a otro plugin
+    const cachePlugin = context.plugins.get('cache');
+    
+    if (cachePlugin) {
+      // Usar funcionalidades del plugin de caché
+      this.cache = cachePlugin;
+      
+      // Registrar función para limpiar caché de notificaciones
+      context.events.on('notification:sent', async (notification) => {
+        await this.cache.delete(`notification:${notification.id}`);
+      });
+    }
+  }
+}
+```
+
+## Configuración Avanzada
+
+### Activación Condicional
+
+Activar plugins basados en condiciones:
+
+```typescript
+// plugins.config.ts
+import { PluginRegistry } from 'fox-framework/core';
+
+export default PluginRegistry.configure([
+  {
+    plugin: DevToolsPlugin,
+    config: { /* opciones */ },
+    enabled: process.env.NODE_ENV === 'development'
+  },
+  {
+    plugin: MonitoringPlugin,
+    config: { /* opciones */ },
+    enabled: process.env.ENABLE_MONITORING === 'true'
+  }
+]);
+```
+
+### Configuración por Entorno
+
+Cargar diferentes configuraciones según el entorno:
+
+```typescript
+// plugins/index.ts
+import baseConfig from './plugins.base';
+import devConfig from './plugins.dev';
+import prodConfig from './plugins.prod';
+import testConfig from './plugins.test';
+
+const configs = {
+  development: devConfig,
+  production: prodConfig,
+  test: testConfig
+};
+
+export default {
+  ...baseConfig,
+  ...(configs[process.env.NODE_ENV] || {})
+};
+```
+
+### Extensión de Plugins Existentes
+
+Extender la funcionalidad de plugins existentes:
+
+```typescript
+import { CachePlugin } from 'fox-framework/plugins/cache';
+
+// Extender un plugin con funcionalidades adicionales
+class EnhancedCachePlugin extends CachePlugin {
+  // Sobrescribir método original
+  async install(context: PluginContext): Promise<void> {
+    // Llamar a la implementación original
+    await super.install(context);
+    
+    // Añadir funcionalidad personalizada
+    context.events.on('cache:miss', (key) => {
+      context.logger.warn(`Cache miss for key: ${key}`);
+    });
+    
+    // Registrar métodos adicionales
+    this.registerAdditionalMethods(context);
+  }
+  
+  // Añadir método personalizado
+  async getOrFetch<T>(key: string, fetchFn: () => Promise<T>, ttl?: number): Promise<T> {
+    const cached = await this.get<T>(key);
+    
+    if (cached !== null) {
+      return cached;
+    }
+    
+    const freshData = await fetchFn();
+    await this.set(key, freshData, ttl);
+    
+    return freshData;
+  }
+  
+  private registerAdditionalMethods(context: PluginContext) {
+    // Extender el contexto con nuevo método
+    context.server.extendContext('cacheOrFetch', (ctx) => 
+      async <T>(key: string, fetchFn: () => Promise<T>, ttl?: number) => 
+        this.getOrFetch(key, fetchFn, ttl)
+    );
+  }
+}
+```
+
+## Hooks y Eventos
+
+### Sistema de Eventos
+
+Los plugins pueden comunicarse a través de eventos:
+
+```typescript
+// En un plugin
+export class PaymentPlugin implements Plugin {
+  async install(context: PluginContext): Promise<void> {
+    // Registrar servicio
+    const paymentService = new PaymentService();
+    context.container.register('payment', paymentService);
+    
+    // Publicar eventos cuando ocurran acciones importantes
+    paymentService.on('payment:successful', (payment) => {
+      context.events.emit('payment:successful', payment);
+    });
+    
+    paymentService.on('payment:failed', (payment, error) => {
+      context.events.emit('payment:failed', { payment, error });
+    });
+  }
+}
+
+// En otro plugin que reacciona a esos eventos
+export class NotificationPlugin implements Plugin {
+  async install(context: PluginContext): Promise<void> {
+    // Suscribirse a eventos de pago
+    context.events.on('payment:successful', async (payment) => {
+      await this.sendSuccessNotification(payment);
+    });
+    
+    context.events.on('payment:failed', async ({ payment, error }) => {
+      await this.sendFailureNotification(payment, error);
+    });
+  }
+}
+```
+
+### Hooks del Servidor
+
+Los plugins pueden engancharse en el ciclo de vida del servidor:
+
+```typescript
+export class AuditPlugin implements Plugin {
+  async install(context: PluginContext): Promise<void> {
+    // Hook antes de procesar una petición
+    context.server.onRequest(async (ctx, next) => {
+      const startTime = Date.now();
+      ctx.audit = {
+        requestId: generateUuid(),
+        timestamp: new Date().toISOString(),
+        user: ctx.auth?.user?.id || 'anonymous'
+      };
+      
+      try {
+        await next();
+      } finally {
+        ctx.audit.duration = Date.now() - startTime;
+        ctx.audit.statusCode = ctx.status;
+        
+        // Registrar la auditoría
+        await this.auditService.log(ctx.audit);
+      }
+    });
+    
+    // Hook cuando ocurre un error
+    context.server.onError(async (error, ctx) => {
+      await this.auditService.logError({
+        requestId: ctx.audit?.requestId,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          code: error.code
+        }
+      });
+    });
+    
+    // Hook cuando el servidor se está apagando
+    context.server.onShutdown(async () => {
+      await this.auditService.flush();
+      context.logger.info('Audit records flushed successfully');
+    });
+  }
+}
+```
+
+## Plugins que Modifican el Core
+
+Algunos plugins pueden modificar el comportamiento central del framework:
+
+### Modificar el Pipeline HTTP
+
+```typescript
+export class PerformancePlugin implements Plugin {
+  async install(context: PluginContext): Promise<void> {
+    // Reemplazar el pipeline HTTP estándar con uno personalizado
+    context.server.setRequestHandler(async (req, res) => {
+      const ctx = await context.server.createContext(req, res);
+      
+      // Añadir métricas de rendimiento
+      const startTime = process.hrtime.bigint();
+      
+      try {
+        // Procesar con pipeline original
+        await context.server.processMiddleware(ctx);
+      } finally {
+        // Calcular duración
+        const endTime = process.hrtime.bigint();
+        const duration = Number(endTime - startTime) / 1_000_000; // en ms
+        
+        // Registrar métricas
+        this.recordMetric('request_duration', duration, {
+          path: ctx.path,
+          method: ctx.method,
+          status: ctx.status
+        });
+        
+        // Añadir headers de rendimiento
+        ctx.set('X-Response-Time', `${duration.toFixed(2)}ms`);
+      }
+      
+      // Finalizar respuesta
+      return context.server.finishResponse(ctx);
+    });
+  }
+}
+```
+
+### Extender el Contenedor DI
+
+```typescript
+export class DiExtensionPlugin implements Plugin {
+  async install(context: PluginContext): Promise<void> {
+    // Extender el contenedor de inyección de dependencias
+    const originalRegister = context.container.register.bind(context.container);
+    
+    // Sobrescribir el método register
+    context.container.register = (name, implementation, options = {}) => {
+      // Registrar la versión original
+      originalRegister(name, implementation, options);
+      
+      // Añadir versión con prefijo para compatibilidad
+      if (typeof name === 'string' && !name.includes('.')) {
+        originalRegister(`services.${name}`, implementation, options);
+      }
+      
+      // Log de registro
+      context.logger.debug(`Service registered: ${name}`);
+    };
+  }
+}
+```
+
+## Diagnóstico y Depuración
+
+### Información de Plugins
+
+Para ver información sobre los plugins instalados:
+
+```typescript
+// En un controlador o middleware
+@Controller('/system')
+export class SystemController {
+  @Inject('pluginRegistry')
+  private plugins: PluginRegistry;
+  
+  @Get('/plugins')
+  getPlugins() {
+    return this.plugins.getInfo();
+  }
+  
+  @Get('/plugins/:name')
+  getPluginInfo(ctx: HttpContext) {
+    const plugin = this.plugins.get(ctx.params.name);
+    
+    if (!plugin) {
+      ctx.status = 404;
+      return { error: 'Plugin not found' };
+    }
+    
+    return {
+      name: plugin.name,
+      version: plugin.version,
+      description: plugin.description,
+      dependencies: plugin.dependencies || [],
+      enabled: this.plugins.isEnabled(plugin.name),
+      status: this.plugins.getStatus(plugin.name)
+    };
+  }
+}
+```
+
+### Modo Debug
+
+Habilitar depuración detallada para plugins:
+
+```typescript
+const server = FoxFactory.createServer({
+  debug: {
+    plugins: true, // Depuración de todos los plugins
+    // O depuración específica por plugin
+    pluginDebug: {
+      cache: true,
+      auth: true
+    }
+  },
+  plugins: [...]
+});
+```
+
+### Validación de Compatibilidad
+
+El sistema verificará automáticamente la compatibilidad entre plugins y versiones:
+
+```typescript
+// Declarar compatibilidad de versiones
+export class AuthPlugin implements Plugin {
+  public readonly name = 'auth';
+  public readonly version = '1.2.0';
+  
+  // Versiones del framework con las que es compatible
+  public readonly compatibility = {
+    framework: '^2.0.0',
+    plugins: {
+      cache: '>=1.0.0 <2.0.0',
+      database: '>=1.5.0'
+    }
+  };
+  
+  // Resto de implementación...
+}
+```
+
+## Ejemplos de Plugins Comunes
+
+### Plugin de Base de Datos
+
+```typescript
+// Ejemplo simplificado de plugin de base de datos
+export class DatabasePlugin implements Plugin<DatabasePluginOptions> {
+  public readonly name = 'database';
+  public readonly version = '1.0.0';
+  
+  private options: DatabasePluginOptions;
+  private connections = new Map<string, any>();
+  
+  constructor(options: DatabasePluginOptions) {
+    this.options = {
+      default: 'main',
+      connections: {},
+      ...options
+    };
+  }
+  
+  async install(context: PluginContext): Promise<void> {
+    // Registrar el servicio de base de datos
+    context.container.register('db', this);
+    
+    // Registrar modelos
+    if (this.options.models) {
+      for (const [name, model] of Object.entries(this.options.models)) {
+        context.container.register(`models.${name}`, model);
+      }
+    }
+    
+    // Extender contexto HTTP
+    context.server.extendContext('db', () => this);
+    
+    // Registrar comandos CLI
+    if (context.cli) {
+      context.cli.registerCommand('db:migrate', this.migrateCommand);
+      context.cli.registerCommand('db:seed', this.seedCommand);
+    }
+  }
+  
+  async boot(context: PluginContext): Promise<void> {
+    // Crear conexiones
+    for (const [name, config] of Object.entries(this.options.connections)) {
+      try {
+        const connection = await this.createConnection(name, config);
+        this.connections.set(name, connection);
+      } catch (error) {
+        context.logger.error(`Failed to connect to database "${name}"`, { error });
+        throw error;
+      }
+    }
+    
+    // Log de conexiones exitosas
+    context.logger.info('Database connections established', {
+      connections: Array.from(this.connections.keys())
+    });
+  }
+  
+  async uninstall(context: PluginContext): Promise<void> {
+    // Cerrar todas las conexiones
+    for (const [name, connection] of this.connections.entries()) {
+      try {
+        await connection.close();
+        context.logger.debug(`Closed database connection "${name}"`);
+      } catch (error) {
+        context.logger.warn(`Error closing database connection "${name}"`, { error });
+      }
+    }
+  }
+  
+  // Métodos públicos del plugin
+  connection(name?: string): any {
+    const connectionName = name || this.options.default;
+    const connection = this.connections.get(connectionName);
+    
+    if (!connection) {
+      throw new Error(`Database connection "${connectionName}" not found`);
+    }
+    
+    return connection;
+  }
+  
+  // Comandos CLI
+  private migrateCommand = async (args) => {
+    const connection = this.connection(args.connection);
+    await connection.migrate.latest();
+    return { message: 'Migrations completed successfully' };
+  }
+  
+  private seedCommand = async (args) => {
+    const connection = this.connection(args.connection);
+    await connection.seed.run();
+    return { message: 'Seed data inserted successfully' };
+  }
+  
+  // Método privado para crear conexión
+  private async createConnection(name: string, config: any) {
+    // Implementación específica según el driver de base de datos
+    // ...
+  }
+}
+```
+
+### Plugin de Logging
+
+```typescript
+export class LoggingPlugin implements Plugin<LoggingPluginOptions> {
+  public readonly name = 'logging';
+  public readonly version = '1.0.0';
+  
+  private options: LoggingPluginOptions;
+  private loggers = new Map<string, Logger>();
+  
+  constructor(options?: Partial<LoggingPluginOptions>) {
+    this.options = {
+      level: 'info',
+      transports: ['console'],
+      format: 'json',
+      ...options
+    };
+  }
+  
+  async install(context: PluginContext): Promise<void> {
+    // Crear logger principal
+    const mainLogger = this.createLogger('main', this.options);
+    this.loggers.set('main', mainLogger);
+    
+    // Registrar en el contenedor
+    context.container.register('logger', mainLogger);
+    context.container.register('loggerFactory', this);
+    
+    // Reemplazar logger por defecto en el contexto
+    context.logger = mainLogger;
+    
+    // Extender contexto HTTP
+    context.server.extendContext('logger', (ctx) => {
+      // Crear logger específico para cada petición con ID de request
+      const requestId = ctx.id || generateUuid();
+      
+      return this.createLogger(`request-${requestId}`, {
+        ...this.options,
+        defaultMeta: {
+          requestId,
+          path: ctx.path,
+          method: ctx.method,
+          ip: ctx.ip
+        }
+      });
+    });
+    
+    // Middleware para logging de peticiones
+    if (this.options.logRequests) {
+      context.server.use(this.createRequestLoggingMiddleware());
+    }
+  }
+  
+  getLogger(name: string): Logger {
+    if (this.loggers.has(name)) {
+      return this.loggers.get(name)!;
+    }
+    
+    const logger = this.createLogger(name, this.options);
+    this.loggers.set(name, logger);
+    
+    return logger;
+  }
+  
+  private createLogger(name: string, options: LoggingPluginOptions): Logger {
+    // Implementación específica según opciones
+    // ...
+  }
+  
+  private createRequestLoggingMiddleware() {
+    return async (ctx, next) => {
+      const start = Date.now();
+      
+      try {
+        await next();
+      } finally {
+        const duration = Date.now() - start;
+        
+        const level = ctx.status >= 500 ? 'error' :
+                      ctx.status >= 400 ? 'warn' : 'info';
+        
+        ctx.logger[level](`${ctx.method} ${ctx.path} - ${ctx.status}`, {
+          responseTime: duration,
+          size: ctx.response.length
+        });
+      }
+    };
+  }
+}
+```
+
+### Plugin de Seguridad
+
+```typescript
+export class SecurityPlugin implements Plugin<SecurityPluginOptions> {
+  public readonly name = 'security';
+  public readonly version = '1.0.0';
+  
+  // Opciones por defecto mezcladas con las proporcionadas
+  private options: SecurityPluginOptions = {
+    helmet: true,
+    cors: {
+      enabled: true,
+      origin: '*'
+    },
+    rateLimit: {
+      enabled: true,
+      windowMs: 15 * 60 * 1000, // 15 minutos
+      max: 100 // 100 peticiones por ventana
+    },
+    csrf: {
+      enabled: false
+    }
+  };
+  
+  constructor(options?: Partial<SecurityPluginOptions>) {
+    this.options = deepMerge(this.options, options || {});
+  }
+  
+  async install(context: PluginContext): Promise<void> {
+    // Registrar middleware de seguridad
+    
+    // 1. Headers de seguridad básicos (helmet)
+    if (this.options.helmet) {
+      context.server.use(this.createHelmetMiddleware());
+    }
+    
+    // 2. CORS
+    if (this.options.cors.enabled) {
+      context.server.use(this.createCorsMiddleware());
+    }
+    
+    // 3. Rate limiting
+    if (this.options.rateLimit.enabled) {
+      context.server.use(this.createRateLimitMiddleware());
+    }
+    
+    // 4. CSRF protection
+    if (this.options.csrf.enabled) {
+      context.server.use(this.createCsrfMiddleware());
+    }
+    
+    // 5. XSS protection
+    if (this.options.xss?.enabled) {
+      context.server.use(this.createXssMiddleware());
+    }
+    
+    // 6. SQL Injection protection
+    if (this.options.sqlInjection?.enabled) {
+      context.server.use(this.createSqlInjectionMiddleware());
+    }
+    
+    // Registrar servicio de seguridad
+    context.container.register('security', {
+      // API para gestionar aspectos de seguridad en tiempo de ejecución
+      updateCorsOrigin: (origin: string | string[]) => {
+        this.updateCorsOrigin(origin);
+      },
+      
+      // API para generar tokens seguros
+      generateToken: (length = 32) => this.generateSecureToken(length),
+      
+      // API para hacer sanitización
+      sanitize: (input: string) => this.sanitizeInput(input)
+    });
+    
+    // Log de seguridad configurada
+    context.logger.info('Security plugin installed', {
+      enabledFeatures: Object.entries(this.options)
+        .filter(([_, config]) => 
+          typeof config === 'object' ? config.enabled : config
+        )
+        .map(([name]) => name)
+    });
+  }
+  
+  // Métodos para crear diferentes middleware
+  private createHelmetMiddleware() {
+    // Implementación de helmet
+    return async (ctx, next) => {
+      // Establecer headers de seguridad
+      ctx.set('X-Content-Type-Options', 'nosniff');
+      ctx.set('X-Frame-Options', 'DENY');
+      ctx.set('X-XSS-Protection', '1; mode=block');
+      // ... otros headers
+      
+      await next();
+    };
+  }
+  
+  private createCorsMiddleware() {
+    const corsOptions = this.options.cors;
+    
+    return async (ctx, next) => {
+      const requestOrigin = ctx.headers.origin;
+      
+      // Determinar si el origen está permitido
+      let allowOrigin = corsOptions.origin;
+      if (Array.isArray(corsOptions.origin) && requestOrigin) {
+        allowOrigin = corsOptions.origin.includes(requestOrigin) 
+          ? requestOrigin 
+          : false;
+      }
+      
+      // Establecer headers CORS
+      if (allowOrigin) {
+        ctx.set('Access-Control-Allow-Origin', allowOrigin === true ? '*' : allowOrigin);
+        ctx.set('Access-Control-Allow-Methods', corsOptions.methods || 'GET,HEAD,PUT,PATCH,POST,DELETE');
+        ctx.set('Access-Control-Allow-Headers', corsOptions.allowedHeaders || 'Content-Type,Authorization');
+        
+        if (corsOptions.exposedHeaders) {
+          ctx.set('Access-Control-Expose-Headers', corsOptions.exposedHeaders);
+        }
+        
+        if (corsOptions.credentials) {
+          ctx.set('Access-Control-Allow-Credentials', 'true');
+        }
+      }
+      
+      // Responder directamente a peticiones OPTIONS
+      if (ctx.method === 'OPTIONS') {
+        ctx.status = 204;
+        return;
+      }
+      
+      await next();
+    };
+  }
+  
+  // ... otros métodos para crear middleware
+  
+  // Métodos de utilidad
+  private updateCorsOrigin(origin: string | string[]) {
+    if (typeof this.options.cors === 'object') {
+      this.options.cors.origin = origin;
+    }
+  }
+  
+  private generateSecureToken(length: number): string {
+    // Implementación de generación de token seguro
+    // ...
+    return 'secure-token';
+  }
+  
+  private sanitizeInput(input: string): string {
+    // Implementación de sanitización
+    // ...
+    return input;
+  }
+}
+```
+
+## Buenas Prácticas
+
+### Diseño de Plugins
+
+1. **Responsabilidad única**: Cada plugin debe tener un propósito claro y específico.
+
+2. **API mínima**: Exponer solo lo necesario para interactuar con el plugin.
+
+3. **Configuración por defecto**: Proporcionar valores por defecto sensatos para todas las opciones.
+
+4. **Validación temprana**: Validar la configuración durante la inicialización.
+
+5. **Manejo de errores**: Gestionar correctamente errores y proporcionar mensajes claros.
+
+6. **Documentación**: Incluir JSDoc y metadatos descriptivos.
+
+### Convenciones de Nomenclatura
+
+- **Nombres de plugins**: Usar sustantivos descriptivos como `cache`, `auth`, `logger`.
+- **Opciones**: Usar objetos con nombres claros como `{ driver: 'redis', ttl: 3600 }`.
+- **Servicios**: Registrar con el mismo nombre del plugin o con sufijo `Service`.
+
+### Versionado
+
+Seguir versionado semántico:
+
+- **MAJOR**: Cambios incompatibles en la API
+- **MINOR**: Funcionalidades nuevas compatibles
+- **PATCH**: Correcciones de bugs compatibles
+
+```typescript
+// Ejemplo de declaración de versión
+export class AuthPlugin implements Plugin {
+  public readonly name = 'auth';
+  public readonly version = '2.3.1'; // major.minor.patch
+  
+  // ...
+}
+```
+
+### Testing de Plugins
+
+```typescript
+import { describe, it, expect, mock } from 'fox-framework/testing';
+import { CachePlugin } from '../src/cache-plugin';
+
+describe('CachePlugin', () => {
+  it('should install correctly', async () => {
+    // Crear mocks
+    const context = {
+      container: {
+        register: jest.fn()
+      },
+      server: {
+        use: jest.fn(),
+        extendContext: jest.fn()
+      },
+      logger: {
+        info: jest.fn(),
+        error: jest.fn()
+      },
+      events: {
+        on: jest.fn(),
+        emit: jest.fn()
+      },
+      plugins: new Map()
+    };
+    
+    // Crear instancia del plugin
+    const plugin = new CachePlugin({
+      driver: 'memory',
+      ttl: 3600
+    });
+    
+    // Ejecutar método a probar
+    await plugin.install(context);
+    
+    // Verificar resultados
+    expect(context.container.register).toHaveBeenCalledWith('cache', expect.any(Object));
+    expect(context.server.extendContext).toHaveBeenCalledWith('cache', expect.any(Function));
+    expect(context.logger.info).toHaveBeenCalled();
+  });
+  
+  it('should store and retrieve values', async () => {
+    // Crear plugin
+    const plugin = new CachePlugin();
+    
+    // Ejecutar método a probar
+    await plugin.set('test-key', { value: 'test-data' });
+    const result = await plugin.get('test-key');
+    
+    // Verificar resultado
+    expect(result).toEqual({ value: 'test-data' });
+  });
+  
+  // Más tests...
+});
+```
+
+## Conclusión
+
+El Sistema de Plugins de Fox Framework proporciona una arquitectura extensible y modular que permite personalizar y extender el framework según las necesidades específicas de cada aplicación. A través de una API bien definida y un ciclo de vida claro, los plugins pueden añadir funcionalidades, modificar el comportamiento existente e integrarse con herramientas de terceros de manera ordenada y mantenible.
+
+Las principales ventajas de esta arquitectura incluyen:
+
+1. **Modularidad**: Separa claramente las funcionalidades y permite activarlas o desactivarlas según sea necesario.
+
+2. **Mantenibilidad**: El código se organiza en unidades coherentes con responsabilidades definidas.
+
+3. **Extensibilidad**: El framework puede crecer y adaptarse sin modificar su núcleo.
+
+4. **Reutilización**: Los plugins pueden compartirse entre proyectos y equipos.
+
+5. **Personalización**: Cada aplicación puede configurar exactamente las funcionalidades que necesita.
+
+El sistema de plugins es una de las características centrales de Fox Framework y constituye la base para construir aplicaciones web robustas, mantenibles y adaptables a las necesidades cambiantes de los proyectos modernos.

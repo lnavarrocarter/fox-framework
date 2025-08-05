@@ -1,0 +1,133 @@
+# Comenzando con Fox Framework
+
+Esta guía te ayudará a instalar Fox Framework y crear tu primera aplicación.
+
+## Requisitos Previos
+
+Antes de comenzar, asegúrate de tener instalado:
+
+- Node.js 14.x o superior
+- npm 6.x o superior (o yarn)
+- TypeScript 4.5.x o superior (recomendado)
+
+## Instalación
+
+Puedes instalar Fox Framework de dos maneras:
+
+### Opción 1: Usar el CLI para crear un nuevo proyecto
+
+La forma más rápida de comenzar es usando nuestro CLI para generar un nuevo proyecto:
+
+```bash
+# Instalar el CLI de Fox Framework globalmente
+npm install -g create-fox-app
+
+# Crear un nuevo proyecto
+npx create-fox-app mi-proyecto
+
+# Navegar al directorio del proyecto
+cd mi-proyecto
+
+# Instalar dependencias
+npm install
+```
+
+### Opción 2: Agregar a un proyecto existente
+
+Para agregar Fox Framework a un proyecto existente:
+
+```bash
+# Instalar Fox Framework
+npm install fox-framework
+
+# Instalar peer dependencies
+npm install typescript @types/node
+```
+
+## Creando tu Primera Aplicación
+
+Después de instalar, puedes crear una aplicación básica así:
+
+### 1. Estructura de Carpetas
+
+Para un proyecto típico, recomendamos esta estructura:
+
+```
+mi-proyecto/
+├── src/
+│   ├── controllers/       # Controladores de la aplicación
+│   ├── routes/            # Definiciones de rutas
+│   ├── services/          # Lógica de negocio
+│   ├── server/            # Configuración del servidor
+│   └── views/             # Templates (si usas server-side rendering)
+├── tests/                 # Tests unitarios e integración
+├── package.json
+└── tsconfig.json
+```
+
+### 2. Configurar el Servidor
+
+Crea un archivo `src/server/index.ts`:
+
+```typescript
+import { FoxFactory, ServerConfig } from 'fox-framework';
+
+const config: ServerConfig = {
+  port: 3000,
+  routes: './routes',
+  middlewares: [
+    // Middleware global
+  ],
+  templates: {
+    engine: 'ejs',
+    directory: './views'
+  }
+};
+
+const app = FoxFactory.createInstance(config);
+app.start();
+
+console.log('🦊 Fox server running on port 3000');
+```
+
+### 3. Definir Rutas
+
+Crea un archivo `src/routes/index.ts`:
+
+```typescript
+import { Router } from 'fox-framework';
+
+const router = Router.create();
+
+// Ruta simple
+router.get('/', (req, res) => {
+  res.send('¡Bienvenido a Fox Framework!');
+});
+
+// Ruta con parámetros
+router.get('/saludar/:nombre', (req, res) => {
+  const { nombre } = req.params;
+  res.send(`¡Hola, ${nombre}!`);
+});
+
+export default router;
+```
+
+### 4. Iniciar el Servidor
+
+```bash
+# Compilar TypeScript
+npx tsc
+
+# Iniciar el servidor
+node dist/server/index.js
+```
+
+¡Felicidades! Tu primera aplicación Fox Framework está funcionando.
+
+## Próximos Pasos
+
+- [Crear un controlador](/docs/controllers)
+- [Configurar middleware](/docs/middleware)
+- [Trabajar con templates](/docs/templates)
+- [Usar el sistema de caché](/docs/cache-system)

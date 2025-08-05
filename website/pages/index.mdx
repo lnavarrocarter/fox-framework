@@ -1,0 +1,101 @@
+# Fox Framework
+
+Fox Framework es un framework web moderno para TypeScript/Node.js, diseñado para crear aplicaciones robustas, escalables y mantenibles.
+
+<div className="mt-8 mb-16 text-center">
+  <div className="inline-flex rounded-md shadow">
+    <a href="/docs/getting-started" className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-fox-orange hover:bg-opacity-90">
+      Comenzar
+    </a>
+  </div>
+  <div className="ml-4 inline-flex">
+    <a href="https://github.com/lnavarrocarter/fox-framework" className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-fox-dark bg-white hover:bg-gray-50">
+      GitHub
+    </a>
+  </div>
+</div>
+
+## Características Principales
+
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-12">
+  <div className="bg-white p-6 rounded-lg shadow-md">
+    <h3 className="text-lg font-bold mb-2">🏗️ Arquitectura Modular</h3>
+    <p>Estructura tu aplicación con patrones de diseño sólidos y una arquitectura escalable.</p>
+  </div>
+  <div className="bg-white p-6 rounded-lg shadow-md">
+    <h3 className="text-lg font-bold mb-2">🚀 Rendimiento Optimizado</h3>
+    <p>Rendimiento excelente con optimizaciones clave y caching integrado.</p>
+  </div>
+  <div className="bg-white p-6 rounded-lg shadow-md">
+    <h3 className="text-lg font-bold mb-2">🔄 Microservicios</h3>
+    <p>Soporte nativo para arquitecturas de microservicios con service registry y load balancing.</p>
+  </div>
+  <div className="bg-white p-6 rounded-lg shadow-md">
+    <h3 className="text-lg font-bold mb-2">📦 Sistema de Plugins</h3>
+    <p>Extiende la funcionalidad fácilmente con un sistema de plugins robusto.</p>
+  </div>
+  <div className="bg-white p-6 rounded-lg shadow-md">
+    <h3 className="text-lg font-bold mb-2">🗄️ Abstracción de Base de Datos</h3>
+    <p>Trabaja con múltiples proveedores de bases de datos a través de una API unificada.</p>
+  </div>
+  <div className="bg-white p-6 rounded-lg shadow-md">
+    <h3 className="text-lg font-bold mb-2">🛠️ CLI Completo</h3>
+    <p>Herramienta de línea de comandos potente para generación de código y tareas de desarrollo.</p>
+  </div>
+</div>
+
+## Comenzando Rápidamente
+
+```bash
+# Instalar Fox Framework
+npm install fox-framework
+
+# Crear un nuevo proyecto
+npx create-fox-app mi-proyecto
+```
+
+## ¿Por qué Fox Framework?
+
+Fox Framework combina la potencia de TypeScript con una arquitectura moderna y flexible, permitiéndote construir desde APIs simples hasta sistemas empresariales complejos.
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-8 my-12">
+  <div>
+    <h3 className="text-xl font-bold mb-3">Desarrollo Rápido</h3>
+    <p>Acelera tu flujo de trabajo con herramientas integradas para generación de código, validación automática y más.</p>
+  </div>
+  <div>
+    <h3 className="text-xl font-bold mb-3">Escalabilidad Enterprise</h3>
+    <p>Diseñado para crecer con tu aplicación, desde proyectos pequeños hasta aplicaciones enterprise de gran escala.</p>
+  </div>
+</div>
+
+## Ejemplo de Código
+
+```typescript
+import { FoxFactory, startServer } from 'fox-framework';
+
+// Configuración del servidor
+const config = {
+  port: 3000,
+  routes: './routes',
+  middlewares: [
+    FoxFactory.createLoggingMiddleware(),
+    FoxFactory.createCacheMiddleware()
+  ],
+  templates: {
+    engine: 'ejs',
+    directory: './views'
+  }
+};
+
+// Iniciar el servidor
+startServer(config);
+```
+
+## Comienza a Usar Fox Framework Hoy
+
+<div className="text-center my-10">
+  <a href="/docs/getting-started" className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-fox-orange hover:bg-opacity-90">
+    Ver Documentación
+  </a>
+</div>

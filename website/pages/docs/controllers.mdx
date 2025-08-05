@@ -1,0 +1,1000 @@
+# Controladores
+
+Los controladores en Fox Framework son componentes fundamentales que gestionan las solicitudes HTTP y devuelven respuestas apropiadas. Implementan la lógica de negocio de tu aplicación y actúan como intermediarios entre las rutas y los servicios.
+
+## Características Principales
+
+- **Estructura uniforme**: Diseño estandarizado para todos los controladores
+- **Decoradores**: Uso de decoradores para metadatos y comportamientos
+- **Inyección de dependencias**: Integración con el sistema DI del framework
+- **Middleware**: Soporte para middleware a nivel de controlador y método
+- **Validación**: Validación automática de datos de entrada
+- **Respuestas tipadas**: Formato de respuesta consistente con tipado
+- **Testing**: Fácil creación de pruebas unitarias
+
+## Controlador Básico
+
+Un controlador básico en Fox Framework tiene esta estructura:
+
+```typescript
+import { Controller, Get, Post, HttpContext, HttpResponse } from 'fox-framework/core';
+import { UserService } from '../services/user.service';
+
+@Controller('/users')
+export class UserController {
+  // Inyección de dependencias
+  constructor(private userService: UserService) {}
+  
+  @Get('/')
+  async getAllUsers(ctx: HttpContext): Promise<HttpResponse> {
+    const users = await this.userService.findAll();
+    return ctx.response.success(users);
+  }
+  
+  @Get('/:id')
+  async getUserById(ctx: HttpContext): Promise<HttpResponse> {
+    const { id } = ctx.params;
+    const user = await this.userService.findById(id);
+    
+    if (!user) {
+      return ctx.response.notFound('Usuario no encontrado');
+    }
+    
+    return ctx.response.success(user);
+  }
+  
+  @Post('/')
+  async createUser(ctx: HttpContext): Promise<HttpResponse> {
+    const userData = ctx.body;
+    const newUser = await this.userService.create(userData);
+    return ctx.response.created(newUser);
+  }
+}
+```
+
+## Decoradores de Controlador
+
+Fox Framework proporciona varios decoradores para definir controladores y sus métodos:
+
+### Decorador de Controlador
+
+```typescript
+@Controller(basePath: string, options?: ControllerOptions)
+```
+
+Este decorador define una clase como controlador y establece su ruta base:
+
+```typescript
+import { Controller } from 'fox-framework/core';
+
+@Controller('/api/products')
+export class ProductController {
+  // Métodos del controlador
+}
+
+// Con opciones
+@Controller('/api/admin', { 
+  middleware: [adminAuthMiddleware],
+  tags: ['admin', 'api']
+})
+export class AdminController {
+  // Métodos del controlador
+}
+```
+
+### Decoradores de Métodos HTTP
+
+```typescript
+@Get(path?: string, options?: RouteOptions)
+@Post(path?: string, options?: RouteOptions)
+@Put(path?: string, options?: RouteOptions)
+@Delete(path?: string, options?: RouteOptions)
+@Patch(path?: string, options?: RouteOptions)
+@Head(path?: string, options?: RouteOptions)
+@Options(path?: string, options?: RouteOptions)
+```
+
+Estos decoradores definen los métodos de controlador para diferentes verbos HTTP:
+
+```typescript
+import { Controller, Get, Post, Put, Delete } from 'fox-framework/core';
+
+@Controller('/posts')
+export class PostController {
+  // GET /posts
+  @Get('/')
+  async getAllPosts() { /*...*/ }
+  
+  // GET /posts/:id
+  @Get('/:id')
+  async getPostById() { /*...*/ }
+  
+  // POST /posts
+  @Post('/')
+  async createPost() { /*...*/ }
+  
+  // PUT /posts/:id
+  @Put('/:id')
+  async updatePost() { /*...*/ }
+  
+  // DELETE /posts/:id
+  @Delete('/:id')
+  async deletePost() { /*...*/ }
+}
+```
+
+### Decoradores de Middleware
+
+```typescript
+@UseMiddleware(...middleware: Middleware[])
+```
+
+Este decorador aplica middleware a un controlador o método específico:
+
+```typescript
+import { Controller, Get, UseMiddleware } from 'fox-framework/core';
+import { authMiddleware, loggingMiddleware } from '../middleware';
+
+// Middleware a nivel de controlador
+@Controller('/admin')
+@UseMiddleware(authMiddleware, loggingMiddleware)
+export class AdminController {
+  // Todos los métodos usarán ambos middlewares
+  
+  @Get('/dashboard')
+  async dashboard() { /*...*/ }
+  
+  // Middleware adicional para un método específico
+  @Get('/settings')
+  @UseMiddleware(roleMiddleware('admin'))
+  async settings() { /*...*/ }
+}
+```
+
+### Decoradores de Validación
+
+```typescript
+@Validate(schema: Schema)
+```
+
+Este decorador aplica validación de entrada a los métodos de controlador:
+
+```typescript
+import { Controller, Post, Validate } from 'fox-framework/core';
+import { Schema } from 'fox-framework/validation';
+
+@Controller('/users')
+export class UserController {
+  // Validar datos de entrada
+  @Post('/')
+  @Validate(new Schema({
+    name: { type: 'string', required: true, min: 2, max: 100 },
+    email: { type: 'email', required: true },
+    age: { type: 'number', min: 18 }
+  }))
+  async createUser(ctx: HttpContext) {
+    // Los datos ya están validados cuando llegan aquí
+    const userData = ctx.body;
+    // ...
+  }
+}
+```
+
+## Contexto HTTP
+
+El objeto `HttpContext` proporciona acceso a la información de la solicitud y respuesta:
+
+```typescript
+interface HttpContext {
+  request: HttpRequest;     // Información de la solicitud
+  response: HttpResponse;   // Objeto de respuesta
+  params: Record<string, string>; // Parámetros de ruta
+  query: Record<string, string>;  // Parámetros de consulta
+  body: any;                // Cuerpo de la solicitud
+  headers: Record<string, string>; // Cabeceras HTTP
+  cookies: Record<string, string>; // Cookies
+  session: Record<string, any>;    // Datos de sesión
+  state: Record<string, any>;      // Estado compartido
+  auth: AuthContext;        // Información de autenticación
+  config: AppConfig;        // Configuración de la aplicación
+}
+```
+
+Ejemplo de uso del contexto:
+
+```typescript
+@Controller('/api')
+export class ApiController {
+  @Get('/profile')
+  async getProfile(ctx: HttpContext) {
+    // Acceder a parámetros
+    const userId = ctx.params.id;
+    
+    // Acceder a query params
+    const { page, limit } = ctx.query;
+    
+    // Acceder a cabeceras
+    const token = ctx.headers.authorization;
+    
+    // Acceder a cookies
+    const sessionId = ctx.cookies.sessionId;
+    
+    // Usar el contexto de autenticación
+    if (!ctx.auth.isAuthenticated) {
+      return ctx.response.unauthorized('No autorizado');
+    }
+    
+    // Acceder al usuario actual
+    const currentUser = ctx.auth.user;
+    
+    // Usar el estado compartido (establecido por middleware)
+    const cachedData = ctx.state.cache;
+    
+    // Configuración
+    const apiVersion = ctx.config.api.version;
+    
+    // Devolver respuesta
+    return ctx.response.success({ 
+      user: currentUser,
+      settings: ctx.session.settings
+    });
+  }
+}
+```
+
+## Respuestas HTTP
+
+El objeto `HttpResponse` facilita la creación de respuestas consistentes:
+
+```typescript
+// Respuestas de éxito
+ctx.response.success(data);            // 200 OK
+ctx.response.created(data);            // 201 Created
+ctx.response.noContent();              // 204 No Content
+ctx.response.accepted();               // 202 Accepted
+
+// Respuestas de error
+ctx.response.badRequest(message);      // 400 Bad Request
+ctx.response.unauthorized(message);    // 401 Unauthorized 
+ctx.response.forbidden(message);       // 403 Forbidden
+ctx.response.notFound(message);        // 404 Not Found
+ctx.response.methodNotAllowed(message); // 405 Method Not Allowed
+ctx.response.conflict(message);        // 409 Conflict
+ctx.response.tooMany(message);         // 429 Too Many Requests
+ctx.response.error(message, status);   // Error personalizado
+
+// Redirecciones
+ctx.response.redirect(url);            // 302 Found
+ctx.response.permanentRedirect(url);   // 301 Moved Permanently
+```
+
+También puedes personalizar la respuesta:
+
+```typescript
+// Respuesta con cabeceras personalizadas
+return ctx.response.success(data, {
+  headers: {
+    'Cache-Control': 'max-age=3600',
+    'X-Custom-Header': 'Value'
+  }
+});
+
+// Respuesta con código de estado personalizado
+return ctx.response.send({
+  message: 'Procesando',
+  status: 'pending'
+}, 202);
+
+// Enviar un archivo
+return ctx.response.file('/path/to/file.pdf', {
+  contentType: 'application/pdf',
+  download: true,
+  filename: 'documento.pdf'
+});
+
+// Enviar un stream
+const fileStream = fs.createReadStream('/path/to/large-file.mp4');
+return ctx.response.stream(fileStream, {
+  contentType: 'video/mp4'
+});
+
+// Respuesta JSON con formato estándar
+return ctx.response.json({
+  success: true,
+  data: result,
+  meta: {
+    totalCount: 100,
+    page: 1
+  }
+});
+```
+
+## Inyección de Dependencias
+
+Los controladores aprovechan el sistema de inyección de dependencias del framework:
+
+```typescript
+import { Controller, Get, Inject } from 'fox-framework/core';
+import { UserService } from '../services/user.service';
+import { LoggerService } from '../services/logger.service';
+import { ConfigService } from '../services/config.service';
+
+@Controller('/users')
+export class UserController {
+  // Inyección por constructor
+  constructor(
+    private userService: UserService,
+    private logger: LoggerService
+  ) {}
+  
+  // Inyección por propiedad
+  @Inject()
+  private config: ConfigService;
+  
+  @Get('/:id')
+  async getUser(ctx: HttpContext) {
+    const userId = ctx.params.id;
+    
+    this.logger.info(`Fetching user ${userId}`);
+    
+    const apiKey = this.config.get('api.key');
+    
+    const user = await this.userService.findById(userId);
+    
+    return ctx.response.success(user);
+  }
+}
+```
+
+## Métodos de Controlador
+
+Los métodos de controlador pueden definirse de varias maneras:
+
+```typescript
+// Método asíncrono con HttpContext
+@Get('/:id')
+async getUser(ctx: HttpContext): Promise<HttpResponse> {
+  // ...
+}
+
+// Con parámetros específicos inyectados
+@Post('/')
+async createUser(
+  @Body() userData: any,
+  @Header('authorization') token: string,
+  @Param('tenantId') tenantId: string,
+  @Query('include') include: string
+): Promise<HttpResponse> {
+  // ...
+}
+
+// Con parámetros de ruta tipados
+@Get('/:id')
+async getUserById(@Param('id', { type: 'number' }) id: number): Promise<User> {
+  // El parámetro id ya está convertido a número
+  return this.userService.findById(id);
+}
+
+// Con auto-inferencia de respuesta
+@Get('/products')
+async getProducts(): Promise<Product[]> {
+  // El framework automáticamente envuelve el resultado en una respuesta exitosa
+  return this.productService.findAll();
+}
+```
+
+## Controladores con Estado
+
+Puedes mantener estado en los controladores para ciertos casos de uso:
+
+```typescript
+@Controller('/cache')
+export class CacheController {
+  // Estado privado del controlador
+  private cache = new Map<string, any>();
+  private lastUpdated: Date;
+  
+  constructor() {
+    this.lastUpdated = new Date();
+  }
+  
+  @Get('/:key')
+  async getFromCache(ctx: HttpContext) {
+    const key = ctx.params.key;
+    
+    if (this.cache.has(key)) {
+      return ctx.response.success({
+        data: this.cache.get(key),
+        fromCache: true,
+        lastUpdated: this.lastUpdated
+      });
+    }
+    
+    return ctx.response.notFound('Clave no encontrada');
+  }
+  
+  @Put('/:key')
+  async updateCache(ctx: HttpContext) {
+    const key = ctx.params.key;
+    const data = ctx.body;
+    
+    this.cache.set(key, data);
+    this.lastUpdated = new Date();
+    
+    return ctx.response.success({ stored: true });
+  }
+}
+```
+
+Sin embargo, recuerda que en entornos sin estado como serverless, el estado del controlador se pierde entre peticiones.
+
+## Controladores Anidados
+
+Puedes organizar controladores jerárquicamente:
+
+```typescript
+// Controlador base
+@Controller('/api')
+export class ApiController {
+  @Get('/version')
+  getVersion() {
+    return { version: '1.0.0' };
+  }
+}
+
+// Controlador anidado
+@Controller('/users')
+export class UserController extends ApiController {
+  // Hereda getVersion y agrega sus propios métodos
+  // Ruta: /api/users
+  
+  @Get('/')
+  async getUsers() {
+    // ...
+  }
+}
+```
+
+## Ciclo de Vida
+
+Los controladores incluyen métodos de ciclo de vida que puedes implementar:
+
+```typescript
+@Controller('/resource')
+export class ResourceController {
+  // Llamado cuando se crea una instancia del controlador
+  initialize() {
+    // Configuración inicial
+  }
+  
+  // Llamado antes de procesar cada solicitud
+  beforeRequest(ctx: HttpContext) {
+    console.log('Procesando solicitud:', ctx.request.url);
+  }
+  
+  // Llamado después de procesar cada solicitud
+  afterRequest(ctx: HttpContext, result: any) {
+    console.log('Solicitud procesada, respuesta:', result);
+  }
+  
+  // Llamado cuando ocurre un error en cualquier método
+  handleError(ctx: HttpContext, error: Error) {
+    console.error('Error en controlador:', error);
+    return ctx.response.error('Error interno', 500);
+  }
+  
+  // Métodos normales del controlador
+  @Get('/')
+  async getResources() {
+    // ...
+  }
+}
+```
+
+## Controladores Especializados
+
+Fox Framework incluye controladores base para casos de uso comunes:
+
+### RESTController
+
+```typescript
+import { RESTController } from 'fox-framework/core';
+import { UserService } from '../services/user.service';
+
+@Controller('/api/users')
+export class UserController extends RESTController<User> {
+  constructor(private userService: UserService) {
+    super();
+  }
+  
+  // Implementa métodos abstractos
+  async findAll(ctx: HttpContext): Promise<User[]> {
+    return this.userService.findAll();
+  }
+  
+  async findById(id: string, ctx: HttpContext): Promise<User | null> {
+    return this.userService.findById(id);
+  }
+  
+  async create(data: any, ctx: HttpContext): Promise<User> {
+    return this.userService.create(data);
+  }
+  
+  async update(id: string, data: any, ctx: HttpContext): Promise<User | null> {
+    return this.userService.update(id, data);
+  }
+  
+  async delete(id: string, ctx: HttpContext): Promise<boolean> {
+    return this.userService.delete(id);
+  }
+}
+```
+
+El `RESTController` ya incluye implementaciones para:
+
+- `GET /api/users` - Lista todos
+- `GET /api/users/:id` - Obtiene por ID
+- `POST /api/users` - Crea nuevo
+- `PUT /api/users/:id` - Actualiza por ID
+- `DELETE /api/users/:id` - Elimina por ID
+
+### ResourceController
+
+```typescript
+import { ResourceController, Validate } from 'fox-framework/core';
+import { UserSchema } from '../schemas/user.schema';
+
+@Controller('/users')
+export class UserController extends ResourceController {
+  // Define esquemas de validación
+  protected createSchema = UserSchema;
+  protected updateSchema = UserSchema.partial();
+  
+  // Define permisos
+  protected permissions = {
+    list: ['users:view'],
+    show: ['users:view'],
+    create: ['users:create'],
+    update: ['users:edit'],
+    delete: ['users:delete'],
+  };
+  
+  // Personaliza comportamientos específicos
+  async beforeCreate(data: any, ctx: HttpContext) {
+    // Agregar datos adicionales
+    data.createdBy = ctx.auth.userId;
+    data.status = 'active';
+    return data;
+  }
+  
+  async afterDelete(id: string, ctx: HttpContext) {
+    // Acciones de limpieza
+    await this.auditService.log('user_deleted', { id, by: ctx.auth.userId });
+  }
+}
+```
+
+## Controladores para Archivos
+
+```typescript
+import { Controller, Post, Get } from 'fox-framework/core';
+import { UploadedFile } from 'fox-framework/files';
+
+@Controller('/files')
+export class FileController {
+  @Post('/upload')
+  async uploadFile(ctx: HttpContext) {
+    const file = await ctx.request.file('document');
+    
+    if (!file) {
+      return ctx.response.badRequest('No se proporcionó ningún archivo');
+    }
+    
+    // Validar tipo de archivo
+    if (!file.isImage()) {
+      return ctx.response.badRequest('El archivo debe ser una imagen');
+    }
+    
+    // Guardar archivo
+    const path = await file.store('uploads', {
+      name: `${Date.now()}-${file.name}`
+    });
+    
+    return ctx.response.success({
+      filename: file.name,
+      size: file.size,
+      path: path
+    });
+  }
+  
+  @Post('/upload-multiple')
+  async uploadMultiple(ctx: HttpContext) {
+    const files = await ctx.request.files('documents');
+    
+    if (!files || files.length === 0) {
+      return ctx.response.badRequest('No se proporcionaron archivos');
+    }
+    
+    const results = [];
+    
+    for (const file of files) {
+      // Procesar cada archivo
+      const path = await file.store('uploads');
+      
+      results.push({
+        name: file.name,
+        size: file.size,
+        path: path
+      });
+    }
+    
+    return ctx.response.success({ files: results });
+  }
+  
+  @Get('/download/:filename')
+  async downloadFile(ctx: HttpContext) {
+    const { filename } = ctx.params;
+    const path = `./uploads/${filename}`;
+    
+    // Enviar archivo como descarga
+    return ctx.response.download(path, filename);
+  }
+}
+```
+
+## Controladores para WebSockets
+
+```typescript
+import { WebSocketController, OnConnect, OnMessage, OnDisconnect } from 'fox-framework/websockets';
+
+@WebSocketController('/chat')
+export class ChatController {
+  // Mantiene conexiones activas
+  private connections = new Map<string, WebSocket>();
+  
+  @OnConnect()
+  handleConnection(socket: WebSocket, ctx: WebSocketContext) {
+    const userId = ctx.auth.userId;
+    
+    // Almacenar conexión
+    this.connections.set(userId, socket);
+    
+    // Broadcast de conexión nueva
+    this.broadcast({
+      type: 'user_connected',
+      userId,
+      timestamp: new Date()
+    });
+  }
+  
+  @OnMessage()
+  handleMessage(data: any, socket: WebSocket, ctx: WebSocketContext) {
+    const userId = ctx.auth.userId;
+    
+    // Procesar mensaje
+    const message = {
+      type: 'chat_message',
+      userId,
+      text: data.text,
+      timestamp: new Date()
+    };
+    
+    // Enviar a todos
+    this.broadcast(message);
+  }
+  
+  @OnDisconnect()
+  handleDisconnect(ctx: WebSocketContext) {
+    const userId = ctx.auth.userId;
+    
+    // Eliminar conexión
+    this.connections.delete(userId);
+    
+    // Broadcast de desconexión
+    this.broadcast({
+      type: 'user_disconnected',
+      userId,
+      timestamp: new Date()
+    });
+  }
+  
+  private broadcast(message: any) {
+    const data = JSON.stringify(message);
+    
+    for (const socket of this.connections.values()) {
+      socket.send(data);
+    }
+  }
+}
+```
+
+## Testing de Controladores
+
+Fox Framework facilita el testing de controladores:
+
+```typescript
+import { createTestContext } from 'fox-framework/testing';
+import { UserController } from '../controllers/user.controller';
+import { UserService } from '../services/user.service';
+
+describe('UserController', () => {
+  let controller: UserController;
+  let mockUserService: Partial<UserService>;
+  
+  beforeEach(() => {
+    // Mock del servicio
+    mockUserService = {
+      findAll: jest.fn().mockResolvedValue([
+        { id: '1', name: 'User 1' },
+        { id: '2', name: 'User 2' }
+      ]),
+      findById: jest.fn().mockImplementation((id) => {
+        if (id === '1') {
+          return Promise.resolve({ id: '1', name: 'User 1' });
+        }
+        return Promise.resolve(null);
+      }),
+      create: jest.fn().mockImplementation((data) => {
+        return Promise.resolve({ id: '3', ...data });
+      })
+    };
+    
+    // Crear controlador con dependencias mockeadas
+    controller = new UserController(mockUserService as UserService);
+  });
+  
+  test('should get all users', async () => {
+    // Crear contexto de prueba
+    const ctx = createTestContext({
+      method: 'GET',
+      url: '/users'
+    });
+    
+    // Ejecutar método
+    const response = await controller.getAllUsers(ctx);
+    
+    // Verificaciones
+    expect(mockUserService.findAll).toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      { id: '1', name: 'User 1' },
+      { id: '2', name: 'User 2' }
+    ]);
+  });
+  
+  test('should get user by id', async () => {
+    // Crear contexto con parámetros
+    const ctx = createTestContext({
+      method: 'GET',
+      url: '/users/1',
+      params: { id: '1' }
+    });
+    
+    const response = await controller.getUserById(ctx);
+    
+    expect(mockUserService.findById).toHaveBeenCalledWith('1');
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ id: '1', name: 'User 1' });
+  });
+  
+  test('should return 404 for non-existent user', async () => {
+    const ctx = createTestContext({
+      method: 'GET',
+      url: '/users/999',
+      params: { id: '999' }
+    });
+    
+    const response = await controller.getUserById(ctx);
+    
+    expect(mockUserService.findById).toHaveBeenCalledWith('999');
+    expect(response.status).toBe(404);
+  });
+  
+  test('should create a new user', async () => {
+    const ctx = createTestContext({
+      method: 'POST',
+      url: '/users',
+      body: { name: 'New User', email: 'new@example.com' }
+    });
+    
+    const response = await controller.createUser(ctx);
+    
+    expect(mockUserService.create).toHaveBeenCalledWith({
+      name: 'New User',
+      email: 'new@example.com'
+    });
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({
+      id: '3',
+      name: 'New User',
+      email: 'new@example.com'
+    });
+  });
+});
+```
+
+## Buenas Prácticas
+
+### Estructura Recomendada
+
+```
+src/
+  controllers/
+    base.controller.ts       # Controlador base
+    user.controller.ts       # Controlador específico
+    product.controller.ts    # Otro controlador
+    admin/                   # Agrupación por área
+      dashboard.controller.ts
+      settings.controller.ts
+    api/                     # Agrupación por tipo
+      v1/
+        users.controller.ts
+      v2/
+        users.controller.ts
+```
+
+### Principios a Seguir
+
+1. **Responsabilidad única**: Cada controlador debe gestionar un recurso o área específica.
+
+2. **Delgados**: Los controladores deben ser delgados, delegando la lógica de negocio a servicios.
+
+3. **Consistencia**: Usa formatos de respuesta consistentes en toda la aplicación.
+
+4. **Validación temprana**: Valida la entrada lo antes posible con los decoradores de validación.
+
+5. **Error handling**: Maneja los errores de forma centralizada.
+
+6. **Documentación**: Usa JSDoc para documentar los parámetros y respuestas.
+
+### Ejemplo de Controlador Bien Estructurado
+
+```typescript
+/**
+ * Controlador para la gestión de productos
+ */
+@Controller('/api/products')
+@UseMiddleware(authMiddleware)
+@ApiTags('products')
+export class ProductController {
+  constructor(
+    private productService: ProductService,
+    private categoryService: CategoryService,
+    private logger: LoggerService
+  ) {}
+  
+  /**
+   * Obtiene la lista de productos con paginación y filtros
+   * 
+   * @param {number} page Número de página (por defecto: 1)
+   * @param {number} limit Elementos por página (por defecto: 20)
+   * @param {string} category Filtrar por categoría
+   * @returns {Promise<PaginatedResponse<Product>>} Lista paginada de productos
+   */
+  @Get('/')
+  @ApiOperation({ summary: 'Get all products', description: 'Returns paginated list of products' })
+  @ApiQuery({ name: 'page', type: 'number', required: false })
+  @ApiQuery({ name: 'limit', type: 'number', required: false })
+  @ApiQuery({ name: 'category', type: 'string', required: false })
+  async getProducts(ctx: HttpContext): Promise<PaginatedResponse<Product>> {
+    try {
+      const { page = 1, limit = 20, category } = ctx.query;
+      
+      // Convertir a números
+      const pageNum = parseInt(page as string, 10);
+      const limitNum = parseInt(limit as string, 10);
+      
+      // Validar parámetros
+      if (isNaN(pageNum) || pageNum < 1) {
+        return ctx.response.badRequest('Página inválida');
+      }
+      
+      if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+        return ctx.response.badRequest('Límite inválido');
+      }
+      
+      // Filtros
+      const filters: ProductFilters = {};
+      
+      if (category) {
+        filters.categoryId = await this.resolveCategoryId(category);
+      }
+      
+      // Obtener productos
+      const result = await this.productService.findPaginated({
+        page: pageNum,
+        limit: limitNum,
+        filters
+      });
+      
+      return ctx.response.success({
+        data: result.items,
+        meta: {
+          total: result.total,
+          page: pageNum,
+          limit: limitNum,
+          pages: Math.ceil(result.total / limitNum)
+        }
+      });
+    } catch (error) {
+      this.logger.error('Error getting products', error);
+      return ctx.response.error('Error al obtener productos', 500);
+    }
+  }
+  
+  /**
+   * Obtiene un producto por su ID
+   */
+  @Get('/:id')
+  async getProduct(ctx: HttpContext): Promise<HttpResponse> {
+    const { id } = ctx.params;
+    
+    try {
+      const product = await this.productService.findById(id);
+      
+      if (!product) {
+        return ctx.response.notFound('Producto no encontrado');
+      }
+      
+      // Transformar la respuesta
+      const result = this.transformProduct(product);
+      
+      return ctx.response.success(result);
+    } catch (error) {
+      this.logger.error(`Error getting product ${id}`, error);
+      return ctx.response.error('Error al obtener el producto', 500);
+    }
+  }
+  
+  /**
+   * Crea un nuevo producto
+   */
+  @Post('/')
+  @Validate(ProductSchema)
+  async createProduct(ctx: HttpContext): Promise<HttpResponse> {
+    // El body ya está validado gracias al decorador @Validate
+    const productData = ctx.body;
+    
+    try {
+      // Agregar datos adicionales
+      productData.createdBy = ctx.auth.userId;
+      productData.createdAt = new Date();
+      
+      const product = await this.productService.create(productData);
+      
+      // Registrar actividad
+      this.logger.info(`Product created: ${product.id}`, {
+        userId: ctx.auth.userId,
+        productId: product.id
+      });
+      
+      return ctx.response.created(product);
+    } catch (error) {
+      this.logger.error('Error creating product', error);
+      return ctx.response.error('Error al crear el producto', 500);
+    }
+  }
+  
+  // Métodos privados de utilidad
+  private async resolveCategoryId(categorySlug: string): Promise<string> {
+    const category = await this.categoryService.findBySlug(categorySlug);
+    return category?.id;
+  }
+  
+  private transformProduct(product: Product): ProductResponse {
+    return {
+      ...product,
+      price: {
+        amount: product.price,
+        formatted: `$${product.price.toFixed(2)}`,
+        currency: 'USD'
+      },
+      url: `/products/${product.slug || product.id}`
+    };
+  }
+}
+```
+
+## Conclusión
+
+Los controladores son fundamentales en la arquitectura de Fox Framework, gestionando las solicitudes HTTP y devolviendo respuestas adecuadas. Al separar las responsabilidades, utilizando decoradores para comportamiento reutilizable, y aprovechando el sistema de inyección de dependencias, puedes crear APIs limpias, mantenibles y fáciles de probar.

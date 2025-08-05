@@ -1,0 +1,216 @@
+# Arquitectura de Fox Framework
+
+Este documento explica la arquitectura general de Fox Framework, sus componentes principales y cómo se relacionan entre sí.
+
+## Visión General
+
+Fox Framework está construido siguiendo principios de diseño modernos y patrones establecidos para asegurar mantenibilidad, extensibilidad y rendimiento. La arquitectura general se compone de varias capas:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Aplicación                       │
+│                                                     │
+│  ┌─────────┐  ┌──────────┐  ┌────────────────────┐ │
+│  │         │  │          │  │                    │ │
+│  │ Rutas   │  │ Controladores │ Servicios        │ │
+│  │         │  │          │  │                    │ │
+│  └─────────┘  └──────────┘  └────────────────────┘ │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+                       │
+┌─────────────────────────────────────────────────────┐
+│                Fox Framework Core                   │
+│                                                     │
+│  ┌─────────┐  ┌──────────┐  ┌────────────────────┐ │
+│  │         │  │          │  │                    │ │
+│  │ Factory │  │ Router   │  │ Middleware         │ │
+│  │         │  │          │  │                    │ │
+│  └─────────┘  └──────────┘  └────────────────────┘ │
+│                                                     │
+│  ┌─────────┐  ┌──────────┐  ┌────────────────────┐ │
+│  │         │  │          │  │                    │ │
+│  │ Cache   │  │ Eventos  │  │ Seguridad          │ │
+│  │         │  │          │  │                    │ │
+│  └─────────┘  └──────────┘  └────────────────────┘ │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+                       │
+┌─────────────────────────────────────────────────────┐
+│              Características Avanzadas              │
+│                                                     │
+│  ┌─────────┐  ┌──────────┐  ┌────────────────────┐ │
+│  │         │  │          │  │                    │ │
+│  │ DB      │  │ Microservices │ Docker           │ │
+│  │         │  │          │  │                    │ │
+│  └─────────┘  └──────────┘  └────────────────────┘ │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
+
+## Componentes Principales
+
+### 1. FoxFactory
+
+El núcleo del framework y punto de entrada principal. Implementa el patrón Factory para crear instancias de los componentes del framework.
+
+**Responsabilidades:**
+- Crear instancias del servidor
+- Registrar servicios y plugins
+- Gestionar configuración
+- Inicializar componentes del framework
+
+### 2. Router
+
+Gestiona el enrutamiento de peticiones HTTP, mapeo de rutas a controladores y generación de URLs.
+
+**Características:**
+- Soporte para rutas parametrizadas
+- Middlewares específicos por ruta
+- Agrupación de rutas
+- Validación de parámetros
+
+### 3. Middleware
+
+Sistema de pipeline para procesar peticiones HTTP. Permite interceptar y modificar peticiones y respuestas.
+
+**Tipos de middleware:**
+- Globales (aplican a todas las rutas)
+- Específicos de ruta
+- Grupales (aplican a un grupo de rutas)
+- Error handlers
+
+### 4. Sistema de Eventos
+
+Implementa una arquitectura orientada a eventos que permite comunicación desacoplada entre componentes.
+
+**Características:**
+- Event Sourcing
+- Publish-Subscribe
+- Event Store
+- Event Handlers
+
+### 5. Cache System
+
+Sistema de caché para optimizar rendimiento y reducir carga en recursos externos.
+
+**Providers:**
+- Memory
+- Redis
+- File
+- Distributed
+
+### 6. Security
+
+Componentes para gestionar autenticación, autorización y otras características de seguridad.
+
+**Características:**
+- JWT Authentication
+- Role-Based Access Control
+- Rate Limiting
+- CSRF Protection
+
+## Patrones de Diseño Utilizados
+
+### Factory Pattern
+
+Fox Framework utiliza extensivamente el patrón Factory para crear instancias de componentes:
+
+```typescript
+// Ejemplo de Factory Pattern
+const server = FoxFactory.createInstance(config);
+const cache = FoxFactory.createCacheProvider(cacheConfig);
+const router = Router.create();
+```
+
+### Dependency Injection
+
+Para gestionar dependencias entre componentes y facilitar el testing:
+
+```typescript
+// Registrar un servicio
+FoxFactory.registerService('userService', new UserService());
+
+// Obtener el servicio
+const userService = FoxFactory.getService('userService');
+```
+
+### Repository Pattern
+
+Para la capa de acceso a datos:
+
+```typescript
+// Definición del repositorio
+interface UserRepository {
+  findById(id: number): Promise<User | null>;
+  findAll(): Promise<User[]>;
+  save(user: User): Promise<User>;
+}
+
+// Implementación concreta
+class PostgresUserRepository implements UserRepository {
+  // implementación...
+}
+```
+
+### Strategy Pattern
+
+Para componentes intercambiables:
+
+```typescript
+// Diferentes estrategias de cache
+const memoryCacheStrategy = new MemoryCacheStrategy();
+const redisCacheStrategy = new RedisCacheStrategy();
+
+// Usar una estrategia
+const cache = new CacheManager(memoryCacheStrategy);
+```
+
+## Flujo de una Petición
+
+1. La petición HTTP llega al servidor
+2. El sistema de routing identifica la ruta correspondiente
+3. Se ejecutan los middlewares globales
+4. Se ejecutan los middlewares específicos de la ruta
+5. Se ejecuta el controlador o handler de la ruta
+6. Se genera y envía la respuesta
+
+## Extensibilidad
+
+Fox Framework está diseñado para ser extensible mediante:
+
+1. **Plugins**: Añaden funcionalidades completas
+2. **Middlewares**: Modifican el flujo de peticiones
+3. **Proveedores personalizados**: Para servicios como cache, logging, etc.
+4. **Eventos**: Para reaccionar a acciones del framework
+
+## Directrices de Arquitectura
+
+Al desarrollar con Fox Framework, recomendamos seguir estos principios:
+
+1. **Separación de responsabilidades**: Mantén modelos, controladores y servicios separados
+2. **Inversión de dependencias**: Usa interfaces y no dependas de implementaciones concretas
+3. **Composición sobre herencia**: Favorece la composición para reutilizar código
+4. **Código testeable**: Diseña componentes fáciles de testear de forma aislada
+5. **SOLID**: Sigue los principios SOLID para un código mantenible
+
+## Arquitectura Recomendada de Proyecto
+
+```
+proyecto/
+├── src/
+│   ├── controllers/     # Controladores (lógica de manejo de peticiones)
+│   ├── models/          # Modelos de datos y entidades
+│   ├── services/        # Servicios (lógica de negocio)
+│   ├── repositories/    # Acceso a datos
+│   ├── routes/          # Definición de rutas
+│   ├── middleware/      # Middlewares personalizados
+│   ├── utils/           # Utilidades y helpers
+│   ├── events/          # Eventos y handlers
+│   ├── config/          # Configuraciones
+│   ├── types/           # Definiciones de tipos TypeScript
+│   └── server.ts        # Punto de entrada de la aplicación
+├── tests/               # Tests unitarios e integración
+└── resources/           # Recursos estáticos
+```
+
+Esta estructura permite una clara separación de responsabilidades y facilita encontrar y mantener el código.

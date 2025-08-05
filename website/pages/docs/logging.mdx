@@ -1,0 +1,1053 @@
+# Logging
+
+El sistema de logging de Fox Framework proporciona una forma flexible y potente para registrar eventos, errores y métricas en tu aplicación. Con múltiples niveles, transportes y formatos personalizables, el sistema permite adaptarse a necesidades específicas, desde desarrollo hasta producción.
+
+## Características Principales
+
+- **Sistema de niveles**: debug, info, warn, error, fatal
+- **Múltiples transportes**: consola, archivo, base de datos, servicios remotos
+- **Rotación de logs**: por tamaño o tiempo
+- **Formatos personalizables**: texto, JSON, personalizado
+- **Contexto enriquecido**: información automática de HTTP, usuario, etc.
+- **Estructurado y filtrable**: metadatos y etiquetas para fácil búsqueda
+- **Integración con servicios**: Sentry, LogDNA, ELK Stack, etc.
+- **Bajo impacto en rendimiento**: operaciones asíncronas y buffering
+
+## Configuración Básica
+
+Para empezar a utilizar el sistema de logging:
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+import { LoggerFactory } from 'fox-framework/logging';
+
+// Crear logger con configuración
+const logger = LoggerFactory.create({
+  // Nivel mínimo a registrar
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  
+  // Transportes donde enviar logs
+  transports: [
+    // Consola para desarrollo
+    { type: 'console', colorize: true },
+    
+    // Archivo para producción
+    {
+      type: 'file',
+      filename: 'logs/app.log',
+      maxSize: '10m',
+      maxFiles: 5
+    }
+  ],
+  
+  // Formato del log
+  format: 'json', // 'text', 'json', o función personalizada
+  
+  // Metadatos por defecto para todos los logs
+  defaultMeta: {
+    service: 'my-api',
+    version: '1.0.0'
+  }
+});
+
+// Registrar en la aplicación
+const server = FoxFactory.createServer({
+  // Otras configuraciones...
+  logger
+});
+
+// También puedes usarlo directamente
+logger.info('Servidor iniciado', { port: 3000 });
+logger.error('Error al conectar a la base de datos', { 
+  error: err.message,
+  dbHost: process.env.DB_HOST
+});
+```
+
+## Uso Básico
+
+### Niveles de Log
+
+Fox Framework proporciona varios niveles de log para diferentes situaciones:
+
+```typescript
+// Para información detallada de desarrollo (solo en desarrollo)
+logger.debug('Procesando solicitud de usuario', { userId, action });
+
+// Para información operacional normal (lo más común)
+logger.info('Usuario creado correctamente', { id: user.id });
+
+// Para condiciones potencialmente problemáticas
+logger.warn('Intentos de login múltiples', { 
+  email, 
+  attempts: 5, 
+  ip: '192.168.1.1' 
+});
+
+// Para errores que permiten continuar la operación
+logger.error('Error al procesar pago', { 
+  orderId: order.id,
+  error: paymentError.message,
+  code: paymentError.code
+});
+
+// Para errores críticos que requieren atención inmediata
+logger.fatal('Excepción no controlada', { 
+  error: err.stack,
+  context: { route, method, body }
+});
+```
+
+### En Controladores
+
+```typescript
+@Controller('/users')
+export class UserController {
+  @Post('/')
+  async createUser(ctx: HttpContext) {
+    try {
+      const userData = ctx.body;
+      
+      // Log info de operación
+      ctx.logger.info('Creando nuevo usuario', { 
+        email: userData.email 
+      });
+      
+      const user = await this.userService.create(userData);
+      
+      // Log de éxito
+      ctx.logger.info('Usuario creado correctamente', { 
+        id: user.id,
+        email: user.email,
+        role: user.role
+      });
+      
+      return user;
+    } catch (err) {
+      // Log de error con contexto completo
+      ctx.logger.error('Error al crear usuario', {
+        userData: ctx.body,
+        error: {
+          message: err.message,
+          stack: err.stack,
+          code: err.code
+        }
+      });
+      
+      // Re-lanzar para que lo maneje el middleware de errores
+      throw err;
+    }
+  }
+}
+```
+
+### En Servicios
+
+```typescript
+@Injectable()
+export class PaymentService {
+  constructor(
+    private paymentGateway: PaymentGateway,
+    private logger: Logger // Inyección automática del logger
+  ) {}
+  
+  async processPayment(orderId: string, amount: number, paymentData: any) {
+    try {
+      this.logger.debug('Iniciando procesamiento de pago', { 
+        orderId, 
+        amount,
+        paymentMethod: paymentData.method 
+      });
+      
+      const result = await this.paymentGateway.charge({
+        amount,
+        currency: 'USD',
+        source: paymentData.token,
+        description: `Order #${orderId}`
+      });
+      
+      this.logger.info('Pago procesado correctamente', { 
+        orderId,
+        transactionId: result.id,
+        status: result.status
+      });
+      
+      return result;
+    } catch (err) {
+      this.logger.error('Error procesando pago', {
+        orderId,
+        error: err.message,
+        errorCode: err.code,
+        paymentMethod: paymentData.method
+      });
+      
+      // Según el error, podríamos lanzar una excepción personalizada
+      if (err.code === 'insufficient_funds') {
+        throw new PaymentError('Fondos insuficientes', 'INSUFFICIENT_FUNDS');
+      }
+      
+      throw err;
+    }
+  }
+}
+```
+
+## Configuración Avanzada
+
+### Múltiples Transportes
+
+Puedes configurar múltiples destinos para tus logs según tus necesidades:
+
+```typescript
+import { LoggerFactory } from 'fox-framework/logging';
+
+const logger = LoggerFactory.create({
+  transports: [
+    // Consola para desarrollo
+    {
+      type: 'console',
+      level: 'debug', // Nivel mínimo para este transporte
+      colorize: true,
+      format: 'text'
+    },
+    
+    // Archivo para errores y advertencias
+    {
+      type: 'file',
+      level: 'warn',
+      filename: 'logs/errors.log',
+      maxSize: '20m',
+      maxFiles: 14, // 14 días
+      format: 'json'
+    },
+    
+    // Archivo para todos los logs
+    {
+      type: 'file',
+      level: 'info',
+      filename: 'logs/combined.log',
+      maxSize: '50m',
+      maxFiles: 7,
+      format: 'json'
+    },
+    
+    // Base de datos para análisis
+    {
+      type: 'database',
+      level: 'info',
+      connection: dbConnection,
+      table: 'app_logs',
+      fields: {
+        timestamp: 'created_at',
+        level: 'level',
+        message: 'message',
+        metadata: 'data'
+      }
+    },
+    
+    // Servicio externo para monitoreo
+    {
+      type: 'http',
+      level: 'error',
+      url: process.env.LOG_SERVICE_URL,
+      headers: {
+        'Authorization': `Bearer ${process.env.LOG_SERVICE_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      batchSize: 10, // Enviar logs en lotes
+      retryCount: 3,
+      retryDelay: 1000
+    }
+  ]
+});
+```
+
+### Formatos Personalizados
+
+Puedes personalizar el formato de tus logs:
+
+```typescript
+const logger = LoggerFactory.create({
+  // Otras configuraciones...
+  
+  format: (info) => {
+    // info contiene: timestamp, level, message, metadata, etc.
+    const { timestamp, level, message, ...metadata } = info;
+    
+    // Para consola, formato legible
+    if (info.transport === 'console') {
+      return `${timestamp} [${level.toUpperCase()}] ${message} ${
+        Object.keys(metadata).length ? JSON.stringify(metadata, null, 2) : ''
+      }`;
+    }
+    
+    // Para archivo, formato JSON estructurado
+    return JSON.stringify({
+      '@timestamp': timestamp,
+      level,
+      message,
+      environment: process.env.NODE_ENV,
+      host: os.hostname(),
+      ...metadata
+    });
+  }
+});
+```
+
+### Rotación de Logs
+
+Para prevenir que los logs ocupen demasiado espacio:
+
+```typescript
+const logger = LoggerFactory.create({
+  transports: [
+    // Rotación por tamaño
+    {
+      type: 'file',
+      filename: 'logs/app.log',
+      maxSize: '10m', // Rotar cuando alcance 10MB
+      maxFiles: 5, // Mantener 5 archivos rotados (app.log.1, app.log.2, etc.)
+      compress: true // Comprimir archivos rotados
+    },
+    
+    // Rotación diaria
+    {
+      type: 'file',
+      filename: 'logs/%DATE%.log',
+      datePattern: 'YYYY-MM-DD',
+      zippedArchive: true,
+      maxSize: '20m',
+      maxFiles: '14d' // Mantener logs de los últimos 14 días
+    }
+  ]
+});
+```
+
+### Logging de HTTP
+
+Registrar automáticamente las peticiones HTTP:
+
+```typescript
+import { httpLogMiddleware } from 'fox-framework/logging';
+
+// Configuración básica
+server.use(httpLogMiddleware());
+
+// Configuración avanzada
+server.use(httpLogMiddleware({
+  // Nivel de log para peticiones exitosas
+  level: 'info',
+  
+  // Nivel para errores
+  errorLevel: 'error',
+  
+  // Formato del mensaje
+  format: (ctx) => {
+    return `${ctx.method} ${ctx.url} - ${ctx.status}`;
+  },
+  
+  // Metadatos a incluir
+  meta: (ctx) => {
+    return {
+      ip: ctx.ip,
+      userAgent: ctx.headers['user-agent'],
+      userId: ctx.auth?.user?.id,
+      responseTime: ctx.responseTime,
+      requestId: ctx.id
+    };
+  },
+  
+  // Opciones para el cuerpo de la petición
+  body: {
+    include: true, // Incluir body en el log
+    maxLength: 1024, // Limitar longitud
+    sanitize: ['password', 'token', 'secret'] // Campos sensibles a sanitizar
+  },
+  
+  // Rutas a excluir
+  ignorePaths: [
+    '/health',
+    '/metrics',
+    '/favicon.ico',
+    /^\/public\//
+  ]
+}));
+```
+
+Ejemplo de log HTTP generado:
+
+```json
+{
+  "timestamp": "2025-07-20T15:42:10.384Z",
+  "level": "info",
+  "message": "GET /api/users - 200",
+  "ip": "192.168.1.1",
+  "userAgent": "Mozilla/5.0...",
+  "userId": "user_123",
+  "method": "GET",
+  "url": "/api/users",
+  "status": 200,
+  "responseTime": 45,
+  "requestId": "req_abcdef123456",
+  "query": { "page": "1", "limit": "20" },
+  "requestSize": 0,
+  "responseSize": 1243
+}
+```
+
+## Contexto y Correlación
+
+### Request ID y Correlación
+
+Para rastrear peticiones a través de microservicios:
+
+```typescript
+import { correlationMiddleware } from 'fox-framework/logging';
+
+// Middleware para ID de correlación
+server.use(correlationMiddleware({
+  // Nombre del header para ID de correlación
+  header: 'X-Correlation-ID',
+  
+  // Generar ID si no existe
+  generateIfMissing: true,
+  
+  // Función de generación personalizada
+  generator: () => `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`
+}));
+
+// Ahora puedes acceder al ID en cualquier middleware o controlador
+server.use((ctx, next) => {
+  const correlationId = ctx.correlationId;
+  
+  // El logger incluirá automáticamente este ID
+  ctx.logger.info('Procesando solicitud', {
+    // No es necesario incluir correlationId, se añade automáticamente
+    action: 'process-request'
+  });
+  
+  return next();
+});
+
+// El middleware de HTTP también lo incluirá en la respuesta
+// Headers de respuesta: { 'X-Correlation-ID': '1627384950123-abc123def' }
+```
+
+### Contexto Enriquecido
+
+Añadir contexto adicional a todos los logs de una solicitud:
+
+```typescript
+// En un middleware
+server.use((ctx, next) => {
+  // Si hay usuario autenticado, añadir al contexto de logs
+  if (ctx.auth?.user) {
+    ctx.logger = ctx.logger.child({
+      userId: ctx.auth.user.id,
+      userRole: ctx.auth.user.role
+    });
+  }
+  
+  // Si hay información de dispositivo, añadirla
+  if (ctx.headers['user-agent']) {
+    const device = parseUserAgent(ctx.headers['user-agent']);
+    ctx.logger = ctx.logger.child({
+      device: {
+        type: device.type,
+        browser: device.browser,
+        os: device.os
+      }
+    });
+  }
+  
+  return next();
+});
+```
+
+## Servicios de Logging Externos
+
+### Integración con Sentry
+
+Para registrar errores en Sentry:
+
+```typescript
+import { LoggerFactory } from 'fox-framework/logging';
+import { SentryTransport } from 'fox-framework/logging/transports/sentry';
+
+// Configurar logger con Sentry
+const logger = LoggerFactory.create({
+  // Otras configuraciones...
+  transports: [
+    // Transportes regulares...
+    
+    // Sentry para errores
+    new SentryTransport({
+      level: 'error',
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV,
+      release: process.env.APP_VERSION,
+      
+      // Transformar logs a eventos de Sentry
+      transformEvent: (info) => {
+        // Extraer datos útiles del log
+        const { error, user, tags, ...extra } = info.metadata || {};
+        
+        return {
+          message: info.message,
+          level: info.level,
+          user,
+          tags,
+          extra
+        };
+      }
+    })
+  ]
+});
+```
+
+### Integración con ELK Stack
+
+Para enviar logs a Elasticsearch:
+
+```typescript
+import { LoggerFactory } from 'fox-framework/logging';
+import { ElasticsearchTransport } from 'fox-framework/logging/transports/elasticsearch';
+
+const logger = LoggerFactory.create({
+  transports: [
+    // Otros transportes...
+    
+    // Elasticsearch para todos los logs
+    new ElasticsearchTransport({
+      level: 'info',
+      clientOpts: {
+        node: process.env.ELASTICSEARCH_URL,
+        auth: {
+          username: process.env.ELASTICSEARCH_USERNAME,
+          password: process.env.ELASTICSEARCH_PASSWORD
+        }
+      },
+      indexPrefix: 'app-logs',
+      indexSuffixPattern: 'YYYY.MM.DD',
+      mappingTemplate: {
+        // Template de mapping para Elasticsearch
+      }
+    })
+  ]
+});
+```
+
+## Performance y Optimización
+
+### Logging Asíncrono
+
+Para no bloquear el hilo principal:
+
+```typescript
+const logger = LoggerFactory.create({
+  // Otras configuraciones...
+  
+  // Modo asíncrono
+  async: true,
+  
+  // Tamaño del buffer para operaciones asíncronas
+  bufferSize: 1000,
+  
+  // Intervalo de procesamiento del buffer (ms)
+  flushInterval: 5000,
+  
+  // Estrategia si el buffer se llena
+  bufferOverflowStrategy: 'drop' // 'drop' o 'flush'
+});
+```
+
+### Filtrado y Muestreo
+
+Para reducir el volumen de logs:
+
+```typescript
+const logger = LoggerFactory.create({
+  // Otras configuraciones...
+  
+  // Filtros
+  filters: [
+    // Ignorar logs de salud
+    (info) => !(info.message.includes('health check') && info.level === 'debug'),
+    
+    // Ignorar ciertos errores
+    (info) => !(info.level === 'error' && 
+               info.metadata?.error?.code === 'ECONNRESET')
+  ],
+  
+  // Muestreo (registrar solo un % de los logs)
+  sampling: {
+    // Para logs de debug, solo registrar 10%
+    debug: 0.1,
+    
+    // Para logs de info sobre peticiones HTTP, muestrear al 50%
+    custom: [
+      {
+        test: (info) => 
+          info.level === 'info' && 
+          info.metadata?.type === 'http-request',
+        rate: 0.5
+      }
+    ]
+  }
+});
+```
+
+## Logging en Entornos Específicos
+
+### Desarrollo
+
+```typescript
+if (process.env.NODE_ENV === 'development') {
+  logger.configure({
+    level: 'debug',
+    transports: [
+      {
+        type: 'console',
+        colorize: true,
+        format: 'text',
+        prettyPrint: true
+      }
+    ]
+  });
+}
+```
+
+### Pruebas
+
+```typescript
+if (process.env.NODE_ENV === 'test') {
+  logger.configure({
+    level: 'error', // Minimizar ruido durante tests
+    transports: [
+      {
+        type: 'memory', // Guardar logs en memoria para verificaciones
+        maxSize: 100
+      }
+    ]
+  });
+  
+  // Acceder a logs en memoria para assertions
+  afterEach(() => {
+    const logs = logger.getTransport('memory').getLogs();
+    expect(logs).toHaveLength(0); // No debería haber errores
+  });
+}
+```
+
+### Producción
+
+```typescript
+if (process.env.NODE_ENV === 'production') {
+  logger.configure({
+    level: 'info',
+    transports: [
+      // Error logs
+      {
+        type: 'file',
+        level: 'error',
+        filename: '/var/log/app/error.log',
+        maxSize: '50m',
+        maxFiles: 10,
+        format: 'json'
+      },
+      
+      // Logs combinados
+      {
+        type: 'file',
+        level: 'info',
+        filename: '/var/log/app/combined.log',
+        maxSize: '100m',
+        maxFiles: 7,
+        format: 'json'
+      },
+      
+      // Alertas críticas a Slack
+      {
+        type: 'webhook',
+        level: 'fatal',
+        url: process.env.SLACK_WEBHOOK_URL,
+        formatter: (info) => ({
+          text: `🚨 *ALERTA CRÍTICA*: ${info.message}`,
+          attachments: [
+            {
+              color: '#FF0000',
+              fields: [
+                { title: 'Error', value: info.metadata.error?.message || 'Desconocido' },
+                { title: 'Servidor', value: os.hostname() },
+                { title: 'Timestamp', value: info.timestamp }
+              ],
+              footer: 'Fox Framework Production'
+            }
+          ]
+        })
+      }
+    ]
+  });
+}
+```
+
+## Integración con Monitor de Aplicaciones
+
+```typescript
+import { LoggerFactory } from 'fox-framework/logging';
+import { AppMonitor } from 'fox-framework/monitoring';
+
+// Crear monitor de aplicación
+const monitor = new AppMonitor({
+  // Configuración de monitoreo...
+});
+
+// Integrar logger con monitor
+const logger = LoggerFactory.create({
+  // Otras configuraciones...
+  
+  // Eventos para métricas
+  on: {
+    log: (info) => {
+      // Incrementar contador según nivel de log
+      monitor.increment(`logs.${info.level}`);
+      
+      // Para errores, aumentar contador específico
+      if (info.level === 'error' || info.level === 'fatal') {
+        const errorCode = info.metadata?.error?.code || 'unknown';
+        monitor.increment(`errors.${errorCode}`);
+      }
+    }
+  }
+});
+
+// Middleware para métricas de errores
+server.use(async (ctx, next) => {
+  try {
+    await next();
+  } catch (err) {
+    // Registrar error en logger
+    ctx.logger.error('Error no controlado', { error: err });
+    
+    // Actualizar métricas
+    monitor.increment('errors.unhandled');
+    monitor.histogram('errors.response_time', ctx.responseTime);
+    
+    throw err;
+  }
+});
+```
+
+## Buenas Prácticas
+
+### Estructurar los Logs
+
+Para facilitar búsqueda y análisis:
+
+```typescript
+// ❌ NO: Log sin estructura
+logger.info(`Usuario ${user.id} ha comprado ${cart.items.length} productos por $${order.total}`);
+
+// ✅ SÍ: Log estructurado con metadatos
+logger.info('Compra completada', {
+  userId: user.id,
+  items: cart.items.length,
+  total: order.total,
+  currency: 'USD',
+  paymentMethod: order.paymentMethod
+});
+```
+
+### Niveles Adecuados
+
+Usar el nivel correcto para cada tipo de mensaje:
+
+```typescript
+// ❌ NO: Nivel incorrecto
+logger.error('Usuario ha iniciado sesión'); // Evento normal como error
+
+// ✅ SÍ: Nivel adecuado
+logger.debug('Validando credenciales de usuario'); // Detalles de desarrollo
+logger.info('Usuario ha iniciado sesión');        // Eventos normales
+logger.warn('Múltiples intentos de login');       // Situaciones sospechosas
+logger.error('Error en pasarela de pago');        // Errores recuperables
+logger.fatal('Base de datos no disponible');      // Errores críticos
+```
+
+### Información Sensible
+
+Evitar registrar datos sensibles:
+
+```typescript
+// ❌ NO: Datos sensibles en logs
+logger.info('Usuario autenticado', {
+  user: {
+    id: 1,
+    email: 'usuario@ejemplo.com',
+    password: '123456', // NUNCA incluir contraseñas
+    creditCard: '4111-1111-1111-1111' // NUNCA incluir datos de tarjetas
+  }
+});
+
+// ✅ SÍ: Sanitizar datos sensibles
+logger.info('Usuario autenticado', {
+  user: {
+    id: 1,
+    email: sanitizeEmail('usuario@ejemplo.com'), // Ej: 'u***@ejemplo.com'
+    hasPassword: true
+  }
+});
+
+// Otra opción: Usar sanitizador automático
+const logger = LoggerFactory.create({
+  // Otras configuraciones...
+  sanitize: {
+    // Campos a sanitizar
+    fields: ['password', 'token', 'secret', 'credit_card', 'ssn'],
+    // Cómo sanitizar (sustituir, truncar, hash, etc.)
+    replacement: '[REDACTED]'
+  }
+});
+```
+
+### Logging Contextual
+
+Proporcionar contexto suficiente:
+
+```typescript
+// ❌ NO: Mensaje sin contexto
+logger.error('Error de base de datos');
+
+// ✅ SÍ: Error con contexto completo
+logger.error('Error de conexión a base de datos', {
+  database: config.database.name,
+  host: config.database.host,
+  error: {
+    code: err.code,
+    message: err.message,
+    query: sanitizeQuery(err.query) // Eliminar parámetros sensibles
+  },
+  retryAttempt: 2,
+  willRetry: retryCount < maxRetries
+});
+```
+
+## Casos de Uso Avanzados
+
+### Logs para Auditoría
+
+Registros específicos para auditoría de seguridad:
+
+```typescript
+import { AuditLogger } from 'fox-framework/logging/audit';
+
+// Crear logger específico para auditoría
+const auditLogger = new AuditLogger({
+  // Transportes específicos para registros de auditoría
+  transports: [
+    // Archivo inmutable para auditoría
+    {
+      type: 'file',
+      filename: '/var/log/app/audit.log',
+      maxSize: '100m',
+      maxFiles: 365, // Retener 1 año
+      format: 'json',
+      // Opciones de seguridad para auditoría
+      secure: true,
+      permissions: 0o400 // Solo lectura para el propietario
+    },
+    
+    // Base de datos para consultas
+    {
+      type: 'database',
+      connection: dbConnection,
+      table: 'audit_logs'
+    }
+  ]
+});
+
+// Middleware para inyectar logger de auditoría
+server.use((ctx, next) => {
+  ctx.audit = auditLogger;
+  return next();
+});
+
+// Ejemplo de uso en controlador
+@Controller('/admin')
+export class AdminController {
+  @Post('/users/:id/suspend')
+  @Role('admin')
+  async suspendUser(ctx: HttpContext) {
+    const { id } = ctx.params;
+    const { reason } = ctx.body;
+    
+    await this.userService.suspend(id, reason);
+    
+    // Registrar acción para auditoría
+    ctx.audit.log({
+      action: 'user.suspend',
+      actor: {
+        id: ctx.auth.user.id,
+        name: ctx.auth.user.name,
+        role: ctx.auth.user.role
+      },
+      target: {
+        id,
+        type: 'user'
+      },
+      context: {
+        reason,
+        ip: ctx.ip,
+        userAgent: ctx.headers['user-agent']
+      },
+      result: 'success'
+    });
+    
+    return { success: true };
+  }
+}
+```
+
+### Logging Distribuido
+
+Para sistemas distribuidos y microservicios:
+
+```typescript
+import { DistributedLogger } from 'fox-framework/logging/distributed';
+import { TraceContext } from 'fox-framework/tracing';
+
+// Crear logger distribuido
+const logger = new DistributedLogger({
+  // Configuración base
+  serviceName: 'user-service',
+  serviceVersion: '1.2.0',
+  
+  // Integración con sistema de trazas
+  tracing: {
+    enabled: true,
+    propagateContext: true
+  },
+  
+  // Formato B3 para propagación de contexto
+  propagation: {
+    format: 'b3',  // 'b3', 'w3c', 'jaeger'
+    headers: {
+      traceId: 'X-B3-TraceId',
+      spanId: 'X-B3-SpanId',
+      parentSpanId: 'X-B3-ParentSpanId',
+      sampled: 'X-B3-Sampled'
+    }
+  },
+  
+  // Transportes
+  transports: [
+    // Local para desarrollo
+    { type: 'console', format: 'text' },
+    
+    // Centralizado para producción
+    {
+      type: 'fluentd',
+      host: process.env.FLUENTD_HOST,
+      port: parseInt(process.env.FLUENTD_PORT || '24224'),
+      timeout: 3000,
+      reconnectInterval: 5000
+    }
+  ]
+});
+
+// Middleware para extraer/inyectar contexto de trazas
+server.use((ctx, next) => {
+  // Extraer contexto de traza de los headers
+  const traceContext = TraceContext.fromRequest(ctx.headers);
+  
+  // Crear logger con contexto de traza
+  ctx.logger = logger.withTraceContext(traceContext);
+  
+  return next();
+});
+
+// Ejemplo de llamada a otro servicio con propagación
+async function callUserService(ctx, userId) {
+  const traceHeaders = TraceContext.toHeaders(ctx.traceContext);
+  
+  const response = await fetch(`${USER_SERVICE_URL}/users/${userId}`, {
+    headers: {
+      ...traceHeaders,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  return response.json();
+}
+```
+
+### Logging como Eventos de Negocio
+
+Para análisis de comportamiento y flujos de negocio:
+
+```typescript
+import { BusinessEventLogger } from 'fox-framework/logging/business';
+
+// Crear logger para eventos de negocio
+const eventLogger = new BusinessEventLogger({
+  // Transportes específicos para eventos
+  transports: [
+    // Kafka para procesamiento en tiempo real
+    {
+      type: 'kafka',
+      brokers: process.env.KAFKA_BROKERS?.split(',') || [],
+      topic: 'business-events',
+      compression: 'gzip'
+    },
+    
+    // Base de datos para análisis histórico
+    {
+      type: 'database',
+      connection: analyticsDbConnection,
+      table: 'business_events'
+    }
+  ]
+});
+
+// En un servicio de compras
+class OrderService {
+  async createOrder(user, cart) {
+    // Lógica para crear orden
+    
+    // Registrar evento de negocio
+    eventLogger.event('order.created', {
+      // Datos del evento
+      orderId: order.id,
+      userId: user.id,
+      amount: order.total,
+      currency: order.currency,
+      items: order.items.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: item.price
+      })),
+      // Metadatos del evento
+      channel: user.acquisitionChannel,
+      userType: user.type,
+      isFirstPurchase: user.ordersCount === 0,
+      deviceType: user.deviceInfo?.type || 'unknown'
+    });
+    
+    return order;
+  }
+}
+```
+
+## Conclusión
+
+El sistema de logging de Fox Framework proporciona una solución completa para gestionar logs en aplicaciones modernas, desde simples mensajes de consola hasta configuraciones avanzadas para sistemas distribuidos y análisis de datos. Con múltiples niveles, transportes configurables y capacidades de filtrado y enriquecimiento, el sistema se adapta a las necesidades de aplicaciones de cualquier tamaño, desde pequeñas APIs hasta sistemas empresariales complejos.
+
+Al implementar buenas prácticas de logging como:
+
+1. **Estructurar los datos** para facilitar búsquedas y análisis
+2. **Usar los niveles adecuados** para cada tipo de mensaje
+3. **Proporcionar contexto suficiente** para depuración
+4. **Sanitizar información sensible** para cumplir con regulaciones
+5. **Separar logs según su propósito** (aplicación, auditoría, eventos)
+
+Fox Framework te permite no solo depurar problemas de forma efectiva, sino también extraer valor de los logs para mejorar la calidad y rendimiento de tu aplicación.

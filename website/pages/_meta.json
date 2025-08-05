@@ -1,0 +1,28 @@
+{
+  "index": {
+    "title": "Inicio",
+    "type": "page",
+    "display": "hidden"
+  },
+  "docs": {
+    "title": "Documentación",
+    "type": "page"
+  },
+  "examples": {
+    "title": "Ejemplos",
+    "type": "page"
+  },
+  "api-reference": {
+    "title": "Referencia API",
+    "type": "page"
+  },
+  "guides": {
+    "title": "Guías",
+    "type": "page"
+  },
+  "community": {
+    "title": "Comunidad",
+    "type": "page",
+    "href": "https://github.com/lnavarrocarter/fox-framework/discussions"
+  }
+}

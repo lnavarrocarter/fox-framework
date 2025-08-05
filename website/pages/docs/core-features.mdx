@@ -1,0 +1,1809 @@
+# Características Core
+
+Fox Framework proporciona un conjunto sólido de características fundamentales que conforman la base para construir aplicaciones web modernas y escalables. Estas características están diseñadas para trabajar en armonía, ofreciendo una experiencia de desarrollo fluida y manteniendo un código limpio y estructurado.
+
+## Arquitectura Modular
+
+### Diseño Basado en Componentes
+
+Fox Framework está construido con una arquitectura modular que promueve la separación de preocupaciones y facilita el desarrollo, mantenimiento y testing de aplicaciones.
+
+```typescript
+// Ejemplo de arquitectura modular
+import { FoxFactory } from 'fox-framework/core';
+import { DatabaseProvider } from './providers/database.provider';
+import { AuthModule } from './modules/auth';
+import { UserModule } from './modules/user';
+import { ProductModule } from './modules/product';
+
+// Crear servidor con módulos independientes
+const server = FoxFactory.createServer({
+  port: 3000,
+  providers: [
+    new DatabaseProvider({
+      connectionString: process.env.DB_CONNECTION
+    })
+  ],
+  // Registrar módulos de aplicación
+  modules: [
+    new AuthModule(),
+    new UserModule(),
+    new ProductModule()
+  ]
+});
+
+// Iniciar servidor
+server.start();
+```
+
+### Sistema de Módulos
+
+Los módulos encapsulan funcionalidades relacionadas, incluyendo controladores, servicios, middleware y configuración:
+
+```typescript
+import { Module } from 'fox-framework/core';
+import { UserController } from './user.controller';
+import { UserService } from './user.service';
+import { UserRepository } from './user.repository';
+import { UserValidator } from './user.validator';
+import { isAuthenticated } from '../../middleware/auth.middleware';
+
+export class UserModule extends Module {
+  // Nombre del módulo
+  name = 'users';
+  
+  // Configuración del módulo
+  config = {
+    routes: {
+      prefix: '/users'
+    }
+  };
+  
+  // Registrar componentes del módulo
+  register(): void {
+    // Registrar servicios
+    this.bind('UserService').to(UserService);
+    this.bind('UserRepository').to(UserRepository);
+    this.bind('UserValidator').to(UserValidator);
+    
+    // Registrar controlador con middleware
+    this.registerController(UserController, {
+      middlewares: [isAuthenticated]
+    });
+  }
+  
+  // Configuración después de que todos los módulos estén registrados
+  onInit(): void {
+    console.log('Módulo de usuarios inicializado');
+    
+    // Acceder a otros módulos si es necesario
+    const authModule = this.getModule<AuthModule>('auth');
+    if (authModule) {
+      // Configuración que depende de otro módulo
+    }
+  }
+}
+```
+
+## Contenedor de Dependencias
+
+### Inyección de Dependencias Integrada
+
+Fox Framework incluye un potente sistema de inyección de dependencias que facilita la creación de componentes desacoplados y fáciles de testear:
+
+```typescript
+import { Injectable, Inject } from 'fox-framework/core';
+import { UserRepository } from './user.repository';
+import { EmailService } from '../email/email.service';
+import { Logger } from 'fox-framework/core/logging';
+
+@Injectable()
+export class UserService {
+  constructor(
+    private userRepository: UserRepository,
+    private emailService: EmailService,
+    @Inject('Logger') private logger: Logger,
+    @Inject('CONFIG') private config: Record<string, any>
+  ) {}
+  
+  async createUser(userData: UserCreateDto): Promise<User> {
+    this.logger.info('Creating new user', { email: userData.email });
+    
+    // Crear usuario
+    const user = await this.userRepository.create(userData);
+    
+    // Enviar email de bienvenida
+    if (this.config.sendWelcomeEmail) {
+      await this.emailService.sendWelcomeEmail(user.email);
+    }
+    
+    return user;
+  }
+}
+```
+
+### Registro de Servicios y Valores
+
+```typescript
+import { Container } from 'fox-framework/core/di';
+
+// Crear un contenedor de dependencias
+const container = new Container();
+
+// Registrar clase
+container.bind('UserService').to(UserService);
+
+// Registrar fábrica
+container.bind('DatabaseConnection').toFactory(() => {
+  return createDatabaseConnection(process.env.DB_URL);
+});
+
+// Registrar singleton
+container.bind('ConfigService').toSingleton(ConfigService);
+
+// Registrar valor
+container.bind('API_KEY').toValue(process.env.API_KEY);
+
+// Registrar con alias
+container.bind('LoggerInterface')
+  .to(FileLogger)
+  .withAlias('Logger');
+
+// Registrar según el entorno
+if (process.env.NODE_ENV === 'production') {
+  container.bind('EmailSender').to(RealEmailSender);
+} else {
+  container.bind('EmailSender').to(MockEmailSender);
+}
+```
+
+### Acceso a Servicios
+
+```typescript
+// Obtener una instancia registrada
+const userService = container.get<UserService>('UserService');
+
+// Verificar si un servicio está registrado
+if (container.has('EmailService')) {
+  const emailService = container.get('EmailService');
+  // Usar el servicio
+}
+
+// Crear e inyectar automáticamente
+const orderController = container.create(OrderController);
+```
+
+## Sistema de Eventos
+
+### Publicación y Suscripción
+
+Fox Framework incluye un sistema de eventos que permite la comunicación entre componentes sin acoplamientos directos:
+
+```typescript
+import { EventEmitter } from 'fox-framework/core/events';
+import { Injectable } from 'fox-framework/core';
+
+@Injectable()
+export class UserService {
+  constructor(private eventEmitter: EventEmitter) {}
+  
+  async createUser(userData: UserCreateDto): Promise<User> {
+    // Crear usuario
+    const user = await this.userRepository.create(userData);
+    
+    // Emitir evento
+    this.eventEmitter.emit('user.created', { user });
+    
+    return user;
+  }
+}
+
+// En otro componente
+@Injectable()
+export class NotificationService {
+  constructor(private eventEmitter: EventEmitter) {
+    // Suscribirse a eventos
+    this.eventEmitter.on('user.created', this.handleUserCreated.bind(this));
+  }
+  
+  private async handleUserCreated(data: { user: User }): Promise<void> {
+    // Enviar notificación de nuevo usuario
+    await this.sendNotification({
+      type: 'NEW_USER',
+      data: {
+        userId: data.user.id,
+        email: data.user.email
+      }
+    });
+  }
+}
+```
+
+### Eventos Tipados
+
+Fox Framework aprovecha TypeScript para proporcionar eventos completamente tipados:
+
+```typescript
+import { EventsDefinition, createEventEmitter } from 'fox-framework/core/events';
+
+// Definir tipado para eventos
+interface AppEvents extends EventsDefinition {
+  'user.created': { user: User };
+  'user.updated': { user: User, changes: string[] };
+  'order.placed': { order: Order, customer: User };
+  'payment.completed': { payment: Payment, order: Order };
+  'system.error': { error: Error, context: string };
+}
+
+// Crear emisor de eventos tipado
+const eventEmitter = createEventEmitter<AppEvents>();
+
+// Uso con tipado completo
+eventEmitter.on('user.created', ({ user }) => {
+  // TypeScript conoce la estructura de 'user'
+  console.log(`Nuevo usuario: ${user.email}`);
+});
+
+// Error de TypeScript si la estructura del evento no coincide
+eventEmitter.emit('user.created', { userId: '123' }); // Error!
+
+// Emisión correcta
+eventEmitter.emit('user.created', { 
+  user: { id: '123', email: 'user@example.com', name: 'Example User' } 
+});
+```
+
+### Eventos Asíncronos
+
+```typescript
+import { AsyncEventEmitter } from 'fox-framework/core/events';
+
+const events = new AsyncEventEmitter();
+
+// Registrar manejador asíncrono
+events.on('order.placed', async (data) => {
+  await emailService.sendOrderConfirmation(data.order);
+});
+
+// Emitir y esperar a que todos los manejadores terminen
+await events.emitAsync('order.placed', { 
+  order: newOrder,
+  customer: customer
+});
+
+console.log('Todos los manejadores de eventos han terminado');
+```
+
+## Sistema de Configuración
+
+### Gestión de Configuración Flexible
+
+Fox Framework proporciona un sistema de configuración robusto que soporta múltiples fuentes y formatos:
+
+```typescript
+import { ConfigFactory } from 'fox-framework/core/config';
+
+// Crear configuración a partir de múltiples fuentes
+const config = ConfigFactory.create({
+  // Valores por defecto
+  defaults: {
+    server: {
+      port: 3000,
+      host: 'localhost'
+    },
+    database: {
+      maxConnections: 10
+    },
+    features: {
+      enableCache: true
+    }
+  },
+  
+  // Archivos de configuración según entorno
+  files: [
+    './config/default.json',
+    `./config/${process.env.NODE_ENV}.json`
+  ],
+  
+  // Variables de entorno (sobrescriben otras fuentes)
+  env: {
+    'SERVER_PORT': 'server.port',
+    'DB_MAX_CONNECTIONS': 'database.maxConnections',
+    'FEATURES_CACHE_ENABLED': 'features.enableCache'
+  },
+  
+  // Opciones generales
+  options: {
+    // Lanzar error si falta una configuración requerida
+    requireKeys: ['database.url'],
+    
+    // Convertir tipos automáticamente
+    autoConvertTypes: true,
+    
+    // Validar esquema de configuración
+    schema: configSchema
+  }
+});
+```
+
+### Acceso a la Configuración
+
+```typescript
+// Obtener valores
+const serverPort = config.get<number>('server.port');
+const databaseConfig = config.get<DbConfig>('database');
+const featureFlag = config.get<boolean>('features.experimentalFeature', false);
+
+// Verificar si existe un valor
+if (config.has('email.smtp')) {
+  // Configurar servicio de email
+}
+
+// Obtener toda la configuración
+const fullConfig = config.getAll();
+
+// Suscribirse a cambios (útil para configuración dinámica)
+config.onChange('features', (newFeatures, oldFeatures) => {
+  console.log('Configuración de características actualizada');
+  
+  // Activar/desactivar características según cambios
+  if (newFeatures.enableCache !== oldFeatures.enableCache) {
+    cacheService.setEnabled(newFeatures.enableCache);
+  }
+});
+```
+
+### Configuración por Entorno
+
+```typescript
+// config/default.json - Configuración base
+{
+  "server": {
+    "port": 3000,
+    "host": "localhost",
+    "cors": {
+      "enabled": false
+    },
+    "rateLimit": {
+      "windowMs": 900000,
+      "max": 100
+    }
+  },
+  "database": {
+    "maxConnections": 10
+  }
+}
+
+// config/development.json - Sobrescrituras para desarrollo
+{
+  "server": {
+    "port": 8080,
+    "cors": {
+      "enabled": true,
+      "origin": "*"
+    }
+  },
+  "logging": {
+    "level": "debug"
+  }
+}
+
+// config/production.json - Sobrescrituras para producción
+{
+  "server": {
+    "host": "0.0.0.0",
+    "cors": {
+      "enabled": true,
+      "origin": "https://example.com"
+    },
+    "rateLimit": {
+      "max": 20
+    }
+  },
+  "logging": {
+    "level": "info"
+  }
+}
+```
+
+## Sistema de Logging
+
+### Logging Estructurado
+
+Fox Framework incluye un sistema de logging versátil que soporta múltiples transportes y formatos:
+
+```typescript
+import { LoggerFactory, LogLevel } from 'fox-framework/core/logging';
+
+// Crear logger con múltiples transportes
+const logger = LoggerFactory.create({
+  level: process.env.NODE_ENV === 'production' ? LogLevel.INFO : LogLevel.DEBUG,
+  
+  transporters: [
+    // Log a consola con colores
+    {
+      type: 'console',
+      format: 'pretty',
+      colorize: true
+    },
+    
+    // Log a archivo rotativo
+    {
+      type: 'file',
+      filename: './logs/app-%DATE%.log',
+      datePattern: 'YYYY-MM-DD',
+      maxFiles: '14d',
+      level: LogLevel.INFO
+    },
+    
+    // Log a servicio remoto en producción
+    ...(process.env.NODE_ENV === 'production' ? [{
+      type: 'http',
+      url: process.env.LOG_SERVICE_URL,
+      headers: {
+        'x-api-key': process.env.LOG_API_KEY
+      },
+      level: LogLevel.WARN
+    }] : [])
+  ],
+  
+  // Formato de los mensajes de log
+  format: {
+    timestamp: true,
+    includeContext: true
+  }
+});
+```
+
+### Uso del Logger
+
+```typescript
+import { Injectable } from 'fox-framework/core';
+import { Logger } from 'fox-framework/core/logging';
+
+@Injectable()
+export class PaymentService {
+  constructor(private logger: Logger) {}
+  
+  async processPayment(payment: Payment): Promise<PaymentResult> {
+    // Logs con diferentes niveles
+    this.logger.info('Procesando pago', { 
+      paymentId: payment.id,
+      amount: payment.amount
+    });
+    
+    try {
+      // Intentar procesar el pago
+      const result = await this.paymentGateway.process(payment);
+      
+      this.logger.info('Pago procesado correctamente', {
+        paymentId: payment.id,
+        transactionId: result.transactionId
+      });
+      
+      return result;
+    } catch (error) {
+      this.logger.error('Error al procesar pago', {
+        paymentId: payment.id,
+        error: error.message,
+        stack: error.stack
+      });
+      
+      throw error;
+    }
+  }
+  
+  async refundPayment(paymentId: string): Promise<void> {
+    // Crear contexto de log para seguimiento
+    const logContext = { paymentId, operation: 'refund' };
+    
+    // Usar contexto en todos los logs relacionados
+    this.logger.debug('Iniciando reembolso', logContext);
+    
+    // Verificar elegibilidad
+    const payment = await this.paymentRepository.findById(paymentId);
+    
+    if (!payment) {
+      this.logger.warn('Intento de reembolso para pago inexistente', logContext);
+      throw new Error('Pago no encontrado');
+    }
+    
+    if (payment.status === 'refunded') {
+      this.logger.warn('Intento de reembolso para pago ya reembolsado', {
+        ...logContext,
+        status: payment.status
+      });
+      throw new Error('El pago ya ha sido reembolsado');
+    }
+    
+    // Log detallado para transacción importante
+    this.logger.info('Realizando reembolso', {
+      ...logContext,
+      amount: payment.amount,
+      currency: payment.currency,
+      customer: payment.customerId
+    });
+    
+    try {
+      await this.paymentGateway.refund(paymentId);
+      
+      this.logger.info('Reembolso completado con éxito', logContext);
+    } catch (error) {
+      this.logger.error('Error al procesar reembolso', {
+        ...logContext,
+        error: error.message,
+        errorCode: error.code,
+        stack: error.stack
+      });
+      
+      throw error;
+    }
+  }
+}
+```
+
+### Middleware de Logging
+
+```typescript
+import { loggerMiddleware } from 'fox-framework/core/middlewares';
+
+// Registrar middleware de logging para peticiones HTTP
+server.use(loggerMiddleware({
+  // Configuraciones específicas para logs de peticiones
+  requestLogging: {
+    // Incluir headers en el log (sanitizados)
+    includeHeaders: true,
+    // Headers que no se deben registrar
+    excludeHeaders: ['authorization', 'cookie'],
+    // Log del cuerpo de la petición
+    includeBody: process.env.NODE_ENV !== 'production',
+    // Máximo tamaño de cuerpo a registrar
+    maxBodySize: 1024
+  },
+  
+  // Configuraciones específicas para logs de respuestas
+  responseLogging: {
+    // Incluir cuerpo de respuesta en el log
+    includeBody: false,
+    // Incluir tiempo de respuesta
+    includeResponseTime: true
+  }
+}));
+```
+
+## Integración con Bases de Datos
+
+### Capa de Abstracción para Bases de Datos
+
+Fox Framework proporciona una capa de abstracción para trabajar con diferentes bases de datos de manera uniforme:
+
+```typescript
+import { DatabaseFactory, QueryBuilder } from 'fox-framework/core/database';
+
+// Crear instancia de base de datos
+const db = DatabaseFactory.create({
+  type: 'postgres', // o 'mysql', 'sqlite', 'mongodb'
+  connection: {
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '5432'),
+    username: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME
+  },
+  pool: {
+    min: 2,
+    max: 10
+  },
+  // Opciones de migración
+  migrations: {
+    directory: './migrations',
+    tableName: 'migrations'
+  }
+});
+
+// Consulta con query builder tipado
+async function getUsersWithPosts() {
+  return db.query()
+    .select('users.*', db.raw('COUNT(posts.id) as post_count'))
+    .from('users')
+    .leftJoin('posts', 'users.id', 'posts.user_id')
+    .where('users.active', true)
+    .groupBy('users.id')
+    .having('post_count', '>', 0)
+    .orderBy('users.created_at', 'desc')
+    .limit(10)
+    .execute();
+}
+
+// Transacciones
+async function transferFunds(fromAccountId: string, toAccountId: string, amount: number) {
+  return db.transaction(async (trx) => {
+    // Operaciones dentro de la transacción
+    await trx.table('accounts')
+      .where('id', fromAccountId)
+      .decrement('balance', amount);
+      
+    await trx.table('accounts')
+      .where('id', toAccountId)
+      .increment('balance', amount);
+      
+    // Registrar la transferencia
+    await trx.table('transfers').insert({
+      fromAccountId,
+      toAccountId,
+      amount,
+      date: new Date()
+    });
+  });
+}
+```
+
+### Repositorios Tipados
+
+```typescript
+import { Repository, Entity, Column, PrimaryKey } from 'fox-framework/core/database';
+
+// Definir entidad
+@Entity('users')
+class User {
+  @PrimaryKey()
+  id: string;
+  
+  @Column({ type: 'varchar', length: 100 })
+  name: string;
+  
+  @Column({ type: 'varchar', unique: true })
+  email: string;
+  
+  @Column({ name: 'created_at', type: 'timestamp' })
+  createdAt: Date;
+  
+  @Column({ nullable: true })
+  lastLoginAt?: Date;
+  
+  // Relación one-to-many
+  @OneToMany(() => Post, post => post.author)
+  posts: Post[];
+}
+
+// Repositorio tipado
+@Injectable()
+export class UserRepository extends Repository<User> {
+  constructor(db: DatabaseConnection) {
+    super(db, User);
+  }
+  
+  // Métodos personalizados
+  async findByEmail(email: string): Promise<User | null> {
+    return this.findOne({
+      where: { email }
+    });
+  }
+  
+  async getActiveUsers(): Promise<User[]> {
+    return this.find({
+      where: {
+        active: true
+      },
+      orderBy: {
+        createdAt: 'DESC'
+      }
+    });
+  }
+  
+  async getUsersWithPostCount(minPosts = 1): Promise<Array<User & { postCount: number }>> {
+    return this.createQueryBuilder('u')
+      .leftJoin('u.posts', 'p')
+      .select(['u.*', 'COUNT(p.id) as postCount'])
+      .groupBy('u.id')
+      .having('postCount >= :minPosts', { minPosts })
+      .getRawMany();
+  }
+}
+```
+
+## Sistema de Validación
+
+### Validación Declarativa
+
+Fox Framework incluye un sistema de validación potente y flexible:
+
+```typescript
+import { validate, IsEmail, Length, IsNotEmpty } from 'fox-framework/core/validation';
+
+// Definir esquema de validación con decoradores
+class CreateUserDto {
+  @IsNotEmpty({ message: 'El nombre es obligatorio' })
+  @Length(2, 50, { message: 'El nombre debe tener entre 2 y 50 caracteres' })
+  name: string;
+  
+  @IsNotEmpty({ message: 'El email es obligatorio' })
+  @IsEmail({}, { message: 'El formato de email no es válido' })
+  email: string;
+  
+  @IsNotEmpty({ message: 'La contraseña es obligatoria' })
+  @Length(8, 100, { message: 'La contraseña debe tener al menos 8 caracteres' })
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).*$/, {
+    message: 'La contraseña debe contener al menos una mayúscula, una minúscula y un número'
+  })
+  password: string;
+  
+  @IsOptional()
+  @IsPhoneNumber(null, { message: 'El formato de teléfono no es válido' })
+  phone?: string;
+}
+
+// Usar validación
+@Post('/users')
+async createUser(ctx: HttpContext) {
+  const userData = ctx.body;
+  
+  // Validar datos
+  const errors = await validate(userData, CreateUserDto);
+  
+  if (errors.length > 0) {
+    // Formatear errores para respuesta
+    const formattedErrors = errors.reduce((acc, error) => {
+      // Extraer mensajes de error por campo
+      const constraints = Object.values(error.constraints || {});
+      
+      if (constraints.length) {
+        acc[error.property] = constraints;
+      }
+      
+      return acc;
+    }, {});
+    
+    return ctx.response.badRequest({
+      message: 'Error de validación',
+      errors: formattedErrors
+    });
+  }
+  
+  // Continuar con la creación del usuario
+  const user = await this.userService.create(userData);
+  
+  return ctx.response.created(user);
+}
+```
+
+### Validación Manual
+
+```typescript
+import { Validator, ValidationSchema } from 'fox-framework/core/validation';
+
+// Esquema de validación
+const productSchema: ValidationSchema = {
+  name: {
+    type: 'string',
+    required: true,
+    minLength: 3,
+    maxLength: 100
+  },
+  price: {
+    type: 'number',
+    required: true,
+    min: 0
+  },
+  description: {
+    type: 'string',
+    maxLength: 1000
+  },
+  category: {
+    type: 'string',
+    enum: ['electronics', 'clothing', 'books', 'home', 'other']
+  },
+  tags: {
+    type: 'array',
+    items: {
+      type: 'string',
+      maxLength: 20
+    },
+    maxItems: 10
+  },
+  dimensions: {
+    type: 'object',
+    properties: {
+      width: { type: 'number', min: 0 },
+      height: { type: 'number', min: 0 },
+      depth: { type: 'number', min: 0 }
+    }
+  }
+};
+
+// Validar datos
+function validateProduct(data: unknown): { isValid: boolean, errors: Record<string, string[]> } {
+  const validator = new Validator();
+  
+  const result = validator.validate(data, productSchema);
+  
+  return {
+    isValid: result.valid,
+    errors: result.errors
+  };
+}
+
+// Uso en controlador
+@Post('/products')
+async createProduct(ctx: HttpContext) {
+  const productData = ctx.body;
+  
+  // Validar datos
+  const { isValid, errors } = validateProduct(productData);
+  
+  if (!isValid) {
+    return ctx.response.badRequest({
+      message: 'Datos de producto inválidos',
+      errors
+    });
+  }
+  
+  // Continuar con datos válidos
+  const product = await this.productService.create(productData);
+  
+  return ctx.response.created(product);
+}
+```
+
+### Validación Personalizada
+
+```typescript
+import { ValidationRule } from 'fox-framework/core/validation';
+
+// Regla personalizada para validar ISBN
+const isValidISBN: ValidationRule = {
+  name: 'isValidISBN',
+  validate: (value, params) => {
+    if (typeof value !== 'string') return false;
+    
+    // Eliminar guiones y espacios
+    const cleaned = value.replace(/[-\s]/g, '');
+    
+    // Validar ISBN-10
+    if (cleaned.length === 10) {
+      let sum = 0;
+      
+      for (let i = 0; i < 9; i++) {
+        const digit = parseInt(cleaned[i]);
+        if (isNaN(digit)) return false;
+        sum += digit * (10 - i);
+      }
+      
+      // Manejar último dígito (puede ser X)
+      const last = cleaned[9].toUpperCase();
+      if (last === 'X') {
+        sum += 10;
+      } else {
+        const digit = parseInt(last);
+        if (isNaN(digit)) return false;
+        sum += digit;
+      }
+      
+      return sum % 11 === 0;
+    }
+    
+    // Validar ISBN-13
+    if (cleaned.length === 13) {
+      let sum = 0;
+      
+      for (let i = 0; i < 12; i++) {
+        const digit = parseInt(cleaned[i]);
+        if (isNaN(digit)) return false;
+        sum += i % 2 === 0 ? digit : digit * 3;
+      }
+      
+      const check = (10 - (sum % 10)) % 10;
+      return check === parseInt(cleaned[12]);
+    }
+    
+    return false;
+  },
+  message: 'El valor debe ser un ISBN válido (ISBN-10 o ISBN-13)'
+};
+
+// Registrar regla personalizada
+Validator.addRule(isValidISBN);
+
+// Usar en esquema
+const bookSchema = {
+  title: { type: 'string', required: true },
+  isbn: { isValidISBN: true },
+  // Otros campos...
+};
+```
+
+## Caché Integrada
+
+### Sistema de Caché Flexible
+
+Fox Framework incluye un sistema de caché versátil que soporta múltiples backends:
+
+```typescript
+import { CacheFactory, CacheManager } from 'fox-framework/core/cache';
+
+// Crear instancia de caché
+const cache = CacheFactory.create({
+  // Proveedor de caché
+  provider: 'redis',
+  
+  // Configuración de conexión
+  connection: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD
+  },
+  
+  // Configuración general
+  defaultTTL: 3600, // 1 hora
+  keyPrefix: 'app:',
+  
+  // Serialización automática de objetos
+  serialize: true
+});
+
+// También soporta múltiples proveedores
+const multiCache = CacheFactory.create({
+  providers: [
+    {
+      // Caché en memoria para respuestas rápidas
+      name: 'memory',
+      provider: 'memory',
+      options: {
+        max: 1000, // Máximo número de ítems
+        ttl: 60 // 1 minuto
+      }
+    },
+    {
+      // Caché distribuida para persistencia
+      name: 'redis',
+      provider: 'redis',
+      options: {
+        connection: {
+          host: process.env.REDIS_HOST,
+          port: parseInt(process.env.REDIS_PORT || '6379')
+        },
+        ttl: 3600 // 1 hora
+      }
+    }
+  ],
+  
+  // Estrategia: intentar primero en memoria, luego en Redis
+  strategy: 'fallback'
+});
+```
+
+### Uso de Caché
+
+```typescript
+import { Injectable } from 'fox-framework/core';
+import { CacheManager } from 'fox-framework/core/cache';
+
+@Injectable()
+export class ProductService {
+  constructor(
+    private productRepository: ProductRepository,
+    private cache: CacheManager
+  ) {}
+  
+  async getProduct(id: string): Promise<Product | null> {
+    // Intentar obtener de caché
+    const cacheKey = `product:${id}`;
+    
+    // Tipado genérico para especificar el tipo de retorno
+    const cachedProduct = await this.cache.get<Product>(cacheKey);
+    
+    if (cachedProduct) {
+      return cachedProduct;
+    }
+    
+    // Si no está en caché, obtener de la base de datos
+    const product = await this.productRepository.findById(id);
+    
+    if (product) {
+      // Guardar en caché
+      await this.cache.set(cacheKey, product, 3600); // TTL: 1 hora
+    }
+    
+    return product;
+  }
+  
+  async getProductsByCategory(category: string): Promise<Product[]> {
+    const cacheKey = `products:category:${category}`;
+    
+    // Obtener de caché o calcular
+    return this.cache.remember<Product[]>(cacheKey, async () => {
+      return this.productRepository.findByCategory(category);
+    }, 600); // TTL: 10 minutos
+  }
+  
+  async updateProduct(id: string, data: ProductUpdateDto): Promise<Product> {
+    // Actualizar en la base de datos
+    const updatedProduct = await this.productRepository.update(id, data);
+    
+    // Invalidar caché
+    await this.cache.delete(`product:${id}`);
+    
+    // Invalidar listas que podrían contener este producto
+    const category = updatedProduct.category;
+    await this.cache.deletePattern(`products:category:*`);
+    await this.cache.delete(`products:featured`);
+    
+    return updatedProduct;
+  }
+  
+  async getFeaturedProducts(): Promise<Product[]> {
+    // Usar caché con múltiples niveles y estrategias
+    
+    // 1. Intentar caché en memoria (rápida)
+    const memoryCache = await this.cache.store('memory').get<Product[]>('products:featured');
+    if (memoryCache) return memoryCache;
+    
+    // 2. Intentar caché distribuida
+    const redisCache = await this.cache.store('redis').get<Product[]>('products:featured');
+    if (redisCache) {
+      // Repoblar la caché en memoria
+      await this.cache.store('memory').set('products:featured', redisCache);
+      return redisCache;
+    }
+    
+    // 3. Calcular y almacenar en ambas cachés
+    const products = await this.productRepository.findFeatured();
+    
+    // Almacenar con diferentes TTLs
+    await this.cache.store('memory').set('products:featured', products, 300); // 5 min
+    await this.cache.store('redis').set('products:featured', products, 3600); // 1 hora
+    
+    return products;
+  }
+}
+```
+
+### Decorador de Caché
+
+```typescript
+import { Cache } from 'fox-framework/core/cache';
+import { Injectable } from 'fox-framework/core';
+
+@Injectable()
+export class UserService {
+  constructor(private userRepository: UserRepository) {}
+  
+  // Cachear resultado durante 1 hora
+  @Cache('user:{id}', 3600)
+  async getUserById(id: string): Promise<User | null> {
+    return this.userRepository.findById(id);
+  }
+  
+  // Cachear con clave dinámica basada en argumentos
+  @Cache('users:role:{0}:active:{1}', 600)
+  async getUsersByRole(role: string, active: boolean): Promise<User[]> {
+    return this.userRepository.findByRoleAndStatus(role, active);
+  }
+  
+  // Invalidar caché al actualizar
+  @CacheInvalidate('user:{id}')
+  async updateUser(id: string, data: Partial<User>): Promise<User> {
+    // También invalida patrones relacionados
+    this.cacheManager.deletePattern('users:*');
+    
+    return this.userRepository.update(id, data);
+  }
+}
+```
+
+## Internacionalización (i18n)
+
+### Soporte para Múltiples Idiomas
+
+Fox Framework proporciona un sistema completo para gestionar traducciones y localización:
+
+```typescript
+import { I18nFactory } from 'fox-framework/core/i18n';
+
+// Configurar sistema de internacionalización
+const i18n = I18nFactory.create({
+  // Idiomas soportados
+  locales: ['es', 'en', 'fr', 'de'],
+  
+  // Idioma por defecto
+  defaultLocale: 'es',
+  
+  // Directorio con traducciones
+  directory: './src/locales',
+  
+  // Fallback para traducciones que faltan
+  fallbacks: {
+    'es-MX': 'es',
+    'es-AR': 'es',
+    'en-US': 'en',
+    'en-GB': 'en'
+  },
+  
+  // Estrategia para detectar el idioma
+  detection: {
+    order: ['query', 'cookie', 'header'],
+    lookups: {
+      query: 'lang',
+      cookie: 'locale',
+      header: 'accept-language'
+    }
+  },
+  
+  // Opciones de formateado
+  formatting: {
+    // Formatos de fecha predefinidos
+    date: {
+      short: {
+        day: 'numeric',
+        month: 'numeric',
+        year: '2-digit'
+      },
+      medium: {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      },
+      long: {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      }
+    },
+    
+    // Formatos de número predefinidos
+    number: {
+      currency: {
+        style: 'currency',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      },
+      percent: {
+        style: 'percent',
+        minimumFractionDigits: 2
+      }
+    }
+  }
+});
+```
+
+### Uso de Traducciones
+
+```typescript
+// Traducción simple
+const greeting = i18n.t('common.greeting');
+
+// Con parámetros
+const welcome = i18n.t('user.welcome', { name: 'María' });
+
+// Pluralización
+const itemCount = i18n.t('cart.items', { count: 5 });
+
+// Selección de idioma
+i18n.setLocale('en');
+const greetingEn = i18n.t('common.greeting');
+
+// Formateo de fecha según el locale
+const today = new Date();
+const formattedDate = i18n.formatDate(today, 'long');
+
+// Formateo de número según el locale
+const price = i18n.formatNumber(29.99, 'currency', { currency: 'EUR' });
+```
+
+### Middleware de i18n
+
+```typescript
+import { i18nMiddleware } from 'fox-framework/core/middlewares';
+
+// Registrar middleware de internacionalización
+server.use(i18nMiddleware({
+  // Sobreescribir opciones específicas
+  cookieName: 'app_locale',
+  cookieMaxAge: 365 * 24 * 60 * 60 * 1000 // 1 año
+}));
+
+// En un controlador
+@Get('/profile')
+getProfile(ctx: HttpContext) {
+  const user = ctx.auth.user;
+  
+  // El middleware añade funciones i18n al contexto
+  const welcomeMessage = ctx.i18n.t('profile.welcome', {
+    name: user.name
+  });
+  
+  const joinDate = ctx.i18n.formatDate(user.createdAt, 'long');
+  
+  return ctx.view.render('profile', {
+    user,
+    welcomeMessage,
+    joinDate
+  });
+}
+```
+
+### Archivos de Traducción
+
+```typescript
+// locales/es.json
+{
+  "common": {
+    "greeting": "¡Hola!",
+    "yes": "Sí",
+    "no": "No",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "error": "Error"
+  },
+  "user": {
+    "welcome": "Bienvenido/a, {{name}}!",
+    "login": "Iniciar sesión",
+    "logout": "Cerrar sesión",
+    "register": "Registrarse"
+  },
+  "cart": {
+    "empty": "Tu carrito está vacío",
+    "items": "{{count}} producto",
+    "items_plural": "{{count}} productos",
+    "total": "Total: {{amount}}"
+  },
+  "errors": {
+    "required": "Este campo es obligatorio",
+    "email": "Introduce un email válido",
+    "minLength": "Debe tener al menos {{min}} caracteres",
+    "notFound": "No se encontró el recurso solicitado"
+  }
+}
+
+// locales/en.json
+{
+  "common": {
+    "greeting": "Hello!",
+    "yes": "Yes",
+    "no": "No",
+    "save": "Save",
+    "cancel": "Cancel",
+    "error": "Error"
+  },
+  "user": {
+    "welcome": "Welcome, {{name}}!",
+    "login": "Log in",
+    "logout": "Log out",
+    "register": "Sign up"
+  },
+  "cart": {
+    "empty": "Your cart is empty",
+    "items": "{{count}} item",
+    "items_plural": "{{count}} items",
+    "total": "Total: {{amount}}"
+  },
+  "errors": {
+    "required": "This field is required",
+    "email": "Enter a valid email address",
+    "minLength": "Must be at least {{min}} characters",
+    "notFound": "The requested resource was not found"
+  }
+}
+```
+
+## Sistema de Seguridad
+
+### Protección contra Vulnerabilidades Comunes
+
+Fox Framework incluye características de seguridad integradas para proteger tus aplicaciones:
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+import { securityMiddleware } from 'fox-framework/core/security';
+
+// Crear servidor con configuración de seguridad
+const server = FoxFactory.createServer({
+  // Otras configuraciones...
+  
+  security: {
+    // Protección contra XSS
+    xss: {
+      enabled: true,
+      // Opciones de sanitización
+      sanitizeOptions: {
+        allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
+        allowedAttributes: {
+          'a': ['href', 'target', 'rel']
+        }
+      }
+    },
+    
+    // Protección CSRF
+    csrf: {
+      enabled: true,
+      // Excluir rutas específicas (por ejemplo, webhooks)
+      ignorePaths: ['/api/webhooks/*', '/api/external/*']
+    },
+    
+    // Cabeceras de seguridad HTTP
+    helmet: {
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "https://trusted-cdn.com"],
+          styleSrc: ["'self'", "https://trusted-cdn.com"],
+          imgSrc: ["'self'", "https://trusted-cdn.com", "data:"],
+          fontSrc: ["'self'", "https://trusted-cdn.com"]
+        }
+      },
+      xssFilter: true,
+      noSniff: true,
+      frameguard: { action: 'deny' }
+    },
+    
+    // Rate limiting
+    rateLimit: {
+      enabled: true,
+      windowMs: 15 * 60 * 1000, // 15 minutos
+      max: 100, // Límite por IP
+      standardHeaders: true,
+      // Personalizar por ruta
+      routes: [
+        {
+          path: '/api/auth/*',
+          windowMs: 60 * 60 * 1000, // 1 hora
+          max: 5 // Más restrictivo para autenticación
+        }
+      ]
+    },
+    
+    // Protección SQL Injection
+    sqlInjection: {
+      enabled: true
+    }
+  }
+});
+
+// O aplicar middleware de seguridad individualmente
+server.use(securityMiddleware.xss());
+server.use(securityMiddleware.csrf());
+server.use(securityMiddleware.helmet());
+server.use(securityMiddleware.rateLimit());
+```
+
+### Autenticación Flexible
+
+```typescript
+import { AuthFactory, JwtStrategy, BasicStrategy } from 'fox-framework/core/auth';
+
+// Configurar autenticación
+const auth = AuthFactory.create({
+  // Estrategias de autenticación
+  strategies: [
+    // JWT para API
+    new JwtStrategy({
+      secretKey: process.env.JWT_SECRET || 'your-secret-key',
+      expiresIn: '1d',
+      issuer: 'fox-app',
+      audience: 'api',
+      extractToken: (req) => {
+        // Extraer token del header Authorization
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          return authHeader.substring(7);
+        }
+        return null;
+      }
+    }),
+    
+    // Autenticación básica para ciertos endpoints
+    new BasicStrategy({
+      realm: 'Admin API',
+      validate: async (username, password) => {
+        // Validar credenciales
+        if (username === process.env.ADMIN_USER && password === process.env.ADMIN_PASS) {
+          return { id: 'admin', role: 'admin' };
+        }
+        return null;
+      }
+    }),
+    
+    // Autenticación por sesión para web
+    new SessionStrategy({
+      sessionKey: 'user',
+      loginUrl: '/auth/login'
+    })
+  ],
+  
+  // Proveedores de usuarios
+  userProviders: {
+    // Proveedor por defecto
+    default: {
+      findById: async (id) => {
+        return userService.findById(id);
+      }
+    },
+    
+    // Proveedor para API
+    api: {
+      findById: async (id) => {
+        return apiClientService.findById(id);
+      }
+    }
+  },
+  
+  // Otras configuraciones
+  options: {
+    // Estrategia por defecto
+    defaultStrategy: 'jwt',
+    
+    // Asignar estrategias por ruta
+    strategyMap: [
+      { pattern: '/api/*', strategy: 'jwt' },
+      { pattern: '/admin/*', strategy: 'basic' },
+      { pattern: '/*', strategy: 'session' }
+    ]
+  }
+});
+
+// Registrar middleware de autenticación
+server.use(auth.middleware());
+
+// Proteger rutas
+server.router.get('/profile', auth.required(), (ctx) => {
+  // Usuario autenticado disponible en ctx.auth.user
+  return ctx.response.success({
+    profile: ctx.auth.user
+  });
+});
+
+// Verificar roles o permisos
+server.router.delete('/users/:id', auth.required(['admin']), (ctx) => {
+  // Solo usuarios con rol admin pueden acceder
+});
+
+// Autenticación opcional
+server.router.get('/products', auth.optional(), (ctx) => {
+  // ctx.auth.user puede ser undefined
+});
+```
+
+### Autorización y Control de Acceso
+
+```typescript
+import { AccessControl } from 'fox-framework/core/auth/acl';
+
+// Definir roles y permisos
+const ac = new AccessControl();
+
+// Definir roles
+ac.defineRole('guest', {
+  description: 'Visitante no autenticado'
+});
+
+ac.defineRole('user', {
+  description: 'Usuario registrado',
+  inherits: ['guest']
+});
+
+ac.defineRole('editor', {
+  description: 'Editor de contenido',
+  inherits: ['user']
+});
+
+ac.defineRole('admin', {
+  description: 'Administrador',
+  inherits: ['editor']
+});
+
+// Definir permisos
+ac.grant('guest')
+  .read('product')
+  .read('category');
+
+ac.grant('user')
+  .create('comment')
+  .update('comment').own()
+  .delete('comment').own()
+  .read('profile').own();
+
+ac.grant('editor')
+  .create('product')
+  .update('product')
+  .delete('product')
+  .create('category')
+  .update('category');
+
+ac.grant('admin')
+  .delete('category')
+  .read('profile')
+  .update('profile')
+  .delete('profile');
+
+// Middleware de autorización
+const checkPermission = (resource, action, condition = 'any') => {
+  return (ctx, next) => {
+    const user = ctx.auth.user;
+    
+    if (!user) {
+      return ctx.response.unauthorized('No autorizado');
+    }
+    
+    const role = user.role || 'user';
+    
+    // Verificar si el rol tiene el permiso requerido
+    const permission = ac.can(role)[action](resource);
+    
+    if (condition === 'own') {
+      // Verificar si es el propietario
+      const resourceId = ctx.params.id;
+      const isOwner = resource === 'profile' ? 
+        user.id === resourceId : 
+        ctx.state[resource]?.userId === user.id;
+      
+      if (!permission.own().granted || !isOwner) {
+        return ctx.response.forbidden('No tienes permisos suficientes');
+      }
+    } else if (!permission.granted) {
+      return ctx.response.forbidden('No tienes permisos suficientes');
+    }
+    
+    return next();
+  };
+};
+
+// Uso en rutas
+server.router.get('/products', (ctx) => {
+  // Accesible para todos
+});
+
+server.router.post('/comments', auth.required(), checkPermission('comment', 'create'), (ctx) => {
+  // Solo usuarios autenticados pueden crear comentarios
+});
+
+server.router.put('/comments/:id', auth.required(), loadResource('comment'), checkPermission('comment', 'update', 'own'), (ctx) => {
+  // Solo el creador puede editar su comentario
+});
+
+server.router.delete('/products/:id', auth.required(), checkPermission('product', 'delete'), (ctx) => {
+  // Solo editores y admins pueden eliminar productos
+});
+```
+
+## Adaptadores de Servidor
+
+### Soporte para Múltiples Servidores HTTP
+
+Fox Framework puede funcionar con varios servidores HTTP subyacentes:
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+
+// Crear servidor con Express (por defecto)
+const expressServer = FoxFactory.createServer({
+  port: 3000,
+  server: 'express',
+  // Otras opciones...
+});
+
+// Crear servidor con Fastify
+const fastifyServer = FoxFactory.createServer({
+  port: 3001,
+  server: 'fastify',
+  // Opciones específicas de Fastify
+  serverOptions: {
+    logger: true,
+    ignoreTrailingSlash: true
+  }
+});
+
+// Crear servidor con Koa
+const koaServer = FoxFactory.createServer({
+  port: 3002,
+  server: 'koa',
+  // Opciones específicas de Koa
+});
+
+// Usar el servidor nativo de Node.js
+const nodeServer = FoxFactory.createServer({
+  port: 3003,
+  server: 'node',
+  // Opciones específicas
+});
+```
+
+### Acceso a la Instancia Subyacente
+
+```typescript
+// Acceder al servidor Express subyacente
+const expressApp = expressServer.getNativeServer();
+
+// Configuraciones específicas de Express
+expressApp.set('view engine', 'ejs');
+expressApp.disable('x-powered-by');
+
+// Acceder al servidor Fastify subyacente
+const fastifyApp = fastifyServer.getNativeServer();
+
+// Configuraciones específicas de Fastify
+fastifyApp.addHook('onRequest', (request, reply, done) => {
+  // Hook específico de Fastify
+  done();
+});
+
+// Registrar plugins específicos de Fastify
+fastifyApp.register(require('fastify-swagger'), {
+  routePrefix: '/documentation',
+  swagger: {
+    info: {
+      title: 'API Documentation',
+      version: '1.0.0'
+    }
+  },
+  exposeRoute: true
+});
+```
+
+## Sistema de Plugins
+
+### Arquitectura Extensible
+
+Fox Framework está diseñado para ser extensible a través de plugins:
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+import { PluginManager } from 'fox-framework/core/plugins';
+
+// Crear gestor de plugins
+const pluginManager = new PluginManager();
+
+// Registrar plugins
+pluginManager.register('fox-swagger', {
+  // Opciones de configuración
+  outputPath: './docs/swagger.json',
+  exposeUI: true,
+  uiPath: '/api-docs'
+});
+
+pluginManager.register('fox-monitoring', {
+  metrics: ['http', 'memory', 'cpu'],
+  interval: 15000, // 15 segundos
+  storage: 'prometheus'
+});
+
+// Crear servidor con plugins
+const server = FoxFactory.createServer({
+  port: 3000,
+  plugins: pluginManager,
+  // Otras opciones...
+});
+
+// Cargar plugin en runtime
+server.plugins.load('fox-graphql', {
+  schemaPath: './src/graphql/schema',
+  resolversPath: './src/graphql/resolvers',
+  playground: process.env.NODE_ENV !== 'production'
+});
+```
+
+### Crear Plugins Personalizados
+
+```typescript
+import { Plugin, Server, PluginContext } from 'fox-framework/core/plugins';
+
+// Definir plugin personalizado
+class CustomLoggerPlugin implements Plugin {
+  // Nombre del plugin
+  name = 'custom-logger';
+  
+  // Versión del plugin
+  version = '1.0.0';
+  
+  // Dependencias
+  dependencies = [];
+  
+  // Opciones por defecto
+  defaultOptions = {
+    level: 'info',
+    format: 'json',
+    transports: ['console']
+  };
+  
+  // Hook de registro
+  async register(server: Server, options: any, context: PluginContext): Promise<void> {
+    // Fusionar opciones con valores por defecto
+    const config = { ...this.defaultOptions, ...options };
+    
+    // Crear logger personalizado
+    const logger = createCustomLogger(config);
+    
+    // Registrar como servicio
+    server.container.bind('Logger').toValue(logger);
+    
+    // Añadir middleware
+    server.use(async (ctx, next) => {
+      // Añadir logger al contexto
+      ctx.logger = logger.child({ requestId: ctx.id });
+      
+      // Registrar inicio de petición
+      ctx.logger.info(`${ctx.method} ${ctx.path}`, {
+        query: ctx.query,
+        headers: ctx.headers
+      });
+      
+      const start = Date.now();
+      
+      try {
+        // Continuar con el siguiente middleware
+        await next();
+        
+        // Registrar finalización
+        const duration = Date.now() - start;
+        ctx.logger.info(`Response sent`, {
+          status: ctx.status,
+          duration,
+          contentLength: ctx.response.length
+        });
+      } catch (error) {
+        // Registrar error
+        const duration = Date.now() - start;
+        ctx.logger.error(`Request error`, {
+          error: error.message,
+          stack: error.stack,
+          status: error.statusCode || 500,
+          duration
+        });
+        
+        // Re-lanzar para que lo maneje el middleware de errores
+        throw error;
+      }
+    });
+    
+    // Registrar eventos
+    server.events.on('server.start', () => {
+      logger.info(`Server started on port ${server.port}`);
+    });
+    
+    server.events.on('server.stop', () => {
+      logger.info(`Server stopped`);
+    });
+    
+    // Devolver API pública del plugin
+    return {
+      logger,
+      setLevel: (level) => {
+        logger.setLevel(level);
+      }
+    };
+  }
+  
+  // Hook de desregistro
+  async unregister(server: Server): Promise<void> {
+    // Limpieza al desactivar el plugin
+    console.log('Custom logger plugin unregistered');
+  }
+}
+
+// Registrar plugin
+server.plugins.register(new CustomLoggerPlugin(), {
+  level: 'debug',
+  format: 'pretty'
+});
+
+// Usar API del plugin
+const loggerPlugin = server.plugins.get('custom-logger');
+loggerPlugin.setLevel('warn');
+```
+
+## Conclusión
+
+Las características core de Fox Framework proporcionan una base sólida y flexible para el desarrollo de aplicaciones web modernas. Con su enfoque en la modularidad, extensibilidad y buenas prácticas de desarrollo, el framework facilita la creación de aplicaciones mantenibles, escalables y robustas.
+
+Estas características fundamentales trabajan en conjunto para ofrecer:
+
+1. **Estructura clara**: Organización modular que facilita el mantenimiento y la colaboración.
+2. **Reutilización de código**: Componentes desacoplados que pueden usarse en diferentes partes de la aplicación.
+3. **Tipado fuerte**: Aprovechando TypeScript para detectar errores en tiempo de compilación.
+4. **Extensibilidad**: Arquitectura de plugins que permite añadir nuevas características sin modificar el core.
+5. **Rendimiento**: Optimizaciones como caché y procesamiento eficiente de peticiones.
+6. **Seguridad**: Protecciones incorporadas contra vulnerabilidades comunes.
+7. **Internacionalización**: Soporte para aplicaciones multilingües desde el diseño.
+8. **Testabilidad**: Diseño orientado a facilitar pruebas unitarias e integración.
+
+Con estas características, Fox Framework proporciona las herramientas necesarias para construir desde pequeñas APIs hasta aplicaciones web empresariales completas, manteniendo siempre el foco en la calidad del código y la experiencia del desarrollador.

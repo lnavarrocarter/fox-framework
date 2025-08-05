@@ -1,0 +1,1258 @@
+# Motor de Templates
+
+El motor de templates de Fox Framework proporciona una forma potente y flexible para generar vistas HTML dinámicas en tus aplicaciones. Diseñado para ser extensible, rápido y compatible con múltiples sistemas de plantillas, este componente te permite separar claramente la lógica de presentación de la lógica de negocio.
+
+## Características Principales
+
+- **Sistema modular**: Soporte para múltiples motores de plantillas
+- **Extensible**: Fácil integración de nuevos motores de templates
+- **Caché integrada**: Optimización de rendimiento para plantillas
+- **Layouts y partials**: Composición de interfaces reutilizables
+- **Helpers**: Funciones de ayuda para manipulación de datos en vistas
+- **Integración con datos**: Paso sencillo de datos desde controladores a vistas
+- **Tipado completo**: Aprovecha TypeScript para detectar errores temprano
+- **Compilación**: Compila plantillas para máximo rendimiento
+
+## Configuración Básica
+
+### Configuración del Motor
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+import { TemplateEngineFactory } from 'fox-framework/templates';
+
+// Crear el servidor con motor de templates
+const server = FoxFactory.createServer({
+  port: 3000,
+  views: {
+    // Motor por defecto
+    engine: 'ejs',
+    
+    // Directorio de plantillas
+    directory: './src/views',
+    
+    // Configuración adicional
+    options: {
+      // Extensión de archivos de plantilla
+      extension: 'ejs',
+      
+      // Caché de plantillas en producción
+      cache: process.env.NODE_ENV === 'production',
+      
+      // Variables globales disponibles en todas las vistas
+      globals: {
+        appName: 'Mi Aplicación',
+        version: '1.0.0'
+      }
+    }
+  },
+  router
+});
+
+// También puedes configurar el motor después de crear el servidor
+server.setTemplateEngine(TemplateEngineFactory.create('pug', {
+  directory: './src/views',
+  extension: 'pug',
+  cache: true
+}));
+```
+
+### Uso Básico en Controladores
+
+```typescript
+import { Controller, Get, HttpContext } from 'fox-framework/core';
+
+@Controller('/')
+export class HomeController {
+  @Get('/')
+  async index(ctx: HttpContext) {
+    // Renderizar vista con datos
+    return ctx.view.render('home', {
+      title: 'Bienvenido',
+      user: ctx.auth.user
+    });
+  }
+  
+  @Get('/about')
+  async about(ctx: HttpContext) {
+    // Renderizar vista con layout específico
+    return ctx.view.render('about', {
+      title: 'Acerca de',
+      content: 'Contenido de la página'
+    }, {
+      layout: 'layouts/simple'
+    });
+  }
+}
+```
+
+## Motores de Plantillas Soportados
+
+Fox Framework soporta varios motores de plantillas populares:
+
+### EJS (por defecto)
+
+```typescript
+// Configuración para EJS
+server.setTemplateEngine(TemplateEngineFactory.create('ejs', {
+  directory: './src/views',
+  extension: 'ejs'
+}));
+
+// Ejemplo de plantilla EJS
+// views/home.ejs
+```
+
+```html
+<%- include('partials/header', { title }) %>
+
+<div class="container">
+  <h1><%= title %></h1>
+  
+  <% if (user) { %>
+    <p>Bienvenido, <%= user.name %>!</p>
+  <% } else { %>
+    <p>Por favor, inicia sesión</p>
+  <% } %>
+  
+  <ul>
+    <% items.forEach(function(item) { %>
+      <li><%= item.name %></li>
+    <% }); %>
+  </ul>
+</div>
+
+<%- include('partials/footer') %>
+```
+
+### Pug (antes Jade)
+
+```typescript
+// Configuración para Pug
+server.setTemplateEngine(TemplateEngineFactory.create('pug', {
+  directory: './src/views',
+  extension: 'pug'
+}));
+
+// Ejemplo de plantilla Pug
+// views/home.pug
+```
+
+```pug
+extends layouts/main
+
+block content
+  .container
+    h1= title
+    
+    if user
+      p Bienvenido, #{user.name}!
+    else
+      p Por favor, inicia sesión
+      
+    ul
+      each item in items
+        li= item.name
+```
+
+### Handlebars
+
+```typescript
+// Configuración para Handlebars
+server.setTemplateEngine(TemplateEngineFactory.create('handlebars', {
+  directory: './src/views',
+  extension: 'hbs'
+}));
+
+// Ejemplo de plantilla Handlebars
+// views/home.hbs
+```
+
+```handlebars
+{{> partials/header title=title}}
+
+<div class="container">
+  <h1>{{title}}</h1>
+  
+  {{#if user}}
+    <p>Bienvenido, {{user.name}}!</p>
+  {{else}}
+    <p>Por favor, inicia sesión</p>
+  {{/if}}
+  
+  <ul>
+    {{#each items}}
+      <li>{{this.name}}</li>
+    {{/each}}
+  </ul>
+</div>
+
+{{> partials/footer}}
+```
+
+### Nunjucks
+
+```typescript
+// Configuración para Nunjucks
+server.setTemplateEngine(TemplateEngineFactory.create('nunjucks', {
+  directory: './src/views',
+  extension: 'njk'
+}));
+
+// Ejemplo de plantilla Nunjucks
+// views/home.njk
+```
+
+```nunjucks
+{% extends "layouts/main.njk" %}
+
+{% block content %}
+<div class="container">
+  <h1>{{ title }}</h1>
+  
+  {% if user %}
+    <p>Bienvenido, {{ user.name }}!</p>
+  {% else %}
+    <p>Por favor, inicia sesión</p>
+  {% endif %}
+  
+  <ul>
+    {% for item in items %}
+      <li>{{ item.name }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}
+```
+
+### Mustache
+
+```typescript
+// Configuración para Mustache
+server.setTemplateEngine(TemplateEngineFactory.create('mustache', {
+  directory: './src/views',
+  extension: 'mustache'
+}));
+
+// Ejemplo de plantilla Mustache
+// views/home.mustache
+```
+
+```mustache
+{{> partials/header }}
+
+<div class="container">
+  <h1>{{title}}</h1>
+  
+  {{#user}}
+    <p>Bienvenido, {{name}}!</p>
+  {{/user}}
+  
+  {{^user}}
+    <p>Por favor, inicia sesión</p>
+  {{/user}}
+  
+  <ul>
+    {{#items}}
+      <li>{{name}}</li>
+    {{/items}}
+  </ul>
+</div>
+
+{{> partials/footer }}
+```
+
+## Layouts y Partials
+
+### Sistema de Layouts
+
+Los layouts permiten definir la estructura común de tus vistas:
+
+#### EJS
+
+```html
+<!-- views/layouts/main.ejs -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title><%= title %> - <%= globals.appName %></title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <header>
+    <%- include('../partials/navigation') %>
+  </header>
+
+  <main>
+    <%- body %>
+  </main>
+
+  <footer>
+    <%- include('../partials/footer') %>
+  </footer>
+
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
+```
+
+#### Pug
+
+```pug
+//- views/layouts/main.pug
+doctype html
+html
+  head
+    title #{title} - #{globals.appName}
+    meta(charset="utf-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    link(rel="stylesheet" href="/assets/css/main.css")
+  body
+    header
+      include ../partials/navigation
+    
+    main
+      block content
+    
+    footer
+      include ../partials/footer
+    
+    script(src="/assets/js/main.js")
+```
+
+### Uso de Partials
+
+Los partials te permiten reutilizar componentes comunes:
+
+#### EJS
+
+```html
+<!-- views/partials/navigation.ejs -->
+<nav>
+  <ul>
+    <li><a href="/">Inicio</a></li>
+    <li><a href="/about">Acerca de</a></li>
+    <li><a href="/contact">Contacto</a></li>
+    <% if (user) { %>
+      <li><a href="/profile">Perfil</a></li>
+      <li><a href="/logout">Cerrar sesión</a></li>
+    <% } else { %>
+      <li><a href="/login">Iniciar sesión</a></li>
+    <% } %>
+  </ul>
+</nav>
+```
+
+#### Handlebars
+
+```handlebars
+{{!-- views/partials/navigation.hbs --}}
+<nav>
+  <ul>
+    <li><a href="/">Inicio</a></li>
+    <li><a href="/about">Acerca de</a></li>
+    <li><a href="/contact">Contacto</a></li>
+    {{#if user}}
+      <li><a href="/profile">Perfil</a></li>
+      <li><a href="/logout">Cerrar sesión</a></li>
+    {{else}}
+      <li><a href="/login">Iniciar sesión</a></li>
+    {{/if}}
+  </ul>
+</nav>
+```
+
+## Helpers para Vistas
+
+Los helpers son funciones que puedes usar en tus plantillas para formatear datos, realizar lógica o generar HTML dinámicamente:
+
+### Definir Helpers Globales
+
+```typescript
+import { TemplateEngineFactory } from 'fox-framework/templates';
+
+const templateEngine = TemplateEngineFactory.create('ejs', {
+  directory: './src/views',
+  extension: 'ejs',
+  helpers: {
+    // Formatear fecha
+    formatDate: (date, format = 'DD/MM/YYYY') => {
+      return dayjs(date).format(format);
+    },
+    
+    // Truncar texto
+    truncate: (text, length = 100) => {
+      if (text.length <= length) return text;
+      return text.substring(0, length) + '...';
+    },
+    
+    // Generar URL para assets con versión para cache busting
+    asset: (path) => {
+      const version = process.env.APP_VERSION || Date.now();
+      return `/assets/${path}?v=${version}`;
+    },
+    
+    // Verificar si una ruta está activa
+    isActive: (currentPath, path) => {
+      return currentPath === path ? 'active' : '';
+    }
+  }
+});
+
+server.setTemplateEngine(templateEngine);
+```
+
+### Usar Helpers en Plantillas
+
+#### EJS
+
+```html
+<!-- Formatear fecha -->
+<p>Publicado el: <%= formatDate(post.publishedAt, 'DD MMM, YYYY') %></p>
+
+<!-- Truncar texto -->
+<p><%= truncate(post.content, 150) %></p>
+
+<!-- URL para asset -->
+<link rel="stylesheet" href="<%= asset('css/styles.css') %>">
+
+<!-- Clase activa -->
+<li class="<%= isActive(currentPath, '/about') %>">
+  <a href="/about">Acerca de</a>
+</li>
+```
+
+#### Handlebars
+
+```handlebars
+<!-- Formatear fecha -->
+<p>Publicado el: {{formatDate post.publishedAt "DD MMM, YYYY"}}</p>
+
+<!-- Truncar texto -->
+<p>{{truncate post.content 150}}</p>
+
+<!-- URL para asset -->
+<link rel="stylesheet" href="{{asset 'css/styles.css'}}">
+
+<!-- Clase activa -->
+<li class="{{isActive currentPath '/about'}}">
+  <a href="/about">Acerca de</a>
+</li>
+```
+
+## Opciones Avanzadas
+
+### Múltiples Motores
+
+Puedes configurar múltiples motores de plantillas para diferentes partes de tu aplicación:
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+import { TemplateEngineFactory } from 'fox-framework/templates';
+
+// Crear el servidor con configuración básica
+const server = FoxFactory.createServer({
+  // ...otras opciones
+});
+
+// Configurar motor principal para vistas HTML
+const mainEngine = TemplateEngineFactory.create('ejs', {
+  directory: './src/views',
+  extension: 'ejs'
+});
+
+// Configurar motor secundario para emails
+const emailEngine = TemplateEngineFactory.create('handlebars', {
+  directory: './src/emails',
+  extension: 'hbs',
+  partials: './src/emails/partials'
+});
+
+// Registrar motores
+server.setTemplateEngine('main', mainEngine); // Motor por defecto
+server.setTemplateEngine('email', emailEngine);
+
+// En un controlador
+@Controller('/users')
+export class UserController {
+  @Post('/register')
+  async register(ctx: HttpContext) {
+    // Registrar usuario
+    // ...
+    
+    // Renderizar email con motor específico
+    const emailHtml = await ctx.view.engine('email').render('welcome', {
+      user: newUser,
+      activationUrl: `https://example.com/activate/${token}`
+    });
+    
+    // Enviar email
+    await emailService.send({
+      to: newUser.email,
+      subject: 'Bienvenido a nuestra aplicación',
+      html: emailHtml
+    });
+    
+    // Renderizar respuesta con motor principal
+    return ctx.view.render('registration-success', {
+      user: newUser
+    });
+  }
+}
+```
+
+### Caché de Plantillas
+
+Fox Framework implementa un sistema de caché para optimizar el rendimiento:
+
+```typescript
+import { TemplateEngineFactory, FileSystemCache } from 'fox-framework/templates';
+
+// Configurar caché personalizada
+const cacheProvider = new FileSystemCache({
+  directory: './cache/templates',
+  ttl: 3600 * 1000 // 1 hora
+});
+
+// Crear motor con caché
+const templateEngine = TemplateEngineFactory.create('ejs', {
+  directory: './src/views',
+  extension: 'ejs',
+  cache: true,
+  cacheProvider: cacheProvider
+});
+
+// También puedes controlar la caché por vista
+@Get('/dashboard')
+async dashboard(ctx: HttpContext) {
+  return ctx.view.render('dashboard', {
+    stats: await this.statsService.getLatest()
+  }, {
+    cache: true,      // Habilitar caché para esta vista
+    cacheTtl: 60000,  // TTL específico (1 minuto)
+    cacheKey: `dashboard-${ctx.auth.userId}` // Clave personalizada
+  });
+}
+```
+
+### Compilación Previa
+
+Para entornos de producción, puedes precompilar tus plantillas para mayor rendimiento:
+
+```typescript
+import { TemplateCompiler } from 'fox-framework/templates';
+
+// Script para compilación de plantillas
+async function compileTemplates() {
+  const compiler = new TemplateCompiler({
+    engine: 'ejs',
+    srcDirectory: './src/views',
+    outputDirectory: './dist/compiled-views',
+    extension: 'ejs'
+  });
+  
+  // Compilar todas las plantillas
+  await compiler.compileAll();
+  
+  console.log('Plantillas compiladas correctamente');
+}
+
+// Ejecutar durante el proceso de build
+if (require.main === module) {
+  compileTemplates().catch(console.error);
+}
+
+// En producción, usar las plantillas compiladas
+if (process.env.NODE_ENV === 'production') {
+  const templateEngine = TemplateEngineFactory.create('ejs', {
+    directory: './dist/compiled-views',
+    usePrecompiled: true
+  });
+  
+  server.setTemplateEngine(templateEngine);
+}
+```
+
+## Contexto de Vistas
+
+El contexto de vistas proporciona datos y funcionalidades accesibles dentro de tus plantillas:
+
+### Variables Globales
+
+```typescript
+const templateEngine = TemplateEngineFactory.create('ejs', {
+  directory: './src/views',
+  extension: 'ejs',
+  globals: {
+    // Información de la aplicación
+    appName: 'Mi Aplicación',
+    version: '1.0.0',
+    
+    // URLs comunes
+    urls: {
+      home: '/',
+      about: '/about',
+      contact: '/contact',
+      login: '/auth/login',
+      register: '/auth/register'
+    },
+    
+    // Función para generar URLs
+    route: (name, params = {}) => {
+      return router.generateUrl(name, params);
+    },
+    
+    // Entorno
+    isDev: process.env.NODE_ENV === 'development',
+    isProd: process.env.NODE_ENV === 'production',
+    
+    // Fecha actual
+    now: () => new Date()
+  }
+});
+```
+
+### Datos de Controladores
+
+```typescript
+@Get('/products/:id')
+async showProduct(ctx: HttpContext) {
+  const { id } = ctx.params;
+  
+  // Cargar datos
+  const product = await this.productService.findById(id);
+  const relatedProducts = await this.productService.findRelated(id);
+  
+  // Verificar si existe
+  if (!product) {
+    return ctx.response.notFound('Producto no encontrado');
+  }
+  
+  // Renderizar con múltiples datos
+  return ctx.view.render('products/show', {
+    title: product.name,
+    product,
+    relatedProducts,
+    reviews: await this.reviewService.getForProduct(id),
+    
+    // Datos del usuario
+    user: ctx.auth.user,
+    
+    // Parámetros de URL
+    id,
+    
+    // Estado
+    inStock: product.stock > 0,
+    
+    // Metadatos
+    meta: {
+      description: product.shortDescription,
+      keywords: product.tags.join(', ')
+    },
+    
+    // Variables para frontend
+    jsData: {
+      productId: product.id,
+      initialPrice: product.price,
+      hasVariants: product.variants.length > 0
+    }
+  });
+}
+```
+
+### Variables Locales en Middleware
+
+Puedes añadir variables para todas las vistas a través de middleware:
+
+```typescript
+const viewContextMiddleware: Middleware = async (ctx, next) => {
+  // Añadir variables a todas las vistas
+  ctx.view.locals({
+    // Usuario actual
+    user: ctx.auth.user,
+    
+    // URL actual para marcar elementos de menú activos
+    currentPath: ctx.request.path,
+    
+    // Mensajes flash de sesiones anteriores
+    flashMessages: ctx.session.getFlash(),
+    
+    // CSRF token
+    csrfToken: ctx.csrf.token(),
+    
+    // Variables de configuración
+    settings: await settingsService.getPublicSettings()
+  });
+  
+  return next();
+};
+
+// Registrar como middleware global
+server.use(viewContextMiddleware);
+```
+
+## Funcionalidades Avanzadas
+
+### Integración con i18n
+
+```typescript
+import { i18n } from 'fox-framework/i18n';
+
+// Configurar internacionalización
+const i18nConfig = {
+  locales: ['es', 'en'],
+  defaultLocale: 'es',
+  directory: './src/locales'
+};
+
+// Inicializar i18n
+const translator = await i18n.init(i18nConfig);
+
+// Integrar con motor de templates
+const templateEngine = TemplateEngineFactory.create('ejs', {
+  directory: './src/views',
+  extension: 'ejs',
+  helpers: {
+    // Helper de traducción
+    t: (key, options = {}) => translator.translate(key, options),
+    
+    // Formateo de números
+    formatNumber: (num, options = {}) => translator.formatNumber(num, options),
+    
+    // Formateo de fechas
+    formatDate: (date, options = {}) => translator.formatDate(date, options),
+    
+    // Pluralización
+    plural: (count, singular, plural) => count === 1 ? singular : plural
+  },
+  
+  // Middleware para detectar y establecer idioma
+  middleware: async (ctx, next) => {
+    // Detectar idioma de la petición
+    const locale = ctx.locale || i18nConfig.defaultLocale;
+    
+    // Establecer idioma para esta petición
+    translator.setLocale(locale);
+    
+    // Continuar
+    return next();
+  }
+});
+```
+
+### Transformación de Datos
+
+```typescript
+// Transformador de datos antes de pasar a la vista
+const templateEngine = TemplateEngineFactory.create('ejs', {
+  directory: './src/views',
+  extension: 'ejs',
+  
+  // Transformar datos antes de renderizar
+  dataTransformers: [
+    // Escapar HTML por defecto (seguridad)
+    (data) => {
+      if (typeof data === 'string') {
+        return escapeHtml(data);
+      }
+      return data;
+    },
+    
+    // Formatear fechas automáticamente
+    (data, key) => {
+      if (data instanceof Date) {
+        return dayjs(data).format('DD/MM/YYYY HH:mm');
+      }
+      return data;
+    },
+    
+    // Transformar modelos a objetos planos
+    (data) => {
+      if (data && typeof data === 'object' && data.toJSON) {
+        return data.toJSON();
+      }
+      return data;
+    }
+  ]
+});
+```
+
+### Renderización Condicional
+
+```typescript
+@Get('/dashboard')
+async dashboard(ctx: HttpContext) {
+  // Determinar formato basado en header Accept o query param
+  const format = ctx.accepts(['html', 'json']) || ctx.query.format;
+  
+  // Cargar datos
+  const data = {
+    stats: await this.dashboardService.getStats(),
+    recentActivity: await this.activityService.getRecent(),
+    notifications: await this.notificationService.getUnread(ctx.auth.userId)
+  };
+  
+  // Renderizar según formato
+  if (format === 'json') {
+    return ctx.response.success(data);
+  } else {
+    return ctx.view.render('dashboard', {
+      title: 'Dashboard',
+      ...data
+    });
+  }
+}
+```
+
+### Componentes Reutilizables
+
+Patrones para crear componentes reutilizables:
+
+#### Macros en Nunjucks
+
+```nunjucks
+{# views/macros/forms.njk #}
+{% macro input(name, label, value='', type='text', attributes={}) %}
+<div class="form-group">
+  <label for="{{ name }}">{{ label }}</label>
+  <input 
+    type="{{ type }}" 
+    name="{{ name }}" 
+    id="{{ name }}" 
+    value="{{ value }}" 
+    {% for attr, val in attributes %}
+      {{ attr }}="{{ val }}"
+    {% endfor %}
+    class="form-control {{ 'is-invalid' if errors[name] }}"
+  >
+  {% if errors[name] %}
+    <div class="invalid-feedback">{{ errors[name] }}</div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{# Uso en una plantilla #}
+{% import "macros/forms.njk" as forms %}
+
+<form method="post">
+  {{ forms.input('name', 'Nombre', user.name) }}
+  {{ forms.input('email', 'Correo electrónico', user.email, 'email', {required: true}) }}
+  {{ forms.input('password', 'Contraseña', '', 'password') }}
+  
+  <button type="submit" class="btn btn-primary">Guardar</button>
+</form>
+```
+
+#### Partials con Parámetros en Handlebars
+
+```handlebars
+{{!-- views/components/card.hbs --}}
+<div class="card {{cardClass}}">
+  {{#if title}}
+    <div class="card-header">{{title}}</div>
+  {{/if}}
+  
+  <div class="card-body">
+    {{#if imageUrl}}
+      <img src="{{imageUrl}}" alt="{{imageAlt}}" class="card-img-top">
+    {{/if}}
+    
+    {{#if content}}
+      <div class="card-text">{{content}}</div>
+    {{/if}}
+    
+    {{> @partial-block }}
+  </div>
+  
+  {{#if footer}}
+    <div class="card-footer">{{footer}}</div>
+  {{/if}}
+</div>
+
+{{!-- Uso en una plantilla --}}
+{{#> components/card 
+  title="Producto destacado"
+  imageUrl=product.imageUrl
+  imageAlt=product.name
+  cardClass="mb-4"
+}}
+  <h5 class="card-title">{{product.name}}</h5>
+  <p>{{product.description}}</p>
+  <div class="price">${{formatNumber product.price}}</div>
+  <button class="btn btn-primary">Añadir al carrito</button>
+{{/components/card}}
+```
+
+## Creación de Motores Personalizados
+
+Puedes crear motores de templates personalizados implementando la interfaz `TemplateEngine`:
+
+```typescript
+import { TemplateEngine, TemplateOptions, RenderOptions } from 'fox-framework/templates';
+import CustomTemplateLib from 'custom-template-lib';
+
+export class CustomTemplateEngine implements TemplateEngine {
+  private engine: any;
+  private options: TemplateOptions;
+  private cache: Map<string, any> = new Map();
+  
+  constructor(options: TemplateOptions) {
+    this.options = {
+      extension: 'custom',
+      cache: false,
+      ...options
+    };
+    
+    this.engine = new CustomTemplateLib({
+      // Configuración específica del motor
+    });
+    
+    // Registrar helpers
+    if (options.helpers) {
+      for (const [name, fn] of Object.entries(options.helpers)) {
+        this.engine.registerHelper(name, fn);
+      }
+    }
+  }
+  
+  async render(template: string, data: Record<string, any>, options?: RenderOptions): Promise<string> {
+    const templatePath = this.resolvePath(template);
+    const renderOptions = { ...this.options, ...options };
+    
+    try {
+      // Si caché está habilitada
+      if (renderOptions.cache) {
+        const cached = this.cache.get(templatePath);
+        if (cached) {
+          return this.engine.renderTemplate(cached, { ...this.options.globals, ...data });
+        }
+      }
+      
+      // Cargar plantilla
+      const templateSource = await fs.promises.readFile(templatePath, 'utf-8');
+      
+      // Compilar si es necesario
+      const compiled = this.engine.compile(templateSource);
+      
+      // Almacenar en caché si está habilitado
+      if (renderOptions.cache) {
+        this.cache.set(templatePath, compiled);
+      }
+      
+      // Renderizar con datos
+      return this.engine.render(compiled, { ...this.options.globals, ...data });
+      
+    } catch (error) {
+      throw new Error(`Error rendering template ${template}: ${error.message}`);
+    }
+  }
+  
+  private resolvePath(template: string): string {
+    const ext = path.extname(template) ? '' : `.${this.options.extension}`;
+    return path.resolve(this.options.directory, `${template}${ext}`);
+  }
+}
+
+// Registrar el motor personalizado
+TemplateEngineFactory.register('custom', (options) => new CustomTemplateEngine(options));
+
+// Uso
+const templateEngine = TemplateEngineFactory.create('custom', {
+  directory: './src/views',
+  extension: 'custom'
+});
+
+server.setTemplateEngine(templateEngine);
+```
+
+## Testing de Vistas
+
+```typescript
+import { createViewMock } from 'fox-framework/testing';
+
+describe('Product View', () => {
+  let viewEngine;
+  
+  beforeEach(() => {
+    // Crear mock del motor de vistas
+    viewEngine = createViewMock({
+      directory: './src/views',
+      extension: 'ejs'
+    });
+  });
+  
+  test('should render product details correctly', async () => {
+    // Datos de prueba
+    const product = {
+      id: '123',
+      name: 'Test Product',
+      price: 99.99,
+      description: 'A test product',
+      inStock: true
+    };
+    
+    // Renderizar vista
+    const html = await viewEngine.render('products/show', {
+      product,
+      title: product.name
+    });
+    
+    // Verificar contenido
+    expect(html).toContain('Test Product');
+    expect(html).toContain('99.99');
+    expect(html).toContain('A test product');
+    expect(html).toContain('En stock');
+    expect(html).not.toContain('Agotado');
+  });
+  
+  test('should show out of stock message', async () => {
+    const product = {
+      id: '123',
+      name: 'Test Product',
+      price: 99.99,
+      description: 'A test product',
+      inStock: false
+    };
+    
+    const html = await viewEngine.render('products/show', { product });
+    
+    expect(html).toContain('Agotado');
+    expect(html).not.toContain('En stock');
+  });
+  
+  test('should render with global variables', async () => {
+    // Configurar globals para el test
+    viewEngine.setGlobals({
+      appName: 'Test App',
+      currentYear: 2023
+    });
+    
+    const html = await viewEngine.render('products/show', {
+      product: { name: 'Test Product' }
+    });
+    
+    expect(html).toContain('Test App');
+    expect(html).toContain('2023');
+  });
+});
+```
+
+## Buenas Prácticas
+
+### Estructura de Directorios
+
+Una estructura recomendada para tus vistas:
+
+```
+src/
+  views/
+    layouts/           # Layouts base
+      main.ejs         # Layout principal
+      admin.ejs        # Layout de administración
+      email.ejs        # Layout para emails
+    
+    partials/          # Componentes reutilizables
+      header.ejs
+      footer.ejs
+      navigation.ejs
+      sidebar.ejs
+    
+    components/        # Componentes de UI
+      alert.ejs
+      card.ejs
+      pagination.ejs
+      forms/
+        input.ejs
+        select.ejs
+        checkbox.ejs
+    
+    pages/             # Páginas principales
+      home.ejs
+      about.ejs
+      contact.ejs
+    
+    auth/              # Vistas de autenticación
+      login.ejs
+      register.ejs
+      forgot-password.ejs
+    
+    products/          # Vistas específicas de producto
+      index.ejs
+      show.ejs
+      _product-card.ejs  # Partial específico de producto
+    
+    admin/             # Vistas de administración
+      dashboard.ejs
+      users/
+        index.ejs
+        edit.ejs
+    
+    errors/            # Páginas de error
+      404.ejs
+      500.ejs
+```
+
+### Separación de Lógica y Presentación
+
+```html
+<!-- ❌ Demasiada lógica en la vista -->
+<div class="products">
+  <% 
+    let filteredProducts = products;
+    if (category) {
+      filteredProducts = products.filter(p => p.category === category);
+    }
+    if (minPrice) {
+      filteredProducts = filteredProducts.filter(p => p.price >= parseFloat(minPrice));
+    }
+    if (maxPrice) {
+      filteredProducts = filteredProducts.filter(p => p.price <= parseFloat(maxPrice));
+    }
+    filteredProducts.sort((a, b) => a.price - b.price);
+  %>
+  
+  <% filteredProducts.forEach(product => { %>
+    <!-- Mostrar producto -->
+  <% }); %>
+</div>
+
+<!-- ✅ Lógica movida al controlador -->
+<div class="products">
+  <% products.forEach(product => { %>
+    <!-- Mostrar producto -->
+  <% }); %>
+</div>
+```
+
+En el controlador:
+
+```typescript
+@Get('/products')
+async listProducts(ctx: HttpContext) {
+  // Obtener parámetros
+  const { category, minPrice, maxPrice, sort } = ctx.query;
+  
+  // Filtrar y ordenar productos
+  let products = await this.productService.findAll();
+  
+  if (category) {
+    products = products.filter(p => p.category === category);
+  }
+  
+  if (minPrice) {
+    products = products.filter(p => p.price >= parseFloat(minPrice));
+  }
+  
+  if (maxPrice) {
+    products = products.filter(p => p.price <= parseFloat(maxPrice));
+  }
+  
+  // Ordenar productos
+  if (sort === 'price-asc') {
+    products.sort((a, b) => a.price - b.price);
+  } else if (sort === 'price-desc') {
+    products.sort((a, b) => b.price - a.price);
+  }
+  
+  return ctx.view.render('products/index', {
+    products,
+    filters: { category, minPrice, maxPrice, sort }
+  });
+}
+```
+
+### Uso de Helpers para Código Reutilizable
+
+```typescript
+// Registrar helpers útiles
+templateEngine.registerHelpers({
+  // Formateo de moneda
+  currency: (amount, currency = 'USD', locale = 'es-ES') => {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency
+    }).format(amount);
+  },
+  
+  // Formato de fechas relativas
+  relativeTime: (date) => {
+    const now = new Date();
+    const diffMs = now - new Date(date);
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffSecs < 60) return 'Justo ahora';
+    if (diffMins < 60) return `Hace ${diffMins} minutos`;
+    if (diffHours < 24) return `Hace ${diffHours} horas`;
+    if (diffDays < 7) return `Hace ${diffDays} días`;
+    
+    return new Intl.DateTimeFormat('es-ES').format(new Date(date));
+  },
+  
+  // Pluralización
+  pluralize: (count, singular, plural) => {
+    return count === 1 ? singular : plural;
+  },
+  
+  // Generar clases CSS condicionales
+  classNames: (...args) => {
+    return args
+      .flat()
+      .filter(Boolean)
+      .join(' ');
+  }
+});
+```
+
+### Seguridad en Plantillas
+
+```typescript
+// Configurar políticas de seguridad para el motor
+templateEngine.setSecurityOptions({
+  // Auto-escapar HTML
+  escapeOutput: true,
+  
+  // Lista de variables que no se escapan
+  noEscapeVars: ['safeHtml'],
+  
+  // Desactivar acceso a ciertas propiedades
+  restrictedProperties: ['constructor', '__proto__', 'prototype'],
+  
+  // Limitar recursión
+  maxRecursion: 10,
+  
+  // Prevenir inyección de scripts
+  preventScriptInjection: true
+});
+
+// Uso en controlador con contenido HTML seguro
+@Get('/page/:slug')
+async showPage(ctx: HttpContext) {
+  const { slug } = ctx.params;
+  
+  // Cargar página
+  const page = await this.pageService.findBySlug(slug);
+  
+  if (!page) {
+    return ctx.response.notFound('Página no encontrada');
+  }
+  
+  // Sanitizar contenido HTML
+  const sanitizedContent = this.securityService.sanitizeHtml(page.content);
+  
+  // Renderizar vista
+  return ctx.view.render('pages/show', {
+    title: page.title,
+    content: page.content,  // Se escapa automáticamente
+    safeHtml: sanitizedContent  // No se escapa (marcado como seguro)
+  });
+}
+```
+
+## Conclusión
+
+El motor de templates de Fox Framework proporciona una solución versátil y potente para la capa de presentación de tus aplicaciones. Con soporte para múltiples sistemas de plantillas, un rico conjunto de características y un diseño extensible, te permite crear interfaces de usuario dinámicas manteniendo una clara separación entre la lógica de negocio y la presentación. Ya sea que estés construyendo una simple aplicación web o un sistema complejo con múltiples interfaces, el motor de templates te ofrece las herramientas necesarias para crear vistas elegantes, mantenibles y eficientes.

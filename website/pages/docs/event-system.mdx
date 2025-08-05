@@ -1,0 +1,315 @@
+# Sistema de Eventos
+
+El sistema de eventos de Fox Framework proporciona una implementación robusta de arquitectura orientada a eventos, permitiendo comunicación desacoplada entre componentes y soporte para patrones como Event Sourcing y CQRS.
+
+## Conceptos Clave
+
+### Event
+
+Un evento representa algo que ha ocurrido en el sistema. Los eventos son inmutables y contienen datos sobre lo que ha sucedido.
+
+```typescript
+interface Event<T = any> {
+  id: string;           // Identificador único del evento
+  type: string;         // Tipo de evento (ej: 'user.created')
+  payload: T;           // Datos del evento
+  metadata: {
+    timestamp: number;  // Cuándo ocurrió
+    actor?: string;     // Quién lo causó (opcional)
+    source?: string;    // Origen del evento (opcional)
+  };
+}
+```
+
+### Event Emitter
+
+Permite a los componentes emitir y suscribirse a eventos dentro de la aplicación.
+
+```typescript
+import { EventEmitter } from 'fox-framework';
+
+const emitter = EventEmitter.create();
+
+// Suscribirse a un evento
+emitter.on('user.created', (user) => {
+  console.log(`Nuevo usuario creado: ${user.name}`);
+});
+
+// Emitir un evento
+emitter.emit('user.created', { id: 1, name: 'Ana' });
+```
+
+### Event Bus
+
+Extiende el concepto de Event Emitter para permitir distribución de eventos entre múltiples servicios o instancias, facilitando la arquitectura de microservicios.
+
+```typescript
+import { EventBusFactory } from 'fox-framework';
+
+const eventBus = EventBusFactory.create({
+  provider: 'redis',
+  connection: {
+    host: 'localhost',
+    port: 6379
+  }
+});
+
+// Publicar un evento en el bus
+eventBus.publish('orders.completed', { 
+  orderId: '12345', 
+  total: 99.99 
+});
+
+// Suscribirse a eventos
+eventBus.subscribe('orders.completed', async (event) => {
+  await sendConfirmationEmail(event.payload);
+});
+```
+
+### Event Store
+
+Almacena eventos de manera persistente, lo que permite reconstruir el estado de la aplicación o implementar Event Sourcing.
+
+```typescript
+import { EventStoreFactory } from 'fox-framework';
+
+const eventStore = EventStoreFactory.create({
+  provider: 'mongodb',
+  connection: {
+    uri: 'mongodb://localhost:27017',
+    database: 'event_store'
+  }
+});
+
+// Almacenar un evento
+await eventStore.append('user-1', {
+  type: 'user.email_changed',
+  payload: { 
+    userId: 1, 
+    oldEmail: 'old@example.com',
+    newEmail: 'new@example.com'
+  }
+});
+
+// Obtener eventos de un stream
+const events = await eventStore.getEvents('user-1');
+```
+
+## Patrones Implementados
+
+### Event Sourcing
+
+Fox Framework soporta Event Sourcing, un patrón donde el estado de una aplicación se determina por una secuencia de eventos en lugar de un snapshot del estado actual.
+
+```typescript
+import { EventSourcingFactory } from 'fox-framework';
+
+// Crear un aggregate
+class UserAggregate {
+  private id: string;
+  private email: string;
+  private name: string;
+  private isActive: boolean = false;
+  
+  // Métodos para aplicar eventos
+  applyUserCreated(event) {
+    this.id = event.payload.id;
+    this.email = event.payload.email;
+    this.name = event.payload.name;
+  }
+  
+  applyEmailChanged(event) {
+    this.email = event.payload.newEmail;
+  }
+  
+  applyUserActivated(event) {
+    this.isActive = true;
+  }
+}
+
+// Crear un repositorio basado en eventos
+const userRepository = EventSourcingFactory.createRepository(
+  UserAggregate,
+  eventStore,
+  {
+    // Mapeo de eventos a métodos
+    'user.created': 'applyUserCreated',
+    'user.email_changed': 'applyEmailChanged',
+    'user.activated': 'applyUserActivated'
+  }
+);
+
+// Reconstruir un aggregate desde eventos
+const user = await userRepository.getById('user-1');
+```
+
+### Command Query Responsibility Segregation (CQRS)
+
+CQRS separa las operaciones de lectura (queries) de las operaciones de escritura (commands).
+
+```typescript
+import { CommandBus, QueryBus } from 'fox-framework';
+
+// Configurar buses
+const commandBus = CommandBus.create();
+const queryBus = QueryBus.create();
+
+// Registrar command handlers
+commandBus.register('createUser', async (command) => {
+  // Validar command
+  // Generar eventos
+  // Persistir cambios
+  return userId;
+});
+
+// Registrar query handlers
+queryBus.register('getUserById', async (query) => {
+  // Obtener datos optimizados para lectura
+  return userDTO;
+});
+
+// Usar buses
+// Enviar command (escritura)
+const userId = await commandBus.dispatch({
+  type: 'createUser',
+  payload: { name: 'Carlos', email: 'carlos@example.com' }
+});
+
+// Enviar query (lectura)
+const user = await queryBus.dispatch({
+  type: 'getUserById',
+  payload: { id: userId }
+});
+```
+
+## Proyecciones
+
+Las proyecciones transforman eventos en vistas optimizadas para lectura, facilitando el patrón CQRS.
+
+```typescript
+import { ProjectionFactory } from 'fox-framework';
+
+// Crear una proyección
+const userProjection = ProjectionFactory.create({
+  name: 'users',
+  eventStore,
+  handlers: {
+    'user.created': (state, event) => {
+      state[event.payload.id] = {
+        id: event.payload.id,
+        name: event.payload.name,
+        email: event.payload.email,
+        created: event.metadata.timestamp
+      };
+    },
+    'user.email_changed': (state, event) => {
+      if (state[event.payload.userId]) {
+        state[event.payload.userId].email = event.payload.newEmail;
+        state[event.payload.userId].updated = event.metadata.timestamp;
+      }
+    }
+  }
+});
+
+// Actualizar la proyección con eventos nuevos
+await userProjection.update();
+
+// Consultar la proyección
+const users = await userProjection.getState();
+```
+
+## Integración con Sistemas Externos
+
+### Adaptadores para Message Brokers
+
+Fox Framework incluye adaptadores para los message brokers más populares:
+
+```typescript
+// RabbitMQ
+const rabbitEventBus = EventBusFactory.create({
+  provider: 'rabbitmq',
+  connection: {
+    url: 'amqp://localhost',
+    exchange: 'events'
+  }
+});
+
+// Kafka
+const kafkaEventBus = EventBusFactory.create({
+  provider: 'kafka',
+  connection: {
+    clientId: 'my-app',
+    brokers: ['localhost:9092']
+  }
+});
+```
+
+### Saga Pattern
+
+Para transacciones distribuidas que abarcan múltiples servicios:
+
+```typescript
+import { SagaFactory } from 'fox-framework';
+
+const orderSaga = SagaFactory.create({
+  name: 'place-order-saga',
+  eventBus,
+  steps: [
+    {
+      event: 'order.placed',
+      handler: async (event, sagaData) => {
+        // Reservar inventario
+        return { orderId: event.payload.orderId, items: event.payload.items };
+      }
+    },
+    {
+      event: 'inventory.reserved',
+      handler: async (event, sagaData) => {
+        // Procesar pago
+        return { ...sagaData, inventoryReserved: true };
+      }
+    },
+    {
+      event: 'payment.processed',
+      handler: async (event, sagaData) => {
+        // Finalizar orden
+        return { ...sagaData, paid: true };
+      }
+    }
+  ],
+  compensation: {
+    'inventory.reservation_failed': async (event, sagaData) => {
+      // Cancelar orden
+    },
+    'payment.failed': async (event, sagaData) => {
+      // Liberar inventario y cancelar orden
+    }
+  }
+});
+
+// Iniciar el saga
+orderSaga.start();
+```
+
+## Mejores Prácticas
+
+1. **Eventos inmutables**: Los eventos deben ser inmutables y representar hechos del pasado
+
+2. **Nombres descriptivos**: Usa nombres descriptivos para los eventos (ej: `user.registered` vs `user.created`)
+
+3. **Información suficiente**: Incluye toda la información necesaria en el evento
+
+4. **Idempotencia**: Los handlers deben ser idempotentes (poder procesarse múltiples veces sin efectos secundarios)
+
+5. **Versionado**: Considera versionar tus eventos para permitir evolución
+
+6. **Segmentación**: Divide streams de eventos por entidad o agregado
+
+7. **Snapshots**: Para agregados con muchos eventos, implementa snapshots periódicos
+
+## Consideraciones de Rendimiento
+
+- Para aplicaciones con alto volumen de eventos, considera utilizar almacenamiento optimizado para eventos como EventStoreDB
+- Implementa backpressure para consumidores lentos
+- Utiliza procesamiento en batch cuando sea posible
+- Configura retries con backoff exponencial para operaciones que pueden fallar

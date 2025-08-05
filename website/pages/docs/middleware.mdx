@@ -1,0 +1,1484 @@
+# Middleware
+
+El sistema de middleware de Fox Framework proporciona una forma potente y flexible de procesar solicitudes HTTP antes y después de llegar a los controladores. Los middleware actúan como capas intermedias que pueden examinar, filtrar, modificar solicitudes y respuestas, o realizar acciones adicionales durante el ciclo de vida de una petición.
+
+## Características Principales
+
+- **Arquitectura por capas**: Procesa solicitudes a través de una serie de funciones intermedias
+- **Ejecución secuencial**: Control preciso del orden de ejecución
+- **Middleware global**: Se aplica a todas las rutas
+- **Middleware por rutas**: Se aplica solo a rutas específicas
+- **Grupos de middleware**: Agrupa middleware relacionados
+- **Middleware condicional**: Se ejecuta según condiciones específicas
+- **Paso de datos**: Comparte información entre middleware y controladores
+- **Gestión de errores**: Manejo centralizado de excepciones
+- **Tipado completo**: Aprovecha TypeScript para garantizar la seguridad de tipos
+
+## Concepto Básico
+
+Un middleware es una función que recibe el contexto de la solicitud y una función `next` para pasar el control al siguiente middleware en la cadena:
+
+```typescript
+export type Middleware = (ctx: HttpContext, next: NextFunction) => Promise<any> | any;
+export type NextFunction = () => Promise<any>;
+```
+
+## Middleware Básico
+
+Veamos un middleware sencillo de registro:
+
+```typescript
+import { Middleware } from 'fox-framework/core';
+
+export const loggingMiddleware: Middleware = async (ctx, next) => {
+  const start = Date.now();
+  console.log(`[${new Date().toISOString()}] ${ctx.request.method} ${ctx.request.url} - Request started`);
+  
+  // Pasar al siguiente middleware o controlador
+  const result = await next();
+  
+  const duration = Date.now() - start;
+  console.log(`[${new Date().toISOString()}] ${ctx.request.method} ${ctx.request.url} - Request completed in ${duration}ms`);
+  
+  // Devolver el resultado
+  return result;
+};
+```
+
+## Registrando Middleware
+
+Hay varias formas de registrar middleware:
+
+### Middleware Global
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+import { loggingMiddleware, corsMiddleware, securityHeadersMiddleware } from './middleware';
+
+const server = FoxFactory.createServer({
+  port: 3000,
+  // Middleware global aplicado a todas las solicitudes
+  middleware: [
+    corsMiddleware,
+    loggingMiddleware,
+    securityHeadersMiddleware
+  ],
+  router
+});
+```
+
+### Middleware en Rutas
+
+```typescript
+import { Router } from 'fox-framework/core';
+import { authMiddleware, validateUserMiddleware } from './middleware';
+
+const router = new Router();
+
+// Middleware en una única ruta
+router.get('/profile', authMiddleware, profileController.show);
+
+// Múltiples middleware en una ruta
+router.post('/users', [
+  authMiddleware,
+  roleMiddleware(['admin']),
+  validateUserMiddleware
+], userController.create);
+```
+
+### Middleware en Grupos de Rutas
+
+```typescript
+// Middleware en un grupo de rutas
+router.group({ 
+  prefix: '/admin', 
+  middleware: [authMiddleware, adminMiddleware] 
+}, (admin) => {
+  admin.get('/dashboard', dashboardController.show);
+  admin.get('/users', userController.index);
+  admin.post('/settings', settingsController.update);
+});
+
+// Combinación de middleware de grupo y ruta específica
+router.group({ middleware: [authMiddleware] }, (auth) => {
+  auth.get('/profile', profileController.show);
+  auth.put('/profile', [validateProfileMiddleware], profileController.update);
+});
+```
+
+### Middleware en Controladores
+
+```typescript
+import { Controller, Get, UseMiddleware } from 'fox-framework/core';
+import { authMiddleware, loggingMiddleware } from '../middleware';
+
+// Middleware a nivel de controlador
+@Controller('/api/users')
+@UseMiddleware(authMiddleware, loggingMiddleware)
+export class UserController {
+  // Todas las rutas del controlador usarán ambos middleware
+  
+  @Get('/')
+  async getAllUsers(ctx) {
+    // ...
+  }
+  
+  // Middleware adicional para un método específico
+  @Get('/:id')
+  @UseMiddleware(cacheMiddleware)
+  async getUser(ctx) {
+    // ...
+  }
+}
+```
+
+## Pipeline de Middleware
+
+El middleware se ejecuta en un pipeline donde cada función puede:
+
+1. Ejecutar código antes de pasar al siguiente middleware
+2. Llamar a `next()` para pasar el control al siguiente middleware
+3. Ejecutar código después de que el siguiente middleware haya terminado
+4. Modificar la respuesta antes de devolverla
+5. Interrumpir el pipeline y devolver una respuesta anticipada
+
+```typescript
+const middleware: Middleware = async (ctx, next) => {
+  // 1. Código antes de next()
+  console.log('Antes de la solicitud');
+  
+  // 2. Pasar al siguiente middleware
+  const result = await next();
+  
+  // 3. Código después de next()
+  console.log('Después de la solicitud');
+  
+  // 4. Modificar la respuesta si es necesario
+  if (typeof result === 'object') {
+    result.extraData = 'Información adicional';
+  }
+  
+  // 5. Devolver resultado (posiblemente modificado)
+  return result;
+};
+```
+
+## Interrumpiendo el Pipeline
+
+Un middleware puede decidir no llamar a `next()`, interrumpiendo el pipeline:
+
+```typescript
+const authMiddleware: Middleware = async (ctx, next) => {
+  const token = ctx.headers.authorization;
+  
+  if (!token) {
+    // Interrumpir el pipeline y devolver una respuesta
+    return ctx.response.unauthorized('Token de autenticación no proporcionado');
+  }
+  
+  try {
+    // Verificar token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Añadir información al contexto
+    ctx.auth = {
+      user: decoded,
+      isAuthenticated: true
+    };
+    
+    // Continuar el pipeline
+    return next();
+  } catch (error) {
+    // Interrumpir con error
+    return ctx.response.unauthorized('Token inválido o expirado');
+  }
+};
+```
+
+## Compartiendo Datos entre Middleware
+
+El objeto `ctx.state` permite compartir datos entre middleware:
+
+```typescript
+// Primer middleware
+const userLoaderMiddleware: Middleware = async (ctx, next) => {
+  const userId = ctx.params.id;
+  
+  // Cargar usuario y almacenarlo en ctx.state
+  const user = await userService.findById(userId);
+  
+  if (!user) {
+    return ctx.response.notFound('Usuario no encontrado');
+  }
+  
+  // Almacenar en state para que esté disponible en middleware y controladores posteriores
+  ctx.state.user = user;
+  
+  return next();
+};
+
+// Segundo middleware puede acceder a ctx.state.user
+const userPermissionMiddleware: Middleware = async (ctx, next) => {
+  const { user } = ctx.state;
+  const { resource } = ctx.params;
+  
+  if (!permissionService.can(user, 'access', resource)) {
+    return ctx.response.forbidden('Sin permiso para acceder a este recurso');
+  }
+  
+  return next();
+};
+
+// El controlador también puede acceder a ctx.state.user
+const resourceController = {
+  show: async (ctx) => {
+    const { user } = ctx.state;
+    const { resource } = ctx.params;
+    
+    // Usar user sin tener que cargarlo nuevamente
+    const data = await resourceService.getResourceForUser(resource, user.id);
+    
+    return ctx.response.success(data);
+  }
+};
+
+// Registrar middleware en orden
+router.get('/resources/:resource', [
+  authMiddleware,
+  userLoaderMiddleware,
+  userPermissionMiddleware
+], resourceController.show);
+```
+
+## Middleware Factory
+
+Para crear middleware configurables, puedes usar el patrón factory:
+
+```typescript
+// Factory que devuelve un middleware
+export function rateLimiter(options: {
+  max: number;          // Número máximo de solicitudes
+  windowMs: number;     // Período de tiempo en ms
+  message?: string;     // Mensaje personalizado
+  keyGenerator?: (ctx: HttpContext) => string; // Función para generar clave
+}): Middleware {
+  const { max, windowMs, message, keyGenerator } = options;
+  const store = new Map<string, { count: number, resetTime: number }>();
+  
+  // Devolver middleware configurado
+  return async (ctx, next) => {
+    // Determinar clave (IP por defecto o personalizada)
+    const key = keyGenerator 
+      ? keyGenerator(ctx) 
+      : ctx.request.ip;
+    
+    const now = Date.now();
+    let record = store.get(key);
+    
+    // Inicializar o limpiar registro si ha expirado
+    if (!record || record.resetTime < now) {
+      record = { count: 0, resetTime: now + windowMs };
+      store.set(key, record);
+    }
+    
+    // Incrementar contador
+    record.count += 1;
+    
+    // Verificar límite
+    if (record.count > max) {
+      return ctx.response.tooMany(
+        message || `Demasiadas solicitudes. Inténtalo de nuevo en ${Math.ceil((record.resetTime - now) / 1000)} segundos.`
+      );
+    }
+    
+    // Continuar al siguiente middleware
+    return next();
+  };
+}
+
+// Uso
+router.post('/login', 
+  rateLimiter({ 
+    max: 5,             // 5 intentos
+    windowMs: 60 * 1000, // por minuto
+    message: 'Demasiados intentos de inicio de sesión. Inténtalo más tarde.'
+  }),
+  authController.login
+);
+```
+
+## Middleware Asincrónico
+
+Fox Framework maneja correctamente middleware asincrónico:
+
+```typescript
+const asyncMiddleware: Middleware = async (ctx, next) => {
+  // Operación asincrónica (ej. consulta a base de datos)
+  const settings = await settingsService.loadSettings();
+  
+  // Almacenar en context
+  ctx.state.settings = settings;
+  
+  // Esperar a que el siguiente middleware complete
+  const result = await next();
+  
+  // Operación asincrónica después de la respuesta
+  await analyticsService.logRequest({
+    path: ctx.request.url,
+    method: ctx.request.method,
+    duration: Date.now() - ctx.state.requestStartTime
+  });
+  
+  return result;
+};
+```
+
+## Manejo de Errores en Middleware
+
+Hay dos enfoques para manejar errores en middleware:
+
+### 1. Try/Catch en cada Middleware
+
+```typescript
+const errorAwareMiddleware: Middleware = async (ctx, next) => {
+  try {
+    // Intentar ejecutar el siguiente middleware
+    return await next();
+  } catch (error) {
+    // Manejar el error
+    console.error('Error en middleware:', error);
+    
+    // Devolver respuesta de error
+    return ctx.response.error(
+      error.message || 'Error interno del servidor',
+      error.status || 500
+    );
+  }
+};
+```
+
+### 2. Middleware de Error Global
+
+```typescript
+const errorHandlerMiddleware: Middleware = async (ctx, next) => {
+  try {
+    return await next();
+  } catch (error) {
+    console.error('Error no capturado:', error);
+    
+    // Errores específicos
+    if (error.name === 'ValidationError') {
+      return ctx.response.badRequest({
+        message: 'Error de validación',
+        details: error.details
+      });
+    }
+    
+    if (error.name === 'UnauthorizedError') {
+      return ctx.response.unauthorized('No autorizado');
+    }
+    
+    // Error genérico
+    return ctx.response.error('Error interno del servidor', 500);
+  }
+};
+
+// Registrarlo como primer middleware
+const server = FoxFactory.createServer({
+  middleware: [errorHandlerMiddleware, ...otherMiddleware],
+  router
+});
+```
+
+## Middleware Condicional
+
+```typescript
+// Middleware que solo se ejecuta bajo ciertas condiciones
+function conditionalMiddleware(condition: (ctx: HttpContext) => boolean): Middleware {
+  return async (ctx, next) => {
+    if (condition(ctx)) {
+      // Ejecutar alguna lógica
+      console.log('Condición cumplida, ejecutando middleware');
+    }
+    
+    // Siempre continuar al siguiente middleware
+    return next();
+  };
+}
+
+// Uso
+router.get('/api/products', 
+  conditionalMiddleware(ctx => ctx.query.debug === 'true'),
+  productController.index
+);
+```
+
+## Middleware de Timeout
+
+```typescript
+function timeoutMiddleware(ms: number): Middleware {
+  return async (ctx, next) => {
+    // Crear promesa de timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Request timeout after ${ms}ms`));
+      }, ms);
+    });
+    
+    // Competir entre el timeout y la respuesta real
+    return Promise.race([
+      next(),
+      timeoutPromise
+    ]);
+  };
+}
+
+// Aplicar a rutas que podrían ser lentas
+router.get('/api/reports/complex', 
+  timeoutMiddleware(30000), // 30 segundos
+  reportController.generateComplexReport
+);
+```
+
+## Middleware de Compresión
+
+```typescript
+import { Middleware } from 'fox-framework/core';
+import zlib from 'zlib';
+import stream from 'stream';
+import { promisify } from 'util';
+
+const gzip = promisify(zlib.gzip);
+const deflate = promisify(zlib.deflate);
+const brotli = promisify(zlib.brotliCompress);
+
+export const compressionMiddleware: Middleware = async (ctx, next) => {
+  // Ejecutar la cadena de middleware
+  const result = await next();
+  
+  // Si no hay cuerpo o ya es un stream, no comprimir
+  if (!result || !result.body || result.body instanceof stream.Readable) {
+    return result;
+  }
+  
+  // Verificar si el cliente acepta compresión
+  const acceptEncoding = ctx.headers['accept-encoding'] || '';
+  
+  // Convertir el cuerpo a buffer si es un objeto
+  const body = typeof result.body === 'object' 
+    ? Buffer.from(JSON.stringify(result.body)) 
+    : Buffer.from(String(result.body));
+  
+  // Comprimir basado en el encoding aceptado
+  if (acceptEncoding.includes('br')) {
+    result.body = await brotli(body);
+    result.headers['Content-Encoding'] = 'br';
+  } else if (acceptEncoding.includes('gzip')) {
+    result.body = await gzip(body);
+    result.headers['Content-Encoding'] = 'gzip';
+  } else if (acceptEncoding.includes('deflate')) {
+    result.body = await deflate(body);
+    result.headers['Content-Encoding'] = 'deflate';
+  }
+  
+  return result;
+};
+```
+
+## Middleware para Cabeceras de Seguridad
+
+```typescript
+export const securityHeadersMiddleware: Middleware = async (ctx, next) => {
+  // Ejecutar middleware
+  const result = await next();
+  
+  // Añadir cabeceras de seguridad
+  const headers = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '1; mode=block',
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline';",
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Referrer-Policy': 'strict-origin-when-cross-origin'
+  };
+  
+  // Asegurarse de que result.headers existe
+  if (!result.headers) {
+    result.headers = {};
+  }
+  
+  // Añadir cada cabecera si no existe ya
+  for (const [header, value] of Object.entries(headers)) {
+    if (!result.headers[header]) {
+      result.headers[header] = value;
+    }
+  }
+  
+  return result;
+};
+```
+
+## Middleware CORS
+
+```typescript
+export function corsMiddleware(options: {
+  origin?: string | string[] | ((origin: string) => boolean);
+  methods?: string[];
+  allowedHeaders?: string[];
+  exposedHeaders?: string[];
+  credentials?: boolean;
+  maxAge?: number;
+} = {}): Middleware {
+  const defaultOptions = {
+    origin: '*',
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: [],
+    credentials: false,
+    maxAge: 86400 // 24 horas
+  };
+  
+  const config = { ...defaultOptions, ...options };
+  
+  return async (ctx, next) => {
+    // Manejar solicitud OPTIONS (preflight)
+    if (ctx.request.method === 'OPTIONS') {
+      const headers = {
+        'Access-Control-Allow-Origin': typeof config.origin === 'function'
+          ? config.origin(ctx.request.headers.origin)
+            ? ctx.request.headers.origin
+            : false
+          : Array.isArray(config.origin)
+            ? (config.origin.includes(ctx.request.headers.origin) ? ctx.request.headers.origin : false)
+            : config.origin,
+        'Access-Control-Allow-Methods': config.methods.join(', '),
+        'Access-Control-Allow-Headers': config.allowedHeaders.join(', '),
+        'Access-Control-Max-Age': String(config.maxAge)
+      };
+      
+      if (config.credentials) {
+        headers['Access-Control-Allow-Credentials'] = 'true';
+      }
+      
+      if (config.exposedHeaders.length) {
+        headers['Access-Control-Expose-Headers'] = config.exposedHeaders.join(', ');
+      }
+      
+      return {
+        status: 204,
+        headers
+      };
+    }
+    
+    // Solicitudes normales
+    const result = await next();
+    
+    // Asegurarse de que result tiene las propiedades necesarias
+    if (!result) return result;
+    if (!result.headers) result.headers = {};
+    
+    // Añadir cabeceras CORS a la respuesta
+    result.headers['Access-Control-Allow-Origin'] = typeof config.origin === 'function'
+      ? config.origin(ctx.request.headers.origin)
+        ? ctx.request.headers.origin
+        : false
+      : Array.isArray(config.origin)
+        ? (config.origin.includes(ctx.request.headers.origin) ? ctx.request.headers.origin : false)
+        : config.origin;
+    
+    if (config.credentials) {
+      result.headers['Access-Control-Allow-Credentials'] = 'true';
+    }
+    
+    if (config.exposedHeaders.length) {
+      result.headers['Access-Control-Expose-Headers'] = config.exposedHeaders.join(', ');
+    }
+    
+    return result;
+  };
+}
+
+// Uso básico
+router.use(corsMiddleware());
+
+// Uso configurado
+router.use(corsMiddleware({
+  origin: ['https://myapp.com', 'https://admin.myapp.com'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
+```
+
+## Middleware de Autenticación
+
+```typescript
+import { Middleware } from 'fox-framework/core';
+import jwt from 'jsonwebtoken';
+import { UserService } from '../services/user.service';
+
+export function authMiddleware(options: {
+  required?: boolean;
+  roles?: string[];
+}): Middleware {
+  const { required = true, roles = [] } = options;
+  
+  return async (ctx, next) => {
+    // Obtener token del header Authorization
+    const authHeader = ctx.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      if (required) {
+        return ctx.response.unauthorized('Token de autenticación no proporcionado');
+      } else {
+        // Si no es obligatorio, continuar como invitado
+        ctx.auth = {
+          isAuthenticated: false,
+          user: null
+        };
+        return next();
+      }
+    }
+    
+    // Extraer token
+    const token = authHeader.split(' ')[1];
+    
+    try {
+      // Verificar y decodificar token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      
+      // Cargar usuario completo
+      const userService = new UserService();
+      const user = await userService.findById(decoded.sub);
+      
+      if (!user) {
+        return ctx.response.unauthorized('Usuario no encontrado');
+      }
+      
+      // Verificar si está activo
+      if (!user.active) {
+        return ctx.response.forbidden('Cuenta de usuario desactivada');
+      }
+      
+      // Verificar roles si es necesario
+      if (roles.length > 0) {
+        const hasRole = roles.some(role => user.roles.includes(role));
+        
+        if (!hasRole) {
+          return ctx.response.forbidden('No tienes los permisos necesarios');
+        }
+      }
+      
+      // Añadir información de autenticación al contexto
+      ctx.auth = {
+        isAuthenticated: true,
+        user,
+        token
+      };
+      
+      // Continuar al siguiente middleware
+      return next();
+      
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        return ctx.response.unauthorized('Token expirado');
+      }
+      
+      return ctx.response.unauthorized('Token inválido');
+    }
+  };
+}
+
+// Uso
+router.get('/profile', authMiddleware({ required: true }), userController.getProfile);
+
+router.get('/admin/dashboard', 
+  authMiddleware({ required: true, roles: ['admin'] }), 
+  adminController.dashboard
+);
+
+router.get('/products', 
+  authMiddleware({ required: false }), 
+  productController.index
+);
+```
+
+## Middleware de Validación
+
+```typescript
+import { Middleware } from 'fox-framework/core';
+import { Schema, ValidationError } from 'fox-framework/validation';
+
+export function validateMiddleware(schema: Schema, options: {
+  source?: 'body' | 'query' | 'params';
+  abortEarly?: boolean;
+  stripUnknown?: boolean;
+} = {}): Middleware {
+  const { source = 'body', abortEarly = true, stripUnknown = true } = options;
+  
+  return async (ctx, next) => {
+    try {
+      // Obtener datos a validar
+      const data = source === 'body'
+        ? ctx.body
+        : source === 'query'
+          ? ctx.query
+          : ctx.params;
+      
+      // Validar datos
+      const validated = await schema.validate(data, {
+        abortEarly,
+        stripUnknown
+      });
+      
+      // Actualizar datos validados en el contexto
+      if (source === 'body') {
+        ctx.body = validated;
+      } else if (source === 'query') {
+        ctx.query = validated;
+      } else {
+        ctx.params = validated;
+      }
+      
+      // Continuar al siguiente middleware
+      return next();
+      
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        return ctx.response.badRequest({
+          message: 'Error de validación',
+          details: error.details
+        });
+      }
+      
+      // Errores inesperados
+      throw error;
+    }
+  };
+}
+
+// Uso con esquema de validación
+const userSchema = new Schema({
+  name: { type: 'string', required: true },
+  email: { type: 'email', required: true },
+  age: { type: 'number', min: 18 }
+});
+
+router.post('/users', 
+  validateMiddleware(userSchema), 
+  userController.create
+);
+
+// Validar parámetros de consulta
+const searchSchema = new Schema({
+  query: { type: 'string', min: 2 },
+  page: { type: 'number', default: 1 },
+  limit: { type: 'number', default: 20, max: 100 }
+});
+
+router.get('/search', 
+  validateMiddleware(searchSchema, { source: 'query' }), 
+  searchController.search
+);
+```
+
+## Middleware de Caché
+
+```typescript
+import { Middleware } from 'fox-framework/core';
+import NodeCache from 'node-cache';
+
+// Caché en memoria
+const cache = new NodeCache();
+
+export function cacheMiddleware(options: {
+  ttl?: number;
+  key?: string | ((ctx: HttpContext) => string);
+  skip?: (ctx: HttpContext) => boolean;
+} = {}): Middleware {
+  const { ttl = 60, key, skip } = options;
+  
+  return async (ctx, next) => {
+    // Verificar si debemos saltar la caché
+    if (skip && skip(ctx)) {
+      return next();
+    }
+    
+    // Generar clave de caché
+    const cacheKey = key 
+      ? (typeof key === 'function' ? key(ctx) : key)
+      : `${ctx.request.method}:${ctx.request.url}`;
+    
+    // Verificar si hay respuesta en caché
+    const cachedResponse = cache.get(cacheKey);
+    
+    if (cachedResponse) {
+      // Devolver respuesta cacheada
+      return {
+        ...cachedResponse,
+        headers: {
+          ...cachedResponse.headers,
+          'X-Cache': 'HIT'
+        }
+      };
+    }
+    
+    // Si no hay caché, ejecutar la cadena de middleware
+    const result = await next();
+    
+    // Cachear la respuesta si es válida y no es un error
+    if (result && result.status >= 200 && result.status < 400) {
+      cache.set(cacheKey, result, ttl);
+    }
+    
+    // Añadir cabecera X-Cache
+    if (result && result.headers) {
+      result.headers['X-Cache'] = 'MISS';
+    }
+    
+    return result;
+  };
+}
+
+// Uso básico - cachear por 5 minutos
+router.get('/products', 
+  cacheMiddleware({ ttl: 300 }),
+  productController.index
+);
+
+// Caché con clave personalizada
+router.get('/users/:id', 
+  cacheMiddleware({ 
+    key: ctx => `user:${ctx.params.id}`,
+    ttl: 60
+  }),
+  userController.show
+);
+
+// Caché condicional
+router.get('/dashboard', 
+  cacheMiddleware({ 
+    skip: ctx => ctx.query.refresh === 'true',
+    ttl: 60
+  }),
+  dashboardController.show
+);
+```
+
+## Middleware de Archivos
+
+```typescript
+import { Middleware } from 'fox-framework/core';
+import multer from 'multer';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+
+export function fileUploadMiddleware(options: {
+  field: string;
+  destination?: string;
+  maxSize?: number;
+  allowedTypes?: string[];
+  multiple?: boolean;
+}): Middleware {
+  const { 
+    field, 
+    destination = './uploads',
+    maxSize = 5 * 1024 * 1024, // 5MB por defecto
+    allowedTypes = ['image/jpeg', 'image/png', 'image/gif'],
+    multiple = false
+  } = options;
+  
+  // Configurar almacenamiento
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, destination);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `${uuidv4()}${ext}`);
+    }
+  });
+  
+  // Filtrar por tipo
+  const fileFilter = (req, file, cb) => {
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Tipo de archivo no permitido. Permitidos: ${allowedTypes.join(', ')}`), false);
+    }
+  };
+  
+  // Crear middleware multer
+  const upload = multer({
+    storage,
+    fileFilter,
+    limits: { fileSize: maxSize }
+  });
+  
+  // Determinar si es un archivo o varios
+  const multerMiddleware = multiple
+    ? upload.array(field)
+    : upload.single(field);
+  
+  // Devolver middleware para Fox Framework
+  return async (ctx, next) => {
+    try {
+      // Convertir middleware multer a Promise
+      await new Promise((resolve, reject) => {
+        multerMiddleware(ctx.request.raw, ctx.response.raw, (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(true);
+          }
+        });
+      });
+      
+      // Añadir archivos al contexto
+      if (multiple) {
+        ctx.files = ctx.request.raw.files;
+      } else {
+        ctx.file = ctx.request.raw.file;
+      }
+      
+      // Continuar al siguiente middleware
+      return next();
+      
+    } catch (error) {
+      // Manejar errores de carga
+      return ctx.response.badRequest({
+        message: 'Error al subir archivo',
+        error: error.message
+      });
+    }
+  };
+}
+
+// Uso
+router.post('/upload-profile-image',
+  authMiddleware({ required: true }),
+  fileUploadMiddleware({
+    field: 'avatar',
+    allowedTypes: ['image/jpeg', 'image/png'],
+    maxSize: 2 * 1024 * 1024 // 2MB
+  }),
+  userController.uploadAvatar
+);
+
+router.post('/upload-gallery',
+  authMiddleware({ required: true }),
+  fileUploadMiddleware({
+    field: 'images',
+    multiple: true,
+    allowedTypes: ['image/jpeg', 'image/png', 'image/gif'],
+    maxSize: 10 * 1024 * 1024 // 10MB
+  }),
+  galleryController.uploadImages
+);
+```
+
+## Middleware de Logging Estructurado
+
+```typescript
+import { Middleware } from 'fox-framework/core';
+import winston from 'winston';
+
+// Configurar logger
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'logs/combined.log' })
+  ]
+});
+
+export const requestLoggerMiddleware: Middleware = async (ctx, next) => {
+  // Generar ID único para la solicitud
+  const requestId = Math.random().toString(36).substring(2, 15);
+  
+  // Añadir al contexto
+  ctx.state.requestId = requestId;
+  
+  // Registrar inicio de solicitud
+  const startTime = Date.now();
+  logger.info({
+    message: 'Request started',
+    requestId,
+    method: ctx.request.method,
+    url: ctx.request.url,
+    ip: ctx.request.ip,
+    userAgent: ctx.headers['user-agent']
+  });
+  
+  try {
+    // Ejecutar solicitud
+    const result = await next();
+    
+    // Calcular tiempo
+    const responseTime = Date.now() - startTime;
+    
+    // Registrar finalización exitosa
+    logger.info({
+      message: 'Request completed',
+      requestId,
+      method: ctx.request.method,
+      url: ctx.request.url,
+      statusCode: result?.status || 200,
+      responseTime
+    });
+    
+    // Añadir cabecera con tiempo de respuesta
+    if (result && result.headers) {
+      result.headers['X-Response-Time'] = `${responseTime}ms`;
+      result.headers['X-Request-ID'] = requestId;
+    }
+    
+    return result;
+    
+  } catch (error) {
+    // Calcular tiempo en caso de error
+    const responseTime = Date.now() - startTime;
+    
+    // Registrar error
+    logger.error({
+      message: 'Request failed',
+      requestId,
+      method: ctx.request.method,
+      url: ctx.request.url,
+      error: error.message,
+      stack: error.stack,
+      responseTime
+    });
+    
+    // Re-lanzar para que lo maneje el middleware de errores
+    throw error;
+  }
+};
+```
+
+## Middleware de Métricas
+
+```typescript
+import { Middleware } from 'fox-framework/core';
+import prometheus from 'prom-client';
+
+// Inicializar colectores de métricas
+prometheus.collectDefaultMetrics();
+
+// Crear métricas personalizadas
+const httpRequestsTotal = new prometheus.Counter({
+  name: 'http_requests_total',
+  help: 'Total HTTP Requests',
+  labelNames: ['method', 'path', 'status']
+});
+
+const httpRequestDurationSeconds = new prometheus.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'HTTP request duration in seconds',
+  labelNames: ['method', 'path', 'status'],
+  buckets: [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10]
+});
+
+export const metricsMiddleware: Middleware = async (ctx, next) => {
+  // Marcar tiempo inicial
+  const startTime = process.hrtime();
+  
+  // Normalizar path (eliminar IDs y otros parámetros variables)
+  let path = ctx.request.path;
+  
+  // Ejemplo de normalización: /users/123 -> /users/:id
+  path = path.replace(/\/\d+/g, '/:id');
+  
+  try {
+    // Ejecutar solicitud
+    const result = await next();
+    
+    // Calcular duración
+    const [seconds, nanoseconds] = process.hrtime(startTime);
+    const duration = seconds + nanoseconds / 1e9;
+    
+    // Registrar métricas
+    const status = result?.status || 200;
+    
+    httpRequestsTotal.inc({
+      method: ctx.request.method,
+      path,
+      status
+    });
+    
+    httpRequestDurationSeconds.observe({
+      method: ctx.request.method,
+      path,
+      status
+    }, duration);
+    
+    return result;
+    
+  } catch (error) {
+    // Calcular duración en caso de error
+    const [seconds, nanoseconds] = process.hrtime(startTime);
+    const duration = seconds + nanoseconds / 1e9;
+    
+    // Registrar métricas con error
+    httpRequestsTotal.inc({
+      method: ctx.request.method,
+      path,
+      status: error.status || 500
+    });
+    
+    httpRequestDurationSeconds.observe({
+      method: ctx.request.method,
+      path,
+      status: error.status || 500
+    }, duration);
+    
+    // Re-lanzar para que lo maneje el middleware de errores
+    throw error;
+  }
+};
+
+// Endpoint para exponer métricas
+router.get('/metrics', (ctx) => {
+  return {
+    status: 200,
+    headers: {
+      'Content-Type': prometheus.register.contentType
+    },
+    body: prometheus.register.metrics()
+  };
+});
+```
+
+## Middleware de Localización
+
+```typescript
+import { Middleware } from 'fox-framework/core';
+import i18next from 'i18next';
+
+// Configurar i18next
+i18next.init({
+  lng: 'es',
+  fallbackLng: 'en',
+  resources: {
+    en: {
+      translation: require('../locales/en.json')
+    },
+    es: {
+      translation: require('../locales/es.json')
+    }
+  }
+});
+
+export const localizationMiddleware: Middleware = async (ctx, next) => {
+  // Detectar idioma
+  let language = 'es'; // Idioma por defecto
+  
+  // Intentar obtener del header Accept-Language
+  const acceptLanguage = ctx.headers['accept-language'];
+  
+  if (acceptLanguage) {
+    const languages = acceptLanguage.split(',')
+      .map(lang => lang.split(';')[0].trim().substring(0, 2));
+    
+    // Buscar el primer idioma soportado
+    for (const lang of languages) {
+      if (i18next.languages.includes(lang)) {
+        language = lang;
+        break;
+      }
+    }
+  }
+  
+  // Sobreescribir con query param si existe
+  if (ctx.query.lang && i18next.languages.includes(ctx.query.lang)) {
+    language = ctx.query.lang;
+  }
+  
+  // Establecer idioma para esta solicitud
+  i18next.changeLanguage(language);
+  
+  // Añadir función de traducción al contexto
+  ctx.i18n = {
+    t: (key, options) => i18next.t(key, options),
+    language
+  };
+  
+  // Ejecutar el siguiente middleware
+  const result = await next();
+  
+  // Añadir cabecera de idioma usado
+  if (result && result.headers) {
+    result.headers['Content-Language'] = language;
+  }
+  
+  return result;
+};
+
+// En un controlador
+const userController = {
+  notFound: (ctx) => {
+    return ctx.response.notFound(ctx.i18n.t('user.not_found'));
+  }
+};
+```
+
+## Testing de Middleware
+
+```typescript
+import { createTestContext } from 'fox-framework/testing';
+import { authMiddleware } from '../middleware/auth.middleware';
+import jwt from 'jsonwebtoken';
+
+describe('Auth Middleware', () => {
+  // Mock de servicios
+  const mockUserService = {
+    findById: jest.fn()
+  };
+  
+  beforeEach(() => {
+    jest.clearAllMocks();
+    
+    // Inyectar dependencia mockeada
+    container.register('UserService', {
+      useValue: mockUserService
+    });
+  });
+  
+  test('should reject requests without token', async () => {
+    // Crear contexto de prueba sin token
+    const ctx = createTestContext({
+      headers: {}
+    });
+    
+    // Función next de prueba
+    const next = jest.fn();
+    
+    // Ejecutar middleware
+    const result = await authMiddleware({ required: true })(ctx, next);
+    
+    // Verificaciones
+    expect(next).not.toHaveBeenCalled();
+    expect(result.status).toBe(401);
+    expect(result.body).toHaveProperty('message', 'Token de autenticación no proporcionado');
+  });
+  
+  test('should accept valid token and populate auth context', async () => {
+    // Crear token válido
+    const token = jwt.sign({ sub: '123', name: 'Test User' }, 'secret');
+    
+    // Mock respuesta del servicio
+    mockUserService.findById.mockResolvedValue({
+      id: '123',
+      name: 'Test User',
+      active: true,
+      roles: ['user']
+    });
+    
+    // Crear contexto de prueba con token
+    const ctx = createTestContext({
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    
+    // Función next de prueba
+    const next = jest.fn().mockResolvedValue({ status: 200, body: 'Success' });
+    
+    // Ejecutar middleware
+    const result = await authMiddleware({ required: true })(ctx, next);
+    
+    // Verificaciones
+    expect(mockUserService.findById).toHaveBeenCalledWith('123');
+    expect(next).toHaveBeenCalled();
+    expect(ctx.auth).toEqual({
+      isAuthenticated: true,
+      user: {
+        id: '123',
+        name: 'Test User',
+        active: true,
+        roles: ['user']
+      },
+      token
+    });
+    expect(result).toEqual({ status: 200, body: 'Success' });
+  });
+  
+  test('should reject inactive users', async () => {
+    // Crear token válido
+    const token = jwt.sign({ sub: '456', name: 'Inactive User' }, 'secret');
+    
+    // Mock respuesta del servicio - usuario inactivo
+    mockUserService.findById.mockResolvedValue({
+      id: '456',
+      name: 'Inactive User',
+      active: false,
+      roles: ['user']
+    });
+    
+    // Crear contexto de prueba
+    const ctx = createTestContext({
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    
+    // Función next de prueba
+    const next = jest.fn();
+    
+    // Ejecutar middleware
+    const result = await authMiddleware({ required: true })(ctx, next);
+    
+    // Verificaciones
+    expect(mockUserService.findById).toHaveBeenCalledWith('456');
+    expect(next).not.toHaveBeenCalled();
+    expect(result.status).toBe(403);
+    expect(result.body).toHaveProperty('message', 'Cuenta de usuario desactivada');
+  });
+});
+```
+
+## Buenas Prácticas
+
+### Organización de Middleware
+
+```typescript
+// src/middleware/index.ts - Punto de entrada centralizado
+export { authMiddleware } from './auth.middleware';
+export { cacheMiddleware } from './cache.middleware';
+export { corsMiddleware } from './cors.middleware';
+export { errorHandlerMiddleware } from './error-handler.middleware';
+export { loggingMiddleware } from './logging.middleware';
+export { metricsMiddleware } from './metrics.middleware';
+export { securityHeadersMiddleware } from './security-headers.middleware';
+export { validationMiddleware } from './validation.middleware';
+```
+
+### Middleware Atómico
+
+Cada middleware debe hacer una sola cosa y hacerla bien:
+
+```typescript
+// ❌ Middleware que hace demasiadas cosas
+const bloatedMiddleware: Middleware = async (ctx, next) => {
+  // Autenticación
+  if (!ctx.headers.authorization) {
+    return ctx.response.unauthorized();
+  }
+  
+  // Logging
+  console.log(`Request: ${ctx.request.method} ${ctx.request.url}`);
+  
+  // Validación
+  if (!ctx.body.name) {
+    return ctx.response.badRequest('Nombre requerido');
+  }
+  
+  // Métricas
+  incrementRequestCount();
+  
+  return next();
+};
+
+// ✅ Middleware dividido en responsabilidades únicas
+const authMiddleware: Middleware = async (ctx, next) => {
+  if (!ctx.headers.authorization) {
+    return ctx.response.unauthorized();
+  }
+  return next();
+};
+
+const loggingMiddleware: Middleware = async (ctx, next) => {
+  console.log(`Request: ${ctx.request.method} ${ctx.request.url}`);
+  return next();
+};
+
+const validationMiddleware: Middleware = async (ctx, next) => {
+  if (!ctx.body.name) {
+    return ctx.response.badRequest('Nombre requerido');
+  }
+  return next();
+};
+
+const metricsMiddleware: Middleware = async (ctx, next) => {
+  incrementRequestCount();
+  return next();
+};
+
+// Aplicar middleware en orden lógico
+router.use(loggingMiddleware);
+router.use(metricsMiddleware);
+router.use(authMiddleware);
+router.use(validationMiddleware);
+```
+
+### Orden de Middleware
+
+El orden de ejecución es crucial:
+
+```typescript
+// ✅ Orden correcto
+server.use([
+  // 1. Middleware de infraestructura (primero)
+  errorHandlerMiddleware,  // Captura todos los errores
+  metricsMiddleware,       // Registra métricas de todas las solicitudes
+  loggingMiddleware,       // Registra todas las solicitudes
+  
+  // 2. Middleware de petición
+  corsMiddleware,          // Gestiona cabeceras CORS
+  bodyParserMiddleware,    // Parsea el cuerpo de la solicitud
+  compressionMiddleware,   // Comprime respuestas
+  
+  // 3. Middleware de seguridad
+  securityHeadersMiddleware,
+  rateLimiterMiddleware,
+  
+  // 4. Middleware de aplicación
+  localizationMiddleware,
+  
+  // 5. Middleware de autenticación/autorización (último)
+  sessionMiddleware,
+  // authMiddleware se usa a nivel de ruta
+]);
+```
+
+### Middleware Reutilizable y Configurable
+
+```typescript
+// ✅ Middleware configurable y reutilizable
+export function throttleMiddleware(options: {
+  limit?: number;
+  window?: number;
+  message?: string;
+} = {}): Middleware {
+  // Valores por defecto
+  const limit = options.limit || 100;
+  const window = options.window || 60000; // 1 minuto
+  const message = options.message || 'Rate limit exceeded';
+  
+  // Almacén en memoria
+  const store = new Map<string, { count: number, reset: number }>();
+  
+  return async (ctx, next) => {
+    // Implementación
+    const ip = ctx.request.ip;
+    
+    // Inicializar o actualizar registro
+    // ...
+    
+    return next();
+  };
+}
+
+// Uso con diferentes configuraciones
+router.post('/login', throttleMiddleware({ limit: 5, window: 60000 }));
+router.post('/register', throttleMiddleware({ limit: 3, window: 3600000 }));
+router.use('/api', throttleMiddleware({ limit: 1000, window: 60000 }));
+```
+
+## Conclusión
+
+El sistema de middleware en Fox Framework proporciona una forma flexible y potente de procesar solicitudes HTTP. Los middleware permiten separar la lógica transversal (autenticación, logging, métricas, etc.) del código de negocio principal, lo que facilita la creación de aplicaciones modulares, mantenibles y escalables. Siguiendo las buenas prácticas para la organización y diseño de middleware, puedes construir pipelines robustos que mejoren la seguridad, el rendimiento y la calidad de tu aplicación.

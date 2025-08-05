@@ -1,0 +1,143 @@
+# Referencia de API de Fox Framework
+
+Esta sección proporciona documentación detallada de todas las APIs públicas de Fox Framework. Utilízala como referencia al desarrollar con Fox Framework.
+
+## Estructura de la API
+
+La API de Fox Framework está organizada en módulos principales:
+
+- **Core**: Las funcionalidades fundamentales del framework
+- **Router**: Sistema de enrutamiento HTTP
+- **Middleware**: Sistema de middleware
+- **Cache**: Sistema de caché
+- **Logging**: Sistema de registro
+- **Event**: Sistema de eventos
+- **Database**: Abstracción de base de datos
+- **Microservices**: Soporte para arquitecturas de microservicios
+- **Security**: Seguridad y autenticación
+- **CLI**: Herramientas de línea de comandos
+
+## Core API
+
+### FoxFactory
+
+El punto de entrada principal para crear y configurar instancias de Fox Framework.
+
+```typescript
+import { FoxFactory, ServerConfig } from 'fox-framework';
+
+const config: ServerConfig = {
+  port: 3000,
+  routes: './routes',
+  middlewares: [...],
+  templates: {...}
+};
+
+const app = FoxFactory.createInstance(config);
+app.start();
+```
+
+#### `FoxFactory.createInstance(config: ServerConfig): FoxServer`
+
+Crea una nueva instancia del servidor Fox.
+
+**Parámetros:**
+- `config`: Objeto de configuración del servidor
+
+**Retorna:**
+- Instancia de `FoxServer`
+
+#### `FoxFactory.registerService(name: string, service: any): void`
+
+Registra un servicio en el contenedor DI.
+
+**Parámetros:**
+- `name`: Nombre único del servicio
+- `service`: Instancia del servicio
+
+#### `FoxFactory.getService<T>(name: string): T`
+
+Recupera un servicio del contenedor DI.
+
+**Parámetros:**
+- `name`: Nombre del servicio a recuperar
+
+**Retorna:**
+- Instancia del servicio solicitado
+
+#### `FoxFactory.createLoggingMiddleware(options?: LoggingOptions): Middleware`
+
+Crea un middleware de logging.
+
+**Parámetros:**
+- `options`: Opciones de configuración del logging (opcional)
+
+**Retorna:**
+- Middleware configurado para logging
+
+## Router API
+
+### Router
+
+El sistema de enrutamiento para manejar peticiones HTTP.
+
+```typescript
+import { Router } from 'fox-framework';
+
+const router = Router.create();
+
+router.get('/users', (req, res) => {
+  res.json([{ id: 1, name: 'Usuario' }]);
+});
+
+export default router;
+```
+
+#### `Router.create(): Router`
+
+Crea una nueva instancia de Router.
+
+**Retorna:**
+- Nueva instancia de Router
+
+#### `router.get(path: string, ...handlers: RequestHandler[]): Router`
+#### `router.post(path: string, ...handlers: RequestHandler[]): Router`
+#### `router.put(path: string, ...handlers: RequestHandler[]): Router`
+#### `router.delete(path: string, ...handlers: RequestHandler[]): Router`
+#### `router.patch(path: string, ...handlers: RequestHandler[]): Router`
+
+Métodos para registrar rutas para diferentes métodos HTTP.
+
+**Parámetros:**
+- `path`: Ruta URL (soporta parámetros dinámicos como `/users/:id`)
+- `handlers`: Uno o más handlers para procesar la solicitud
+
+**Retorna:**
+- La misma instancia de Router (para encadenamiento)
+
+## Middleware API
+
+```typescript
+import { FoxFactory, NextFunction, Request, Response } from 'fox-framework';
+
+// Middleware personalizado
+const customMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  console.log(`Request: ${req.method} ${req.path}`);
+  next();
+};
+
+// Aplicar middleware globalmente
+const app = FoxFactory.createInstance({
+  middlewares: [customMiddleware]
+});
+
+// Aplicar middleware a una ruta específica
+const router = Router.create();
+router.get('/admin', authMiddleware, (req, res) => {
+  res.send('Panel Admin');
+});
+```
+
+## Para más información
+
+Consulta los submódulos de esta sección para ver la documentación detallada de cada parte de la API de Fox Framework.

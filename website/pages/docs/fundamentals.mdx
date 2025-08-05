@@ -1,0 +1,148 @@
+# Conceptos Fundamentales
+
+Este documento explica los conceptos fundamentales y patrones de diseño utilizados en Fox Framework.
+
+## Factory Pattern
+
+Fox Framework utiliza extensivamente el patrón Factory para crear instancias de componentes. Esto proporciona:
+
+- Encapsulación de lógica de creación
+- Mayor testabilidad
+- Flexibilidad para extensiones
+
+```typescript
+// Ejemplo de uso del Factory Pattern
+import { FoxFactory } from 'fox-framework';
+
+// Crear una instancia del servidor
+const app = FoxFactory.createInstance({
+  port: 3000,
+  routes: './routes'
+});
+
+// Crear middleware usando factory
+const loggerMiddleware = FoxFactory.createLoggingMiddleware({
+  level: 'info',
+  format: 'json'
+});
+```
+
+## Dependency Injection
+
+Fox Framework implementa un sistema de Dependency Injection para gestionar dependencias entre componentes:
+
+```typescript
+// Definir un servicio
+class UserService {
+  async getUsers() {
+    return [{ id: 1, name: 'Ana' }, { id: 2, name: 'Carlos' }];
+  }
+}
+
+// Registrar en el contenedor DI
+FoxFactory.registerService('userService', new UserService());
+
+// Usar el servicio en un controlador
+const userController = {
+  async listUsers(req, res) {
+    const userService = FoxFactory.getService('userService');
+    const users = await userService.getUsers();
+    res.json(users);
+  }
+};
+```
+
+## Middleware Stack
+
+Los middlewares son funciones que procesan las solicitudes HTTP en una secuencia. Pueden:
+
+- Modificar la solicitud o respuesta
+- Terminar el ciclo de solicitud/respuesta
+- Invocar el siguiente middleware en la pila
+
+```typescript
+// Middleware simple de autenticación
+const authMiddleware = (req, res, next) => {
+  const token = req.headers.authorization;
+  
+  if (!token) {
+    return res.status(401).send('No autorizado');
+  }
+  
+  // Verificar token...
+  req.user = { id: 123, role: 'admin' };
+  
+  // Continuar con el siguiente middleware
+  next();
+};
+
+// Aplicar middleware a una ruta específica
+router.get('/admin', authMiddleware, (req, res) => {
+  res.send(`Bienvenido, administrador #${req.user.id}`);
+});
+```
+
+## Event-Driven Architecture
+
+Fox Framework incorpora un sistema de eventos que permite una arquitectura desacoplada:
+
+```typescript
+import { EventEmitter } from 'fox-framework';
+
+// Crear emisor de eventos
+const events = EventEmitter.create();
+
+// Suscribirse a un evento
+events.on('user:created', (user) => {
+  console.log(`Nuevo usuario creado: ${user.name}`);
+  // Enviar email de bienvenida, actualizar estadísticas, etc.
+});
+
+// Emitir un evento
+router.post('/users', async (req, res) => {
+  const user = await createUser(req.body);
+  events.emit('user:created', user);
+  res.status(201).json(user);
+});
+```
+
+## Template Engine
+
+Fox Framework incluye un motor de plantillas flexible:
+
+```typescript
+// Configurar el motor de plantillas
+const app = FoxFactory.createInstance({
+  templates: {
+    engine: 'ejs',
+    directory: './views'
+  }
+});
+
+// Usar en una ruta
+router.get('/perfil', (req, res) => {
+  res.render('profile', {
+    user: { name: 'Elena', email: 'elena@example.com' }
+  });
+});
+```
+
+## Plugin System
+
+Extiende Fox Framework con plugins:
+
+```typescript
+import { RedisCache } from 'fox-framework-redis';
+
+// Registrar plugin
+FoxFactory.registerPlugin('cache', new RedisCache({
+  host: 'localhost',
+  port: 6379
+}));
+
+// Usar plugin
+const cache = FoxFactory.getPlugin('cache');
+await cache.set('user:123', userData, 3600); // TTL 1 hora
+```
+
+Estos conceptos fundamentales forman la base de Fox Framework y proporcionan un fundamento sólido para construir aplicaciones escalables y mantenibles.

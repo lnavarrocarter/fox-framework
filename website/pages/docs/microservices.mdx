@@ -1,0 +1,510 @@
+# Sistema de Microservicios
+
+Fox Framework ofrece un completo soporte para arquitecturas de microservicios, proporcionando herramientas para service discovery, load balancing, circuit breaking y más.
+
+## Componentes del Sistema de Microservicios
+
+### Service Registry
+
+El Service Registry permite el registro y descubrimiento dinámico de servicios en una arquitectura distribuida.
+
+```typescript
+import { ServiceRegistry, ServiceRegistryFactory } from 'fox-framework';
+
+// Crear un registry
+const registry = ServiceRegistryFactory.create({
+  provider: 'consul',  // Opciones: 'memory', 'consul', 'etcd'
+  connection: {
+    host: 'localhost',
+    port: 8500
+  }
+});
+
+// Registrar un servicio
+await registry.register({
+  id: 'user-service-1',
+  name: 'user-service',
+  version: '1.0.0',
+  address: 'user-service.example.com',
+  port: 3000,
+  healthCheck: {
+    endpoint: '/health',
+    interval: '10s',
+    timeout: '1s'
+  },
+  metadata: {
+    region: 'us-east-1',
+    environment: 'production'
+  }
+});
+
+// Descubrir servicios
+const userServices = await registry.discover('user-service');
+console.log(`Found ${userServices.length} instances of user-service`);
+```
+
+### Load Balancer
+
+El Load Balancer distribuye las peticiones entre múltiples instancias de un servicio.
+
+```typescript
+import { LoadBalancer, LoadBalancerFactory } from 'fox-framework';
+
+// Crear un load balancer
+const loadBalancer = LoadBalancerFactory.create({
+  algorithm: 'round-robin',  // Opciones: 'round-robin', 'weighted', 'least-connections', 'random'
+  registry: registry,        // Referencia al service registry
+  serviceName: 'user-service',
+  options: {
+    preferSameRegion: true,  // Priorizar instancias en la misma región
+    healthyOnly: true        // Considerar solo instancias saludables
+  }
+});
+
+// Obtener la siguiente instancia para una petición
+const serviceInstance = await loadBalancer.next();
+console.log(`Selected instance: ${serviceInstance.address}:${serviceInstance.port}`);
+```
+
+### Circuit Breaker
+
+El Circuit Breaker previene fallos en cascada al detectar errores y abrir temporalmente el circuito para evitar más llamadas a un servicio fallido.
+
+```typescript
+import { CircuitBreaker, CircuitBreakerFactory } from 'fox-framework';
+
+// Crear un circuit breaker
+const breaker = CircuitBreakerFactory.create({
+  name: 'user-service-breaker',
+  failureThreshold: 5,       // Número de fallos antes de abrir el circuito
+  resetTimeout: 30000,       // Tiempo (ms) antes de intentar cerrar un circuito abierto
+  halfOpenSuccess: 2,        // Éxitos necesarios en estado half-open para cerrar el circuito
+  timeout: 3000,             // Timeout para las operaciones (ms)
+  monitorInterval: 5000      // Intervalo para actualizar métricas (ms)
+});
+
+// Ejecutar operación con protección de circuit breaker
+try {
+  const result = await breaker.execute(async () => {
+    // Llamada a un servicio externo que podría fallar
+    const response = await fetch('https://user-service.example.com/api/users');
+    if (!response.ok) {
+      throw new Error(`Service responded with status ${response.status}`);
+    }
+    return response.json();
+  });
+  
+  console.log('Operation successful:', result);
+} catch (error) {
+  if (error.name === 'CircuitBreakerOpenError') {
+    console.error('Circuit is open! Not making remote call');
+  } else {
+    console.error('Operation failed:', error);
+  }
+}
+```
+
+### API Gateway
+
+El API Gateway proporciona un punto de entrada único a múltiples servicios, gestionando routing, transformación y políticas.
+
+```typescript
+import { ApiGateway, ApiGatewayFactory } from 'fox-framework';
+
+// Crear un API Gateway
+const gateway = ApiGatewayFactory.create({
+  port: 8000,
+  cors: true,
+  rateLimit: {
+    windowMs: 15 * 60 * 1000,  // 15 minutos
+    max: 100                    // 100 peticiones por ventana
+  },
+  registry: registry            // Referencia al service registry
+});
+
+// Configurar rutas
+gateway.route({
+  path: '/users',
+  service: 'user-service',
+  methods: ['GET', 'POST'],
+  strip: false,                 // No eliminar el prefijo de la ruta
+  rewrite: '/api/users'         // Reescribir la ruta en el destino
+});
+
+gateway.route({
+  path: '/orders',
+  service: 'order-service',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  strip: true,                  // Eliminar el prefijo en la ruta de destino
+  middleware: [                 // Middleware específico para esta ruta
+    authMiddleware, 
+    loggingMiddleware
+  ]
+});
+
+// Iniciar el gateway
+gateway.start();
+console.log('API Gateway running on port 8000');
+```
+
+### Service Mesh
+
+El Service Mesh gestiona la comunicación entre servicios, proporcionando características como seguridad, observabilidad y control de tráfico.
+
+```typescript
+import { ServiceMesh, ServiceMeshFactory } from 'fox-framework';
+
+// Crear una malla de servicios
+const mesh = ServiceMeshFactory.create({
+  name: 'fox-mesh',
+  discovery: registry,
+  tracing: {
+    provider: 'jaeger',
+    endpoint: 'http://jaeger:14268/api/traces'
+  },
+  metrics: {
+    provider: 'prometheus',
+    endpoint: 'http://prometheus:9090'
+  },
+  security: {
+    mtls: true,               // TLS mutuo entre servicios
+    certificateAuthority: '/path/to/ca',
+    certificatePath: '/path/to/cert',
+    keyPath: '/path/to/key'
+  }
+});
+
+// Registrar el servicio actual en la malla
+await mesh.register({
+  name: 'order-service',
+  version: '1.0.0',
+  port: 3000
+});
+
+// Crear un cliente para otro servicio
+const userServiceClient = await mesh.createClient('user-service');
+
+// Llamar a un servicio a través de la malla
+try {
+  const user = await userServiceClient.get('/users/1234');
+  console.log('User data:', user);
+} catch (error) {
+  console.error('Failed to get user:', error);
+}
+```
+
+### Health Checker
+
+El Health Checker monitoriza la salud de los servicios y actualiza su estado en el registry.
+
+```typescript
+import { HealthChecker, HealthCheckerFactory } from 'fox-framework';
+
+// Crear un health checker
+const healthChecker = HealthCheckerFactory.create({
+  serviceName: 'order-service',
+  serviceId: 'order-service-1',
+  registry: registry,
+  checks: [
+    // Verificar conexión a base de datos
+    {
+      name: 'database',
+      interval: 15000,  // 15 segundos
+      timeout: 5000,    // 5 segundos
+      check: async () => {
+        return database.isConnected();
+      }
+    },
+    // Verificar conexión a cache
+    {
+      name: 'cache',
+      interval: 10000,  // 10 segundos
+      timeout: 2000,    // 2 segundos
+      check: async () => {
+        return cache.ping();
+      }
+    }
+  ],
+  // Endpoint para health check HTTP
+  endpoint: {
+    path: '/health',
+    port: 3000
+  }
+});
+
+// Iniciar health checker
+healthChecker.start();
+
+// Verificar estado de salud
+const status = await healthChecker.check();
+console.log('Service health:', status);
+```
+
+## Arquitectura de Microservicios Completa
+
+A continuación se muestra cómo implementar una arquitectura de microservicios completa con Fox Framework:
+
+```typescript
+import { 
+  FoxFactory,
+  MicroservicesFactory,
+  ServiceRegistry,
+  LoadBalancer,
+  CircuitBreaker,
+  EventBus
+} from 'fox-framework';
+
+// Configuración centralizada
+const microservicesConfig = {
+  serviceName: 'user-service',
+  serviceId: `user-service-${process.env.HOSTNAME || 'local'}`,
+  version: '1.0.0',
+  port: 3000,
+  registry: {
+    provider: 'consul',
+    connection: {
+      host: process.env.REGISTRY_HOST || 'localhost',
+      port: process.env.REGISTRY_PORT || 8500
+    }
+  },
+  eventBus: {
+    provider: 'kafka',
+    connection: {
+      clientId: 'user-service',
+      brokers: [process.env.KAFKA_BROKER || 'localhost:9092']
+    }
+  }
+};
+
+// Crear factory de microservicios
+const microservices = MicroservicesFactory.create(microservicesConfig);
+
+// Inicializar componentes
+async function initializeMicroservices() {
+  // Inicializar componentes
+  await microservices.initialize();
+  
+  // Obtener componentes configurados
+  const registry = microservices.getRegistry();
+  const loadBalancer = microservices.getLoadBalancer('payment-service');
+  const circuitBreaker = microservices.getCircuitBreaker('payment-service');
+  const eventBus = microservices.getEventBus();
+  
+  // Registrar el servicio actual
+  await registry.register({
+    id: microservicesConfig.serviceId,
+    name: microservicesConfig.serviceName,
+    version: microservicesConfig.version,
+    address: process.env.SERVICE_HOST || 'localhost',
+    port: microservicesConfig.port,
+    healthCheck: {
+      endpoint: '/health',
+      interval: '10s'
+    }
+  });
+  
+  // Suscribirse a eventos relevantes
+  eventBus.subscribe('payment.completed', async (event) => {
+    console.log('Payment completed:', event);
+    // Procesar evento...
+  });
+  
+  // Configurar servidor HTTP
+  const app = FoxFactory.createInstance({
+    port: microservicesConfig.port,
+    // Otras configuraciones...
+  });
+  
+  // Endpoint para llamar a otro servicio
+  app.get('/payment/:id', async (req, res) => {
+    try {
+      // Obtener instancia del servicio
+      const paymentService = await loadBalancer.next();
+      
+      // Llamar con circuit breaker
+      const result = await circuitBreaker.execute(async () => {
+        const response = await fetch(
+          `http://${paymentService.address}:${paymentService.port}/api/payments/${req.params.id}`
+        );
+        if (!response.ok) {
+          throw new Error(`Payment service responded with ${response.status}`);
+        }
+        return response.json();
+      });
+      
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // Endpoint de health check
+  app.get('/health', (req, res) => {
+    res.json({ status: 'UP' });
+  });
+  
+  // Iniciar servidor
+  app.start();
+  console.log(`Microservice ${microservicesConfig.serviceName} started on port ${microservicesConfig.port}`);
+}
+
+// Iniciar microservicio
+initializeMicroservices().catch(console.error);
+```
+
+## Patrones para Microservicios
+
+Fox Framework facilita la implementación de estos patrones comunes para microservicios:
+
+### API Composition
+
+```typescript
+// Componedor de APIs
+const apiComposer = microservices.createApiComposer();
+
+// Definir una composición
+apiComposer.compose({
+  name: 'orderDetails',
+  sources: [
+    {
+      service: 'order-service',
+      path: '/orders/:id',
+      map: (data) => ({ order: data })
+    },
+    {
+      service: 'user-service',
+      path: '/users/:userId',
+      params: (req, prevResults) => ({
+        userId: prevResults.order.userId
+      }),
+      map: (data) => ({ customer: data })
+    },
+    {
+      service: 'payment-service',
+      path: '/payments/byOrder/:orderId',
+      params: (req) => ({ orderId: req.params.id }),
+      map: (data) => ({ payment: data })
+    }
+  ]
+});
+
+// Usar la composición en un endpoint
+app.get('/api/orders/:id/details', apiComposer.getHandler('orderDetails'));
+```
+
+### Database per Service
+
+Fox Framework soporta el patrón de base de datos por servicio mediante sus abstracciones de base de datos:
+
+```typescript
+import { DatabaseFactory } from 'fox-framework';
+
+// Cada microservicio tiene su propia base de datos
+const db = DatabaseFactory.create({
+  provider: 'postgresql',
+  connection: {
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD
+  }
+});
+
+// Usar la conexión
+const userRepository = db.getRepository('users');
+```
+
+### Event-Driven Communication
+
+La comunicación basada en eventos es fundamental para microservicios desacoplados:
+
+```typescript
+// Publicar eventos de dominio
+app.post('/api/orders', async (req, res) => {
+  try {
+    // Crear la orden
+    const order = await orderService.createOrder(req.body);
+    
+    // Publicar evento
+    await eventBus.publish('order.created', {
+      orderId: order.id,
+      userId: order.userId,
+      amount: order.totalAmount,
+      items: order.items
+    });
+    
+    res.status(201).json(order);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Suscribirse a eventos de otros servicios
+eventBus.subscribe('payment.confirmed', async (event) => {
+  await orderService.updateOrderStatus(event.payload.orderId, 'paid');
+});
+```
+
+## Despliegue de Microservicios
+
+Fox Framework proporciona herramientas para facilitar el despliegue de microservicios:
+
+```typescript
+import { DeploymentFactory } from 'fox-framework';
+
+// Crear configuración de despliegue
+const deployment = DeploymentFactory.create({
+  provider: 'kubernetes',  // o 'docker-compose', 'aws', etc.
+  services: [
+    {
+      name: 'user-service',
+      replicas: 3,
+      image: 'organization/user-service:1.0.0',
+      env: {
+        NODE_ENV: 'production',
+        REGISTRY_HOST: 'consul-service'
+      },
+      resources: {
+        cpu: '100m',
+        memory: '128Mi'
+      }
+    },
+    // Más servicios...
+  ],
+  infrastructure: {
+    registry: {
+      type: 'consul',
+      replicas: 3
+    },
+    messageQueue: {
+      type: 'kafka',
+      brokers: 3
+    }
+  }
+});
+
+// Generar archivos de configuración
+const files = await deployment.generateFiles();
+
+// O aplicar directamente
+await deployment.apply();
+```
+
+## Mejores Prácticas
+
+1. **Servicios autónomos**: Cada servicio debe poder funcionar independientemente
+
+2. **Diseño por dominios**: Sigue Domain-Driven Design para definir límites de servicios
+
+3. **API contracts**: Define contratos claros entre servicios y versiónalos
+
+4. **Resilience**: Implementa circuit breakers, retries y timeouts
+
+5. **Observabilidad**: Asegura que cada servicio emita logs, métricas y traces
+
+6. **Stateless**: Diseña servicios sin estado para facilitar el escalado
+
+7. **Configuración centralizada**: Usa un servicio de configuración para gestionar parámetros
+
+8. **CI/CD dedicados**: Cada servicio debe tener su propio pipeline

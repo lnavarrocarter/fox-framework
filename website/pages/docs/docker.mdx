@@ -1,0 +1,417 @@
+# Integración con Docker
+
+Fox Framework ofrece una integración completa con Docker para facilitar el desarrollo, pruebas y despliegue de aplicaciones en contenedores.
+
+## Funcionalidades Principales
+
+- **Generación Automática de Dockerfiles**: Optimizados para desarrollo y producción
+- **Multi-Stage Builds**: Para imágenes eficientes y seguras
+- **Docker Compose**: Orquestación para entornos completos
+- **Modo de Desarrollo**: Contenedores con hot reload y debugging
+- **Optimización de Producción**: Imágenes minimalistas y seguras
+- **Integración con CLI**: Comandos para gestionar contenedores
+
+## Estructura de Archivos
+
+Al utilizar la integración con Docker de Fox Framework, se generan los siguientes archivos:
+
+```
+proyecto/
+├── Dockerfile             # Multi-stage build para producción
+├── Dockerfile.dev         # Configuración para desarrollo
+├── .dockerignore          # Archivos a ignorar en el build
+├── docker-compose.yml     # Orquestación de servicios
+└── docker/
+    ├── nginx/             # Configuración de Nginx
+    │   ├── nginx.conf     # Configuración principal
+    │   └── ssl/           # Certificados SSL
+    ├── scripts/           # Scripts de inicialización
+    └── development.env    # Variables de entorno para desarrollo
+```
+
+## Dockerfile para Producción
+
+Fox Framework genera un Dockerfile optimizado para producción usando multi-stage builds:
+
+```dockerfile
+# ---- Base Node ----
+FROM node:18-alpine AS base
+WORKDIR /app
+COPY package*.json ./
+
+# ---- Dependencies ----
+FROM base AS dependencies
+RUN npm ci --only=production
+COPY . .
+
+# ---- Build ----
+FROM dependencies AS build
+RUN npm run build
+
+# ---- Production ----
+FROM node:18-alpine AS production
+WORKDIR /app
+COPY --from=dependencies /app/package*.json ./
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/config ./config
+
+# Metadatos y configuración
+LABEL maintainer="Fox Framework <info@foxframework.com>"
+ENV NODE_ENV production
+EXPOSE 3000
+
+# Usuario no root para mayor seguridad
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S foxapp -u 1001
+USER foxapp
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD node ./dist/health-check.js
+
+# Comando de inicio
+CMD ["node", "dist/server.js"]
+```
+
+## Dockerfile para Desarrollo
+
+Para desarrollo, Fox Framework genera un Dockerfile optimizado para iteración rápida:
+
+```dockerfile
+FROM node:18
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+ENV NODE_ENV=development
+EXPOSE 3000 9229
+
+# Habilitando source maps y debugging
+ENV NODE_OPTIONS=--enable-source-maps
+
+# Utilizando nodemon para hot reload
+CMD ["npm", "run", "dev"]
+```
+
+## Docker Compose
+
+Docker Compose facilita la orquestación de servicios relacionados:
+
+```yaml
+version: '3.8'
+
+services:
+  # Aplicación Fox Framework
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+      - "9229:9229"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=database
+      - REDIS_HOST=cache
+    depends_on:
+      - database
+      - cache
+    networks:
+      - fox-network
+
+  # Base de datos
+  database:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_DB=foxapp
+      - POSTGRES_USER=foxuser
+      - POSTGRES_PASSWORD=foxpassword
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - fox-network
+
+  # Cache con Redis
+  cache:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - fox-network
+
+  # Nginx como reverse proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - app
+    networks:
+      - fox-network
+
+networks:
+  fox-network:
+
+volumes:
+  db-data:
+  redis-data:
+```
+
+## Comandos CLI para Docker
+
+Fox Framework CLI incluye comandos para gestionar contenedores:
+
+```bash
+# Generar archivos Docker
+npx tsfox docker init
+
+# Construir imagen
+npx tsfox docker build
+
+# Ejecutar contenedor de desarrollo
+npx tsfox docker dev
+
+# Ejecutar en modo producción
+npx tsfox docker run
+
+# Detener contenedores
+npx tsfox docker stop
+
+# Limpiar contenedores y volúmenes
+npx tsfox docker clean
+```
+
+## Integración con Microservicios
+
+Para arquitecturas de microservicios, Fox Framework genera configuraciones Docker más avanzadas:
+
+```yaml
+# docker-compose.microservices.yml
+version: '3.8'
+
+services:
+  # Servicio de API Gateway
+  gateway:
+    build:
+      context: ./services/gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - SERVICE_REGISTRY_HOST=registry
+    depends_on:
+      - registry
+    networks:
+      - fox-services
+
+  # Servicio de registro y descubrimiento
+  registry:
+    build:
+      context: ./services/registry
+    ports:
+      - "8500:8500"
+    volumes:
+      - registry-data:/data
+    networks:
+      - fox-services
+
+  # Servicio de usuarios
+  user-service:
+    build:
+      context: ./services/user
+    deploy:
+      replicas: 2
+    environment:
+      - SERVICE_REGISTRY_HOST=registry
+      - DB_HOST=users-db
+    depends_on:
+      - users-db
+      - registry
+    networks:
+      - fox-services
+      - users-network
+
+  # Base de datos para servicio de usuarios
+  users-db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_DB=users
+      - POSTGRES_USER=user_service
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - users-db-data:/var/lib/postgresql/data
+    networks:
+      - users-network
+
+networks:
+  fox-services:
+  users-network:
+
+volumes:
+  registry-data:
+  users-db-data:
+```
+
+## Despliegue en Kubernetes
+
+Fox Framework también genera configuraciones para Kubernetes:
+
+```yaml
+# kubernetes/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fox-app
+  labels:
+    app: fox-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fox-app
+  template:
+    metadata:
+      labels:
+        app: fox-app
+    spec:
+      containers:
+      - name: fox-app
+        image: fox-app:1.0.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: db_host
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+```
+
+## Gestión de Configuración
+
+### Variables de Entorno
+
+Fox Framework gestiona automáticamente las variables de entorno en Docker:
+
+```typescript
+// src/config.ts
+import { ConfigFactory } from 'fox-framework';
+
+const config = ConfigFactory.create({
+  server: {
+    port: process.env.PORT || 3000,
+    host: process.env.HOST || '0.0.0.0'
+  },
+  database: {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    name: process.env.DB_NAME || 'foxapp',
+    user: process.env.DB_USER || 'foxuser',
+    password: process.env.DB_PASSWORD || 'password'
+  },
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379')
+  },
+  environment: process.env.NODE_ENV || 'development'
+});
+
+export default config;
+```
+
+### Docker Health Checks
+
+Implementación de health checks para contenedores:
+
+```typescript
+// src/health-check.ts
+import http from 'http';
+
+const options = {
+  host: 'localhost',
+  port: process.env.PORT || 3000,
+  path: '/health',
+  timeout: 2000
+};
+
+const request = http.request(options, (res) => {
+  console.log(`Health check status: ${res.statusCode}`);
+  if (res.statusCode === 200) {
+    process.exit(0);
+  } else {
+    process.exit(1);
+  }
+});
+
+request.on('error', (err) => {
+  console.error('Health check failed:', err);
+  process.exit(1);
+});
+
+request.end();
+```
+
+## Optimizaciones
+
+### Capas de Docker Optimizadas
+
+Fox Framework organiza las capas del contenedor para maximizar el uso de la caché:
+
+1. **Dependencias**: Instaladas primero, raramente cambian
+2. **Código fuente**: Cambia con frecuencia pero no afecta a las dependencias
+3. **Configuración**: Separada para facilitar actualizaciones
+
+### Imágenes Multi-Stage
+
+Las imágenes multi-stage reducen el tamaño final:
+
+1. **Base**: Node.js con herramientas de construcción
+2. **Dependencias**: Instalación de paquetes
+3. **Build**: Compilación TypeScript y assets
+4. **Producción**: Solo los archivos necesarios para ejecutar la aplicación
+
+## Mejores Prácticas
+
+1. **Usuario No Root**: Ejecutar como usuario sin privilegios
+2. **Secretos**: Usar Docker secrets para credenciales
+3. **Health Checks**: Implementar checks para monitoring
+4. **Volúmenes**: Utilizar volúmenes para datos persistentes
+5. **Redes**: Segmentar servicios con redes dedicadas
+6. **Logging**: Configurar para enviar logs al host
+7. **Tagging**: Versionar imágenes correctamente

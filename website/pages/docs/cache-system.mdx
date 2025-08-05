@@ -1,0 +1,1310 @@
+# Sistema de Cache
+
+El Sistema de Cache de Fox Framework proporciona una solución robusta y flexible para almacenar temporalmente datos y mejorar el rendimiento de las aplicaciones. Con múltiples drivers, estrategias de invalidación y soporte para operaciones complejas, el cache se integra perfectamente con todos los componentes del framework.
+
+## Características Principales
+
+- **Múltiples Drivers**: Memoria, Redis, Memcached, Archivo
+- **API Unificada**: Interfaz consistente independientemente del driver
+- **Serialización Automática**: Conversión transparente de objetos complejos
+- **TTL Configurable**: Control granular sobre la expiración de datos
+- **Cache por Tags**: Agrupación e invalidación por categorías
+- **Almacenamiento Jerárquico**: Cache en múltiples niveles (L1/L2)
+- **Cache de Respuestas HTTP**: Almacenamiento de respuestas completas
+- **Operaciones Atómicas**: Bloqueos para operaciones concurrentes
+- **Cache Distribuido**: Sincronización entre múltiples instancias
+
+## Uso Básico
+
+### Configuración
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+import { CacheFactory } from 'fox-framework/cache';
+
+// Crear instancia de caché
+const cache = CacheFactory.create({
+  // Driver de cache
+  driver: 'redis',
+  
+  // Configuración de conexión
+  connection: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD
+  },
+  
+  // Opciones generales
+  prefix: 'app:', // Prefijo para todas las claves
+  ttl: 3600,      // Tiempo de vida por defecto (segundos)
+  
+  // Serialización
+  serialize: JSON.stringify,
+  deserialize: JSON.parse
+});
+
+// Registrar en la aplicación
+const server = FoxFactory.createServer({
+  // Otras configuraciones...
+  cache
+});
+```
+
+### Operaciones Básicas
+
+```typescript
+// Guardar un valor en caché
+await cache.set('user:profile:123', userData, 3600); // TTL: 1 hora
+
+// Obtener un valor
+const userData = await cache.get('user:profile:123');
+if (userData) {
+  // Usar datos del caché
+} else {
+  // Datos no encontrados en caché
+}
+
+// Verificar si existe una clave
+const exists = await cache.has('user:profile:123');
+
+// Eliminar un valor
+await cache.delete('user:profile:123');
+
+// Incrementar un contador
+await cache.increment('visits:homepage');
+await cache.increment('user:points:123', 5); // Incrementar en 5
+
+// Decrementar un contador
+await cache.decrement('stock:product:456', 1);
+
+// Limpiar todo el caché
+await cache.clear();
+```
+
+### Caducidad y TTL
+
+```typescript
+// Establecer con TTL específico (10 minutos)
+await cache.set('session:token:abc', sessionData, 600);
+
+// Obtener tiempo restante de vida (en segundos)
+const ttl = await cache.ttl('session:token:abc');
+
+// Extender tiempo de vida
+await cache.expire('session:token:abc', 1800); // 30 minutos adicionales
+
+// Persistir una clave (eliminar expiración)
+await cache.persist('important:config');
+```
+
+### Operación "Obtener o Guardar"
+
+```typescript
+// Obtener datos del caché o ejecutar función si no existe
+const user = await cache.remember('user:123', async () => {
+  // Esta función solo se ejecuta si la clave no existe en caché
+  return await userService.findById('123');
+}, 3600); // TTL: 1 hora
+
+// Variante que siempre ejecuta la función y actualiza el caché
+const freshUser = await cache.rememberForever('user:123', async () => {
+  return await userService.findById('123');
+});
+```
+
+## Drivers Disponibles
+
+### Driver de Memoria
+
+Para desarrollo y aplicaciones pequeñas:
+
+```typescript
+const cache = CacheFactory.create({
+  driver: 'memory',
+  
+  // Límite de entradas (LRU)
+  maxItems: 1000,
+  
+  // Opciones de LRU
+  lruOptions: {
+    maxAge: 3600000, // 1 hora en ms
+    updateAgeOnGet: true
+  }
+});
+```
+
+### Driver de Redis
+
+Para entornos de producción y cache distribuido:
+
+```typescript
+const cache = CacheFactory.create({
+  driver: 'redis',
+  
+  connection: {
+    // Conexión única
+    host: 'localhost',
+    port: 6379,
+    password: 'secret',
+    db: 0,
+    
+    // O cluster
+    cluster: [
+      { host: 'redis-0', port: 6379 },
+      { host: 'redis-1', port: 6379 },
+      { host: 'redis-2', port: 6379 }
+    ],
+    
+    // Opciones avanzadas
+    enableOfflineQueue: true,
+    connectTimeout: 10000,
+    commandTimeout: 5000
+  },
+  
+  // Opciones de serialización
+  serializer: {
+    stringify: (value) => JSON.stringify(value),
+    parse: (value) => JSON.parse(value)
+  }
+});
+```
+
+### Driver de Memcached
+
+Para cache de alta velocidad:
+
+```typescript
+const cache = CacheFactory.create({
+  driver: 'memcached',
+  
+  // Servidores
+  servers: ['memcached-1:11211', 'memcached-2:11211'],
+  
+  // Opciones
+  options: {
+    retries: 3,
+    retry: 1000,
+    timeout: 5000,
+    reconnect: 10000
+  }
+});
+```
+
+### Driver de Archivo
+
+Para desarrollo o aplicaciones con pocos recursos:
+
+```typescript
+const cache = CacheFactory.create({
+  driver: 'file',
+  
+  // Directorio de almacenamiento
+  directory: './storage/cache',
+  
+  // Extensión de archivo
+  extension: '.cache',
+  
+  // Opciones de sistema de archivos
+  fsOptions: {
+    encoding: 'utf8',
+    mode: 0o666
+  },
+  
+  // Limpieza periódica
+  gcProbability: 100, // 1/100 probabilidad de limpieza en cada operación
+});
+```
+
+## Cache por Tags
+
+Los tags permiten agrupar elementos relacionados y limpiarlos juntos:
+
+```typescript
+// Guardar con tags
+await cache.tags(['users', 'profile']).set('user:123', userData, 3600);
+
+// Obtener desde tags
+const userData = await cache.tags(['users']).get('user:123');
+
+// Limpiar por tag
+await cache.tags(['users']).flush(); // Elimina todas las claves asociadas al tag 'users'
+
+// Múltiples operaciones con los mismos tags
+const userCache = cache.tags(['users']);
+await userCache.set('user:123', user123Data);
+await userCache.set('user:456', user456Data);
+
+// Operaciones complejas con tags
+const tagsCache = cache.tags(['products', 'featured']);
+await tagsCache.remember('products:list', async () => {
+  return await productService.getFeaturedProducts();
+});
+```
+
+## Cache de Respuestas HTTP
+
+Para cachear respuestas HTTP completas:
+
+```typescript
+import { httpCacheMiddleware } from 'fox-framework/cache';
+
+// Middleware global para cache de respuestas
+server.use(httpCacheMiddleware({
+  // TTL por defecto
+  ttl: 300, // 5 minutos
+  
+  // Solo respuestas 200
+  statusCodes: [200],
+  
+  // No cachear para estos métodos
+  ignoreMethods: ['POST', 'PUT', 'DELETE', 'PATCH'],
+  
+  // No cachear rutas específicas
+  ignorePaths: [
+    '/admin',
+    '/auth',
+    /\/api\/private\/.*/
+  ],
+  
+  // Claves personalizadas
+  keyGenerator: (ctx) => {
+    return `response:${ctx.method}:${ctx.url}:${ctx.auth?.user?.id || 'guest'}`;
+  },
+  
+  // Headers para control de cache
+  headers: {
+    enabled: true, // Añadir headers Cache-Control y Etag
+    cacheControl: 'public, max-age=300'
+  },
+  
+  // Validar cache
+  validate: (ctx, cached) => {
+    // Personalizar validación
+    return true;
+  }
+}));
+```
+
+Con decoradores en controladores:
+
+```typescript
+@Controller('/products')
+export class ProductController {
+  @Get('/')
+  @HttpCache(600) // 10 minutos
+  async getProducts(ctx: HttpContext) {
+    const products = await this.productService.findAll();
+    return products;
+  }
+  
+  @Get('/:id')
+  @HttpCache({
+    ttl: 300,
+    tags: ['product-details'],
+    keyBy: (ctx) => `product:${ctx.params.id}`
+  })
+  async getProduct(ctx: HttpContext) {
+    const product = await this.productService.findById(ctx.params.id);
+    return product;
+  }
+  
+  @Post('/')
+  @InvalidateCache('products') // Invalidar cache al crear un producto
+  async createProduct(ctx: HttpContext) {
+    const product = await this.productService.create(ctx.body);
+    return product;
+  }
+}
+```
+
+## Cache Multinivel
+
+Para optimizar rendimiento con diferentes niveles de cache:
+
+```typescript
+import { CacheFactory, MultiLevelCache } from 'fox-framework/cache';
+
+// Crear caches individuales
+const memoryCache = CacheFactory.create({
+  driver: 'memory',
+  ttl: 300 // 5 minutos
+});
+
+const redisCache = CacheFactory.create({
+  driver: 'redis',
+  connection: { host: 'localhost', port: 6379 },
+  ttl: 3600 // 1 hora
+});
+
+// Crear cache multinivel
+const cache = new MultiLevelCache([
+  { cache: memoryCache, weight: 1 }, // L1 (más rápido)
+  { cache: redisCache, weight: 2 }   // L2 (más persistente)
+]);
+
+// El uso es transparente, igual que un cache normal
+await cache.set('key', value);
+const value = await cache.get('key');
+```
+
+Funcionamiento del cache multinivel:
+1. Las lecturas (`get`) buscan primero en L1, luego en L2 si no se encuentra
+2. Las escrituras (`set`) se propagan a todos los niveles
+3. Los borrados (`delete`) se propagan a todos los niveles
+
+## Operaciones Atómicas
+
+Para garantizar consistencia en entornos concurrentes:
+
+```typescript
+// Incremento atómico
+const newValue = await cache.increment('visits', 1);
+
+// Operación con bloqueo
+const result = await cache.lock('processing:order:123').get(async (release) => {
+  try {
+    // Operación que requiere exclusividad
+    const order = await orderService.process('123');
+    
+    // Operación completada con éxito
+    return order;
+  } finally {
+    // Liberar bloqueo al finalizar
+    release();
+  }
+}, 30); // Tiempo máximo de espera (segundos)
+
+// Operación "obtener y establecer" atómica
+const oldValue = await cache.getAndSet('counter', 0);
+
+// Comparar y establecer (CAS)
+const success = await cache.cas('status:job:123', 'pending', 'processing');
+if (success) {
+  // El valor era "pending" y ahora es "processing"
+} else {
+  // El valor ya no era "pending", otra operación lo modificó
+}
+```
+
+## Cache en Servicios y Repositories
+
+Integración con la capa de acceso a datos:
+
+```typescript
+@Injectable()
+export class UserRepository {
+  constructor(
+    private database: Database,
+    private cache: CacheService
+  ) {}
+  
+  async findById(id: string): Promise<User | null> {
+    // Clave de cache específica
+    const cacheKey = `user:${id}`;
+    
+    // Intentar obtener del cache primero
+    return this.cache.remember(cacheKey, async () => {
+      // Si no está en cache, consultar base de datos
+      const user = await this.database.query('SELECT * FROM users WHERE id = ?', [id]);
+      return user || null;
+    }, 3600); // TTL: 1 hora
+  }
+  
+  async findByEmail(email: string): Promise<User | null> {
+    // Usar tags para agrupar por tipo de consulta
+    return this.cache
+      .tags(['users', 'by-email'])
+      .remember(`user:email:${email}`, async () => {
+        return this.database.query('SELECT * FROM users WHERE email = ?', [email]);
+      });
+  }
+  
+  async update(id: string, data: Partial<User>): Promise<User> {
+    // Actualizar en base de datos
+    const user = await this.database.query(
+      'UPDATE users SET ? WHERE id = ? RETURNING *',
+      [data, id]
+    );
+    
+    // Invalidar cache relacionado con este usuario
+    await this.cache.tags(['users']).deletePattern(`user:${id}`);
+    await this.cache.delete(`user:email:${user.email}`);
+    
+    // Actualizar cache con nuevos datos
+    await this.cache.set(`user:${id}`, user, 3600);
+    
+    return user;
+  }
+}
+```
+
+## Cache para Computaciones Costosas
+
+```typescript
+@Injectable()
+export class ReportService {
+  constructor(private cache: CacheService) {}
+  
+  async generateDailyReport(date: Date, forceRefresh = false): Promise<Report> {
+    const dateStr = date.toISOString().split('T')[0];
+    const cacheKey = `report:daily:${dateStr}`;
+    
+    // Si se solicita actualización, ignorar cache
+    if (forceRefresh) {
+      const report = await this.computeReport(date);
+      await this.cache.set(cacheKey, report, 86400); // TTL: 24 horas
+      return report;
+    }
+    
+    // Intentar obtener del cache
+    return this.cache.remember(cacheKey, async () => {
+      return this.computeReport(date);
+    }, 86400);
+  }
+  
+  private async computeReport(date: Date): Promise<Report> {
+    // Simulación de operación costosa
+    console.log('Generando reporte complejo...');
+    
+    // En un caso real, esta sería una operación intensiva
+    // como análisis de datos, agregaciones o consultas complejas
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    return {
+      date: date.toISOString(),
+      metrics: {
+        totalUsers: 1250,
+        activeUsers: 520,
+        revenue: 12500,
+        conversionRate: 3.2
+      },
+      // ... más datos de reporte
+    };
+  }
+}
+```
+
+## Estrategias de Cache
+
+### Cache Aside (Lazy Loading)
+
+```typescript
+// Patrón "Cache Aside"
+async function getData(key) {
+  // 1. Intentar obtener del cache
+  const cached = await cache.get(key);
+  if (cached) {
+    return cached;
+  }
+  
+  // 2. Si no está en cache, obtener de la fuente original
+  const data = await fetchFromDatabase(key);
+  
+  // 3. Guardar en cache para futuras solicitudes
+  await cache.set(key, data, 3600);
+  
+  return data;
+}
+```
+
+### Write Through
+
+```typescript
+// Patrón "Write Through"
+async function saveData(key, data) {
+  // 1. Guardar en la fuente original
+  await saveToDatabase(key, data);
+  
+  // 2. Actualizar el cache inmediatamente
+  await cache.set(key, data, 3600);
+  
+  return data;
+}
+```
+
+### Write Behind (Write Back)
+
+```typescript
+// Patrón "Write Behind" (simplificado)
+class WriteBackCache {
+  private pendingWrites = new Map();
+  private timer: NodeJS.Timeout | null = null;
+  
+  constructor(
+    private cache: CacheService,
+    private db: Database,
+    private flushInterval = 5000 // 5 segundos
+  ) {
+    this.startTimer();
+  }
+  
+  async set(key, value) {
+    // 1. Actualizar cache inmediatamente
+    await this.cache.set(key, value);
+    
+    // 2. Añadir a operaciones pendientes
+    this.pendingWrites.set(key, value);
+    
+    return value;
+  }
+  
+  private startTimer() {
+    this.timer = setInterval(() => this.flushPendingWrites(), this.flushInterval);
+  }
+  
+  private async flushPendingWrites() {
+    if (this.pendingWrites.size === 0) return;
+    
+    // Crear copia de las operaciones pendientes
+    const batch = new Map(this.pendingWrites);
+    this.pendingWrites.clear();
+    
+    try {
+      // Procesar operaciones en lote
+      await this.db.batchUpdate(Array.from(batch.entries()));
+    } catch (error) {
+      // En caso de error, volver a poner en la cola de pendientes
+      for (const [key, value] of batch.entries()) {
+        this.pendingWrites.set(key, value);
+      }
+      
+      console.error('Error al procesar escrituras pendientes:', error);
+    }
+  }
+  
+  dispose() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    
+    // Flush final
+    return this.flushPendingWrites();
+  }
+}
+```
+
+### Read Through
+
+```typescript
+// Patrón "Read Through" con loader personalizado
+const cache = CacheFactory.create({
+  driver: 'redis',
+  connection: { /* config */ },
+  
+  // Función para cargar datos cuando no están en cache
+  loader: {
+    load: async (key) => {
+      // Extraer ID de la clave (ej: "user:123" -> "123")
+      const id = key.split(':')[1];
+      
+      if (key.startsWith('user:')) {
+        return await userService.findById(id);
+      } else if (key.startsWith('product:')) {
+        return await productService.findById(id);
+      }
+      
+      // Valor por defecto si no hay loader específico
+      return null;
+    },
+    ttl: 3600 // TTL para valores cargados automáticamente
+  }
+});
+
+// Ahora el cache buscará automáticamente los datos
+// cuando se solicite una clave que no existe
+const user = await cache.get('user:123'); // Cargará desde userService si no existe
+```
+
+## Patrones de Invalidación
+
+### Invalidación por Tiempo (TTL)
+
+```typescript
+// El enfoque más simple: TTL
+await cache.set('stats:daily', statsData, 86400); // 24 horas
+```
+
+### Invalidación Explícita
+
+```typescript
+// Invalidación manual cuando cambian los datos
+@Controller('/products')
+export class ProductController {
+  constructor(
+    private productService: ProductService,
+    private cache: CacheService
+  ) {}
+  
+  @Put('/:id')
+  async updateProduct(ctx: HttpContext) {
+    const { id } = ctx.params;
+    const updatedProduct = await this.productService.update(id, ctx.body);
+    
+    // Invalidar cache específico del producto
+    await this.cache.delete(`product:${id}`);
+    
+    // Invalidar listas que puedan contener este producto
+    await this.cache.tags(['product-lists']).flush();
+    
+    return updatedProduct;
+  }
+}
+```
+
+### Invalidación por Versión
+
+```typescript
+// Usar una clave de versión para listas
+class ProductRepository {
+  // Clave que representa la versión actual de los productos
+  private readonly PRODUCTS_VERSION_KEY = 'products:version';
+  
+  constructor(private cache: CacheService) {}
+  
+  async getAllProducts(): Promise<Product[]> {
+    // Obtener versión actual
+    const version = await this.cache.get(this.PRODUCTS_VERSION_KEY) || '1';
+    const cacheKey = `products:list:${version}`;
+    
+    // Obtener con versión en la clave
+    return this.cache.remember(cacheKey, async () => {
+      return await this.fetchProductsFromDatabase();
+    }, 3600);
+  }
+  
+  async updateProduct(id: string, data: Partial<Product>): Promise<Product> {
+    // Actualizar en base de datos
+    const updated = await this.saveProductToDatabase(id, data);
+    
+    // Incrementar versión para invalidar listados
+    await this.cache.increment(this.PRODUCTS_VERSION_KEY);
+    
+    // Actualizar cache individual
+    await this.cache.set(`product:${id}`, updated);
+    
+    return updated;
+  }
+}
+```
+
+## Monitoreo y Diagnóstico
+
+### Métricas de Rendimiento
+
+```typescript
+// Cache con eventos para monitoreo
+const cache = CacheFactory.create({
+  driver: 'redis',
+  connection: { /* config */ },
+  
+  // Opciones de monitoreo
+  monitoring: {
+    // Recopilar métricas
+    collectMetrics: true,
+    
+    // Eventos para monitoreo
+    onHit: (key) => {
+      metrics.increment('cache.hits');
+      metrics.timing('cache.hit_keys', key);
+    },
+    onMiss: (key) => {
+      metrics.increment('cache.misses');
+      metrics.timing('cache.miss_keys', key);
+    },
+    onSet: (key, size, ttl) => {
+      metrics.increment('cache.sets');
+      metrics.gauge('cache.stored_bytes', size);
+      metrics.histogram('cache.ttl_distribution', ttl);
+    },
+    onError: (operation, error) => {
+      metrics.increment('cache.errors');
+      logger.error(`Cache error during ${operation}`, { error });
+    }
+  }
+});
+
+// Obtener estadísticas
+const stats = await cache.getStats();
+console.log('Cache Stats:', stats);
+// Ejemplo: { hits: 1250, misses: 120, ratio: 0.912, keys: 840, size: '2.4MB' }
+```
+
+### Depuración
+
+```typescript
+// Habilitar modo debug
+const cache = CacheFactory.create({
+  driver: 'redis',
+  connection: { /* config */ },
+  
+  // Opciones de debug
+  debug: true,
+  logger: customLogger, // Logger personalizado
+  
+  // Ignorar claves para debug
+  debugIgnoreKeys: [
+    /^session:/,  // Ignorar claves de sesión
+    /^temp:/      // Ignorar claves temporales
+  ]
+});
+```
+
+## Cache en Contextos Específicos
+
+### Cache en Controladores con Decoradores
+
+```typescript
+@Controller('/api')
+export class ApiController {
+  @Get('/products')
+  @Cached({
+    ttl: 300,
+    tags: ['products', 'api'],
+    condition: (ctx) => !ctx.query.refresh
+  })
+  async getProducts(ctx: HttpContext) {
+    return await this.productService.findAll({
+      category: ctx.query.category,
+      limit: parseInt(ctx.query.limit || '20')
+    });
+  }
+  
+  @Get('/products/:id')
+  @Cached(ctx => ({
+    key: `product:${ctx.params.id}`,
+    ttl: 600,
+    tags: [`product:${ctx.params.id}`]
+  }))
+  async getProduct(ctx: HttpContext) {
+    return await this.productService.findById(ctx.params.id);
+  }
+  
+  @Post('/products')
+  @InvalidateCache({
+    tags: ['products']
+  })
+  async createProduct(ctx: HttpContext) {
+    return await this.productService.create(ctx.body);
+  }
+  
+  @Delete('/products/:id')
+  @InvalidateCache(ctx => [
+    `product:${ctx.params.id}`,
+    { tags: ['products'] }
+  ])
+  async deleteProduct(ctx: HttpContext) {
+    await this.productService.delete(ctx.params.id);
+    return { success: true };
+  }
+}
+```
+
+### Cache para GraphQL
+
+```typescript
+import { CacheFactory } from 'fox-framework/cache';
+import { createGraphQLCache } from 'fox-framework/cache/graphql';
+
+// Crear caché específico para GraphQL
+const graphqlCache = createGraphQLCache({
+  baseCache: CacheFactory.create({ driver: 'redis' }),
+  
+  // Opciones específicas de GraphQL
+  ttl: 300, // 5 minutos por defecto
+  
+  // Configuración por tipo
+  types: {
+    User: {
+      ttl: 3600, // 1 hora para usuarios
+      idFields: ['id', 'email']
+    },
+    Product: {
+      ttl: 1800, // 30 minutos para productos
+      idFields: ['id', 'slug']
+    }
+  },
+  
+  // Configuración por query
+  queries: {
+    getProducts: {
+      ttl: 120, // 2 minutos
+      varyBy: ['category', 'sort', 'limit']
+    }
+  }
+});
+
+// Integración con Apollo Server
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+  cache: graphqlCache,
+  plugins: [
+    responseCachePlugin({
+      cache: graphqlCache
+    })
+  ]
+});
+```
+
+### Cache para Procesamiento en Segundo Plano
+
+```typescript
+@Injectable()
+export class BackgroundJobProcessor {
+  constructor(private cache: CacheService) {}
+  
+  async processJob(jobId: string): Promise<void> {
+    // Clave de bloqueo para evitar procesamiento duplicado
+    const lockKey = `job:lock:${jobId}`;
+    
+    // Intentar adquirir bloqueo
+    const acquired = await this.cache.set(lockKey, '1', 300, { onlyIfNotExists: true });
+    
+    if (!acquired) {
+      throw new Error(`Job ${jobId} is already being processed`);
+    }
+    
+    try {
+      // Procesar trabajo
+      await this.doJobProcessing(jobId);
+      
+      // Marcar como completado
+      await this.cache.set(`job:status:${jobId}`, 'completed', 86400);
+    } catch (error) {
+      // Marcar como fallido
+      await this.cache.set(`job:status:${jobId}`, 'failed', 86400);
+      await this.cache.set(`job:error:${jobId}`, error.message, 86400);
+      
+      throw error;
+    } finally {
+      // Liberar bloqueo
+      await this.cache.delete(lockKey);
+    }
+  }
+  
+  async getJobStatus(jobId: string): Promise<string> {
+    return (await this.cache.get(`job:status:${jobId}`)) || 'unknown';
+  }
+}
+```
+
+## Configuración Avanzada
+
+### Fallbacks y Recuperación
+
+```typescript
+// Cache con fallback automático
+const cache = CacheFactory.create({
+  driver: 'redis',
+  connection: { /* config */ },
+  
+  // Opciones de fallback
+  fallback: {
+    // Driver alternativo si el principal falla
+    driver: 'memory',
+    
+    // Cuándo activar el fallback
+    triggers: ['connection_error', 'timeout'],
+    
+    // Tiempo antes de reintentar el driver principal
+    retryAfter: 30000, // 30 segundos
+    
+    // Notificar cuando se active el fallback
+    onActivate: (error) => {
+      logger.warn('Cache fallback activated', { error });
+      metrics.increment('cache.fallback_activated');
+    },
+    
+    // Notificar cuando se recupere
+    onRecover: () => {
+      logger.info('Cache recovered, using primary driver');
+      metrics.increment('cache.fallback_recovered');
+    }
+  }
+});
+```
+
+### Plugins y Extensiones
+
+```typescript
+// Crear plugin de encriptación para cache
+function createEncryptionPlugin(encryptionKey: Buffer) {
+  return {
+    name: 'encryption',
+    
+    // Modificar valores antes de guardar
+    beforeSet: async (key, value) => {
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+      
+      let encrypted = cipher.update(JSON.stringify(value), 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      
+      const authTag = cipher.getAuthTag();
+      
+      return {
+        iv: iv.toString('hex'),
+        data: encrypted,
+        tag: authTag.toString('hex')
+      };
+    },
+    
+    // Modificar valores después de leer
+    afterGet: async (key, encryptedValue) => {
+      if (!encryptedValue) return null;
+      
+      const { iv, data, tag } = encryptedValue;
+      
+      const decipher = crypto.createDecipheriv(
+        'aes-256-gcm',
+        encryptionKey,
+        Buffer.from(iv, 'hex')
+      );
+      
+      decipher.setAuthTag(Buffer.from(tag, 'hex'));
+      
+      let decrypted = decipher.update(data, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      
+      return JSON.parse(decrypted);
+    }
+  };
+}
+
+// Usar el plugin
+const cache = CacheFactory.create({
+  driver: 'redis',
+  connection: { /* config */ },
+  plugins: [
+    createEncryptionPlugin(Buffer.from(process.env.ENCRYPTION_KEY, 'hex'))
+  ]
+});
+```
+
+### Patrones de Claves
+
+```typescript
+// Cache con esquemas de clave
+const cache = CacheFactory.create({
+  driver: 'redis',
+  
+  // Patrones de claves
+  keyPatterns: {
+    user: 'user:{id}',
+    product: 'product:{id}',
+    category: 'category:{slug}',
+    search: 'search:{query}:{page}:{limit}'
+  },
+  
+  // Prefijo global
+  prefix: 'app:v1:'
+});
+
+// Uso con patrones predefinidos
+await cache.setWithPattern('user', { id: 123 }, userData);
+const userData = await cache.getWithPattern('user', { id: 123 });
+
+// Resultado: operación sobre la clave "app:v1:user:123"
+```
+
+## Ejemplos de Uso Real
+
+### Cache para Autenticación
+
+```typescript
+@Injectable()
+export class AuthService {
+  constructor(private cache: CacheService) {}
+  
+  async login(email: string, password: string): Promise<{ token: string, user: User }> {
+    // Verificar credenciales...
+    
+    // Generar token
+    const token = crypto.randomUUID();
+    const user = await this.userService.findByEmail(email);
+    
+    // Guardar sesión en caché
+    await this.cache.set(
+      `session:${token}`,
+      {
+        userId: user.id,
+        role: user.role,
+        loginTime: new Date().toISOString()
+      },
+      86400 // 24 horas
+    );
+    
+    return { token, user };
+  }
+  
+  async validateToken(token: string): Promise<SessionData | null> {
+    return await this.cache.get(`session:${token}`);
+  }
+  
+  async logout(token: string): Promise<void> {
+    await this.cache.delete(`session:${token}`);
+  }
+  
+  async refreshToken(oldToken: string): Promise<{ token: string, user: User }> {
+    // Obtener sesión actual
+    const session = await this.cache.get(`session:${oldToken}`);
+    if (!session) {
+      throw new Error('Invalid token');
+    }
+    
+    // Generar nuevo token
+    const newToken = crypto.randomUUID();
+    
+    // Transferir sesión al nuevo token
+    await this.cache.set(`session:${newToken}`, session, 86400);
+    await this.cache.delete(`session:${oldToken}`);
+    
+    // Obtener datos actualizados del usuario
+    const user = await this.userService.findById(session.userId);
+    
+    return { token: newToken, user };
+  }
+}
+```
+
+### Cache para Búsquedas
+
+```typescript
+@Injectable()
+export class SearchService {
+  constructor(private cache: CacheService) {}
+  
+  async search(query: string, filters: SearchFilters, page = 1, limit = 20): Promise<SearchResult> {
+    // Normalizar y sanitizar parámetros
+    query = query.trim().toLowerCase();
+    page = Math.max(1, page);
+    limit = Math.min(100, Math.max(1, limit));
+    
+    // Crear clave de caché única
+    const cacheKey = `search:${query}:${JSON.stringify(filters)}:${page}:${limit}`;
+    
+    // Buscar en caché primero
+    return this.cache.remember(cacheKey, async () => {
+      // Búsqueda costosa en base de datos o servicio externo
+      console.log('Realizando búsqueda en fuente original...');
+      
+      const results = await this.performSearch(query, filters, page, limit);
+      
+      return {
+        query,
+        page,
+        limit,
+        total: results.total,
+        results: results.items,
+        facets: results.facets
+      };
+    }, 900); // 15 minutos
+  }
+  
+  async clearSearchCache(): Promise<void> {
+    // Limpiar todo el cache de búsquedas
+    await this.cache.deletePattern('search:*');
+  }
+}
+```
+
+### Cache para Configuración Dinámica
+
+```typescript
+@Injectable()
+export class ConfigService {
+  constructor(private cache: CacheService) {}
+  
+  async get<T>(key: string, defaultValue?: T): Promise<T> {
+    const cacheKey = `config:${key}`;
+    
+    // Intentar obtener del caché
+    return this.cache.remember(cacheKey, async () => {
+      // Cargar desde base de datos
+      const config = await this.loadConfigFromDb(key);
+      return config?.value ?? defaultValue;
+    }, 3600); // 1 hora
+  }
+  
+  async set<T>(key: string, value: T): Promise<void> {
+    // Guardar en base de datos
+    await this.saveConfigToDb(key, value);
+    
+    // Actualizar caché
+    await this.cache.set(`config:${key}`, value);
+    
+    // Publicar evento para otras instancias
+    await this.eventBus.publish('config:updated', { key, value });
+  }
+  
+  // Para aplicaciones distribuidas, escuchar cambios
+  setupConfigListener() {
+    this.eventBus.subscribe('config:updated', async (data) => {
+      // Actualizar caché local cuando otra instancia actualiza configuración
+      const { key, value } = data;
+      await this.cache.set(`config:${key}`, value);
+    });
+  }
+}
+```
+
+## Buenas Prácticas
+
+### Claves de Caché
+
+```typescript
+// ❌ NO: Claves demasiado genéricas
+await cache.set('users', allUsers);
+
+// ✅ SÍ: Claves específicas y estructuradas
+await cache.set('users:list:active:page:1:limit:20', activeUsers);
+
+// ❌ NO: Claves con caracteres problemáticos o espacios
+await cache.set('product info: Nike Air Max (size: 42)', productInfo);
+
+// ✅ SÍ: Claves normalizadas
+await cache.set('product:nike-air-max:size:42', productInfo);
+
+// ❌ NO: Claves sin namespace
+await cache.set('123', userData);
+
+// ✅ SÍ: Namespaces para evitar colisiones
+await cache.set('user:123', userData);
+```
+
+### TTL Adecuado
+
+```typescript
+// ❌ NO: TTL demasiado largo para datos frecuentemente actualizados
+await cache.set('product:stock:123', stockInfo, 86400); // 24h para inventario
+
+// ✅ SÍ: TTL apropiado según volatilidad
+await cache.set('product:stock:123', stockInfo, 300); // 5 min para inventario
+await cache.set('product:details:123', details, 3600); // 1h para detalles
+await cache.set('shop:categories', categories, 86400); // 24h para categorías
+
+// ❌ NO: TTL fijo sin considerar el entorno
+await cache.set('api:status', status, 3600);
+
+// ✅ SÍ: TTL adaptado al entorno
+const ttl = process.env.NODE_ENV === 'production' ? 3600 : 60;
+await cache.set('api:status', status, ttl);
+```
+
+### Invalidación Estratégica
+
+```typescript
+// ❌ NO: Invalidar todo el caché
+await cache.clear();
+
+// ✅ SÍ: Invalidar solo lo necesario
+await cache.delete(`product:${id}`);
+await cache.tags(['products']).flush();
+
+// ❌ NO: Olvidar invalidar cache relacionado
+async function updateUser(id, data) {
+  await db.users.update(id, data);
+  await cache.delete(`user:${id}`); // Olvida otras claves relacionadas
+}
+
+// ✅ SÍ: Invalidación completa
+async function updateUser(id, data) {
+  const user = await db.users.update(id, data);
+  
+  // Invalidar cache del usuario específico
+  await cache.delete(`user:${id}`);
+  
+  // Invalidar listas que puedan contener este usuario
+  await cache.tags(['users']).flush();
+  
+  // Invalidar cache por email si cambió
+  if (data.email) {
+    await cache.delete(`user:email:${data.email}`);
+    
+    // Si tenemos el email anterior, invalidar también
+    if (user.previousEmail) {
+      await cache.delete(`user:email:${user.previousEmail}`);
+    }
+  }
+  
+  return user;
+}
+```
+
+### Evitar Fallas en Cascada
+
+```typescript
+// ❌ NO: Sin manejo de errores
+async function getProducts() {
+  return await cache.get('products:all');
+}
+
+// ✅ SÍ: Manejar fallos de caché
+async function getProducts() {
+  try {
+    const products = await cache.get('products:all');
+    if (products) {
+      return products;
+    }
+  } catch (error) {
+    // Log del error, pero continuar
+    logger.warn('Cache error, falling back to database', { error });
+  }
+  
+  // Recurrir a la fuente original
+  const products = await productsDb.getAll();
+  
+  // Intentar actualizar el caché, pero no bloquear por esto
+  cache.set('products:all', products).catch(error => {
+    logger.error('Failed to update cache', { error });
+  });
+  
+  return products;
+}
+```
+
+### Serialización Adecuada
+
+```typescript
+// ❌ NO: Guardar objetos con métodos o referencias circulares
+const user = new User();
+await cache.set('complex:object', user);
+
+// ✅ SÍ: Serializar datos planos o DTO
+await cache.set('user:123', {
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  lastLogin: user.lastLogin.toISOString()
+});
+
+// ❌ NO: Guardar información sensible
+await cache.set('user:123', {
+  id: '123',
+  password: 'hashed_password', // ¡NUNCA guardar contraseñas!
+  token: 'access_token' // ¡NUNCA guardar tokens de acceso!
+});
+
+// ✅ SÍ: Guardar solo información no sensible
+await cache.set('user:123', {
+  id: '123',
+  name: 'John Doe',
+  role: 'user'
+});
+```
+
+## Conclusión
+
+El Sistema de Cache de Fox Framework proporciona una solución robusta y flexible para mejorar el rendimiento y escalabilidad de las aplicaciones. Con soporte para múltiples drivers, estrategias de invalidación avanzadas y una API unificada, el cache se integra perfectamente con todos los componentes del framework.
+
+Al implementar buenas prácticas de cache como:
+
+1. **Diseño adecuado de claves**: Estructura jerárquica y namespaces
+2. **Tiempo de vida apropiado**: TTL adaptado a la volatilidad de los datos
+3. **Invalidación selectiva**: Actualizar solo lo necesario
+4. **Manejo de errores robusto**: Evitar fallas en cascada
+5. **Seguridad de datos**: No almacenar información sensible
+
+El Sistema de Cache de Fox Framework permite reducir la latencia, disminuir la carga en bases de datos y servicios externos, y mejorar la experiencia del usuario final con tiempos de respuesta más rápidos y consistentes.

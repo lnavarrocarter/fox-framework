@@ -1,0 +1,776 @@
+# Monitoreo y Métricas
+
+Fox Framework incluye un sistema completo de monitoreo y métricas que te permite observar el comportamiento de tu aplicación en tiempo real, detectar problemas antes de que afecten a los usuarios y tomar decisiones basadas en datos.
+
+## Características del Sistema de Monitoreo
+
+- **Métricas en tiempo real**: Recolección continua de métricas de rendimiento
+- **Health checks**: Verificación automática del estado de la aplicación
+- **Alertas inteligentes**: Notificaciones proactivas sobre problemas
+- **Dashboards**: Visualización de métricas y tendencias
+- **Distributed tracing**: Seguimiento de requests a través de microservicios
+- **Error tracking**: Captura y análisis de errores
+- **Performance profiling**: Análisis detallado de rendimiento
+
+## Configuración Inicial
+
+### Instalación de Dependencias
+
+```bash
+npm install @fox-framework/monitoring prometheus-client jaeger-client winston-elasticsearch
+```
+
+### Configuración Base
+
+```typescript
+import { MonitoringModule } from '@fox-framework/monitoring';
+import { FoxFactory } from 'fox-framework/core';
+
+const server = FoxFactory.createServer({
+  port: 3000,
+  monitoring: {
+    // Métricas Prometheus
+    metrics: {
+      enabled: true,
+      endpoint: '/metrics',
+      prefix: 'fox_app_',
+      collectDefaultMetrics: true
+    },
+    
+    // Health checks
+    health: {
+      enabled: true,
+      endpoint: '/health',
+      interval: 30000, // 30 segundos
+      timeout: 5000    // 5 segundos
+    },
+    
+    // Distributed tracing
+    tracing: {
+      enabled: true,
+      jaeger: {
+        endpoint: process.env.JAEGER_ENDPOINT,
+        serviceName: 'fox-framework-app',
+        samplingRate: 0.1 // 10% de traces
+      }
+    },
+    
+    // Error tracking
+    errorTracking: {
+      enabled: true,
+      sentry: {
+        dsn: process.env.SENTRY_DSN,
+        environment: process.env.NODE_ENV
+      }
+    }
+  }
+});
+```
+
+## Métricas de Aplicación
+
+### Métricas Automáticas
+
+Fox Framework recolecta automáticamente estas métricas:
+
+```typescript
+// Métricas HTTP
+- http_requests_total: Contador de requests HTTP
+- http_request_duration_seconds: Duración de requests
+- http_response_size_bytes: Tamaño de respuestas
+- http_requests_in_flight: Requests activos
+
+// Métricas del sistema
+- nodejs_heap_used_bytes: Memoria heap utilizada
+- nodejs_heap_total_bytes: Memoria heap total
+- nodejs_external_memory_bytes: Memoria externa
+- nodejs_gc_duration_seconds: Duración de garbage collection
+
+// Métricas de base de datos
+- db_connections_active: Conexiones activas
+- db_connections_idle: Conexiones inactivas
+- db_query_duration_seconds: Duración de queries
+- db_query_errors_total: Errores de queries
+```
+
+### Métricas Personalizadas
+
+```typescript
+import { MetricsCollector } from '@fox-framework/monitoring';
+
+export class BusinessMetrics {
+  private metrics: MetricsCollector;
+
+  constructor() {
+    this.metrics = new MetricsCollector();
+    this.setupMetrics();
+  }
+
+  private setupMetrics() {
+    // Contador de usuarios registrados
+    this.metrics.counter('users_registered_total', 'Total users registered', ['source']);
+    
+    // Histograma de tiempo de login
+    this.metrics.histogram('user_login_duration_seconds', 'User login duration');
+    
+    // Gauge de usuarios activos
+    this.metrics.gauge('users_active_current', 'Currently active users');
+    
+    // Contador de órdenes procesadas
+    this.metrics.counter('orders_processed_total', 'Total orders processed', ['status']);
+  }
+
+  // Incrementar usuarios registrados
+  incrementUsersRegistered(source: string) {
+    this.metrics.incrementCounter('users_registered_total', { source });
+  }
+
+  // Registrar tiempo de login
+  recordLoginDuration(duration: number) {
+    this.metrics.observeHistogram('user_login_duration_seconds', duration);
+  }
+
+  // Actualizar usuarios activos
+  setActiveUsers(count: number) {
+    this.metrics.setGauge('users_active_current', count);
+  }
+
+  // Incrementar órdenes procesadas
+  incrementOrdersProcessed(status: 'success' | 'failed') {
+    this.metrics.incrementCounter('orders_processed_total', { status });
+  }
+}
+```
+
+### Uso en Controladores
+
+```typescript
+import { FoxController, Request, Response } from 'fox-framework/core';
+import { Metrics } from '@fox-framework/monitoring';
+
+export class UserController extends FoxController {
+  constructor(
+    private userService: UserService,
+    private businessMetrics: BusinessMetrics
+  ) {
+    super();
+  }
+
+  @Metrics.timed('user_registration_duration')
+  async register(req: Request, res: Response): Promise<void> {
+    const timer = Metrics.startTimer('user_registration_process');
+    
+    try {
+      const user = await this.userService.create(req.body);
+      
+      // Registrar métrica de negocio
+      this.businessMetrics.incrementUsersRegistered(req.body.source || 'web');
+      
+      timer.end({ status: 'success' });
+      
+      return res.status(201).json({
+        success: true,
+        data: user
+      });
+    } catch (error) {
+      timer.end({ status: 'error' });
+      
+      // Métrica de error
+      Metrics.incrementCounter('user_registration_errors_total', {
+        error_type: error.constructor.name
+      });
+      
+      throw error;
+    }
+  }
+}
+```
+
+## Health Checks
+
+### Health Check Básico
+
+```typescript
+import { HealthCheck, HealthStatus } from '@fox-framework/monitoring';
+
+export class AppHealthCheck extends HealthCheck {
+  constructor(
+    private databaseService: DatabaseService,
+    private cacheService: CacheService,
+    private emailService: EmailService
+  ) {
+    super();
+  }
+
+  async checkHealth(): Promise<HealthStatus> {
+    const checks = await this.runChecks([
+      this.checkDatabase(),
+      this.checkCache(),
+      this.checkEmailService(),
+      this.checkExternalAPI()
+    ]);
+
+    return {
+      status: this.determineOverallStatus(checks),
+      timestamp: new Date().toISOString(),
+      version: process.env.APP_VERSION || 'unknown',
+      uptime: process.uptime(),
+      checks
+    };
+  }
+
+  private async checkDatabase(): Promise<CheckResult> {
+    const start = Date.now();
+    
+    try {
+      await this.databaseService.ping();
+      
+      return {
+        name: 'database',
+        status: 'healthy',
+        responseTime: Date.now() - start,
+        details: {
+          type: 'postgresql',
+          connections: await this.databaseService.getConnectionCount()
+        }
+      };
+    } catch (error) {
+      return {
+        name: 'database',
+        status: 'unhealthy',
+        responseTime: Date.now() - start,
+        error: error.message
+      };
+    }
+  }
+
+  private async checkCache(): Promise<CheckResult> {
+    const start = Date.now();
+    
+    try {
+      await this.cacheService.ping();
+      
+      return {
+        name: 'cache',
+        status: 'healthy',
+        responseTime: Date.now() - start,
+        details: {
+          type: 'redis',
+          memory: await this.cacheService.getMemoryUsage()
+        }
+      };
+    } catch (error) {
+      return {
+        name: 'cache',
+        status: 'degraded', // Cache no es crítico
+        responseTime: Date.now() - start,
+        error: error.message
+      };
+    }
+  }
+}
+```
+
+### Health Check Avanzado
+
+```typescript
+export class DetailedHealthCheck extends HealthCheck {
+  // Health check con diferentes niveles de detalle
+  async checkHealth(level: 'basic' | 'detailed' | 'full' = 'basic'): Promise<HealthStatus> {
+    const checks: CheckResult[] = [];
+    
+    // Checks básicos (siempre incluidos)
+    checks.push(await this.checkBasicHealth());
+    
+    if (level === 'detailed' || level === 'full') {
+      checks.push(
+        await this.checkDatabasePerformance(),
+        await this.checkMemoryUsage(),
+        await this.checkDiskSpace()
+      );
+    }
+    
+    if (level === 'full') {
+      checks.push(
+        await this.checkNetworkLatency(),
+        await this.checkDependencyHealth(),
+        await this.checkSecurityStatus()
+      );
+    }
+
+    return {
+      status: this.determineOverallStatus(checks),
+      timestamp: new Date().toISOString(),
+      level,
+      checks
+    };
+  }
+
+  private async checkDatabasePerformance(): Promise<CheckResult> {
+    const start = Date.now();
+    
+    try {
+      const stats = await this.databaseService.getPerformanceStats();
+      const responseTime = Date.now() - start;
+      
+      const status = responseTime > 1000 ? 'degraded' : 'healthy';
+      
+      return {
+        name: 'database_performance',
+        status,
+        responseTime,
+        details: {
+          slowQueries: stats.slowQueries,
+          avgQueryTime: stats.avgQueryTime,
+          activeConnections: stats.activeConnections
+        }
+      };
+    } catch (error) {
+      return {
+        name: 'database_performance',
+        status: 'unhealthy',
+        responseTime: Date.now() - start,
+        error: error.message
+      };
+    }
+  }
+}
+```
+
+## Distributed Tracing
+
+### Configuración de Jaeger
+
+```typescript
+import { JaegerTracer } from '@fox-framework/monitoring';
+
+const tracer = new JaegerTracer({
+  serviceName: 'fox-framework-app',
+  jaeger: {
+    endpoint: process.env.JAEGER_ENDPOINT || 'http://localhost:14268/api/traces',
+    tags: {
+      'fox-framework.version': '1.0.0',
+      'environment': process.env.NODE_ENV
+    }
+  },
+  sampler: {
+    type: 'probabilistic',
+    param: 0.1 // 10% de sampling
+  }
+});
+```
+
+### Instrumentación Automática
+
+```typescript
+import { TraceMiddleware } from '@fox-framework/monitoring';
+
+// Middleware automático para HTTP requests
+app.use(TraceMiddleware.http({
+  tracer,
+  ignoreRoutes: ['/health', '/metrics'],
+  includeHeaders: ['user-agent', 'authorization'],
+  includeBodies: process.env.NODE_ENV === 'development'
+}));
+
+// Instrumentación automática de base de datos
+TraceMiddleware.database(tracer, {
+  includeQueryParameters: false, // Por seguridad
+  slowQueryThreshold: 1000 // ms
+});
+```
+
+### Trazas Manuales
+
+```typescript
+import { Tracer } from '@fox-framework/monitoring';
+
+export class OrderService {
+  async processOrder(orderId: string): Promise<Order> {
+    const span = Tracer.startSpan('order.process', {
+      tags: {
+        'order.id': orderId,
+        'service': 'order-service'
+      }
+    });
+
+    try {
+      // Validar orden
+      const validationSpan = Tracer.startSpan('order.validate', { childOf: span });
+      const order = await this.validateOrder(orderId);
+      validationSpan.setTag('order.status', order.status);
+      validationSpan.finish();
+
+      // Procesar pago
+      const paymentSpan = Tracer.startSpan('payment.process', { childOf: span });
+      await this.processPayment(order);
+      paymentSpan.finish();
+
+      // Actualizar inventario
+      const inventorySpan = Tracer.startSpan('inventory.update', { childOf: span });
+      await this.updateInventory(order);
+      inventorySpan.finish();
+
+      span.setTag('order.processed', true);
+      span.log({ event: 'order_completed', orderId });
+      
+      return order;
+    } catch (error) {
+      span.setTag('error', true);
+      span.log({ event: 'error', message: error.message });
+      throw error;
+    } finally {
+      span.finish();
+    }
+  }
+}
+```
+
+## Error Tracking
+
+### Configuración de Sentry
+
+```typescript
+import { ErrorTracker } from '@fox-framework/monitoring';
+
+const errorTracker = new ErrorTracker({
+  sentry: {
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV,
+    release: process.env.APP_VERSION,
+    beforeSend: (event, hint) => {
+      // Filtrar errores sensibles
+      if (event.exception?.values?.[0]?.value?.includes('password')) {
+        return null;
+      }
+      return event;
+    }
+  }
+});
+```
+
+### Captura de Errores
+
+```typescript
+import { ErrorHandler } from '@fox-framework/monitoring';
+
+export class UserController extends FoxController {
+  async createUser(req: Request, res: Response): Promise<void> {
+    try {
+      const user = await this.userService.create(req.body);
+      res.status(201).json({ success: true, data: user });
+    } catch (error) {
+      // Capturar error con contexto
+      ErrorHandler.captureException(error, {
+        user: req.user,
+        request: {
+          url: req.url,
+          method: req.method,
+          body: this.sanitizeBody(req.body)
+        },
+        tags: {
+          'operation': 'user.create',
+          'controller': 'UserController'
+        }
+      });
+
+      throw error;
+    }
+  }
+
+  private sanitizeBody(body: any): any {
+    const { password, ...sanitized } = body;
+    return sanitized;
+  }
+}
+```
+
+## Dashboards y Visualización
+
+### Configuración de Grafana
+
+**grafana/dashboards/fox-framework-app.json**
+```json
+{
+  "dashboard": {
+    "title": "Fox Framework App Monitoring",
+    "panels": [
+      {
+        "title": "HTTP Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(fox_app_http_requests_total[5m])",
+            "legendFormat": "{{method}} {{status}}"
+          }
+        ]
+      },
+      {
+        "title": "Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(fox_app_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          }
+        ]
+      },
+      {
+        "title": "Error Rate",
+        "type": "singlestat",
+        "targets": [
+          {
+            "expr": "rate(fox_app_http_requests_total{status=~\"5..\"}[5m])",
+            "legendFormat": "Error Rate"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Dashboard Personalizado
+
+```typescript
+import { DashboardBuilder } from '@fox-framework/monitoring';
+
+export class BusinessDashboard {
+  static build(): Dashboard {
+    return new DashboardBuilder('Fox Framework Business Metrics')
+      .addPanel('User Registrations', {
+        type: 'graph',
+        query: 'rate(fox_app_users_registered_total[1h])',
+        unit: 'per hour'
+      })
+      .addPanel('Active Users', {
+        type: 'singlestat',
+        query: 'fox_app_users_active_current',
+        unit: 'users'
+      })
+      .addPanel('Order Processing Rate', {
+        type: 'graph',
+        query: 'rate(fox_app_orders_processed_total[5m])',
+        legend: '{{status}}'
+      })
+      .addPanel('Revenue', {
+        type: 'graph',
+        query: 'increase(fox_app_revenue_total[1d])',
+        unit: 'currency'
+      })
+      .build();
+  }
+}
+```
+
+## Alertas y Notificaciones
+
+### Configuración de Alertas
+
+```typescript
+import { AlertManager } from '@fox-framework/monitoring';
+
+const alertManager = new AlertManager({
+  rules: [
+    {
+      name: 'High Error Rate',
+      query: 'rate(fox_app_http_requests_total{status=~"5.."}[5m]) > 0.1',
+      duration: '2m',
+      severity: 'critical',
+      annotations: {
+        summary: 'High error rate detected',
+        description: 'Error rate is above 10% for 2 minutes'
+      }
+    },
+    {
+      name: 'High Response Time',
+      query: 'histogram_quantile(0.95, rate(fox_app_http_request_duration_seconds_bucket[5m])) > 1.0',
+      duration: '5m',
+      severity: 'warning',
+      annotations: {
+        summary: 'High response time detected',
+        description: '95th percentile response time is above 1 second'
+      }
+    },
+    {
+      name: 'Database Connection Issues',
+      query: 'fox_app_db_connections_active / fox_app_db_connections_total > 0.8',
+      duration: '1m',
+      severity: 'warning',
+      annotations: {
+        summary: 'Database connection pool usage high',
+        description: 'Database connection pool is 80% full'
+      }
+    }
+  ],
+  
+  notifications: [
+    {
+      name: 'slack',
+      webhook: process.env.SLACK_WEBHOOK_URL,
+      channel: '#alerts'
+    },
+    {
+      name: 'email',
+      smtp: {
+        host: process.env.SMTP_HOST,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
+        }
+      },
+      recipients: ['devops@company.com']
+    }
+  ]
+});
+```
+
+### Alertas Personalizadas
+
+```typescript
+export class BusinessAlerts {
+  private alertManager: AlertManager;
+
+  constructor(alertManager: AlertManager) {
+    this.alertManager = alertManager;
+  }
+
+  setupBusinessAlerts() {
+    // Alerta por caída en registros
+    this.alertManager.addRule({
+      name: 'Low User Registration Rate',
+      query: 'rate(fox_app_users_registered_total[1h]) < 5',
+      duration: '30m',
+      severity: 'warning',
+      annotations: {
+        summary: 'User registration rate is below normal',
+        description: 'Less than 5 users registered in the last hour'
+      }
+    });
+
+    // Alerta por fallas en órdenes
+    this.alertManager.addRule({
+      name: 'High Order Failure Rate',
+      query: 'rate(fox_app_orders_processed_total{status="failed"}[5m]) / rate(fox_app_orders_processed_total[5m]) > 0.05',
+      duration: '2m',
+      severity: 'critical',
+      annotations: {
+        summary: 'High order failure rate',
+        description: 'More than 5% of orders are failing'
+      }
+    });
+  }
+}
+```
+
+## Performance Profiling
+
+### CPU Profiling
+
+```typescript
+import { Profiler } from '@fox-framework/monitoring';
+
+export class PerformanceMonitor {
+  static async profileCPU(duration: number = 30000): Promise<void> {
+    const profiler = new Profiler();
+    
+    console.log('Starting CPU profiling...');
+    profiler.startCPUProfiling();
+    
+    setTimeout(() => {
+      const profile = profiler.stopCPUProfiling();
+      
+      // Guardar perfil
+      fs.writeFileSync(`cpu-profile-${Date.now()}.cpuprofile`, JSON.stringify(profile));
+      
+      // Analizar hot spots
+      const hotSpots = this.analyzeCPUProfile(profile);
+      console.log('CPU Hot Spots:', hotSpots);
+    }, duration);
+  }
+
+  static async profileMemory(): Promise<void> {
+    const heapSnapshot = process.memoryUsage();
+    
+    console.log('Memory Usage:', {
+      rss: `${Math.round(heapSnapshot.rss / 1024 / 1024)} MB`,
+      heapTotal: `${Math.round(heapSnapshot.heapTotal / 1024 / 1024)} MB`,
+      heapUsed: `${Math.round(heapSnapshot.heapUsed / 1024 / 1024)} MB`,
+      external: `${Math.round(heapSnapshot.external / 1024 / 1024)} MB`
+    });
+  }
+}
+```
+
+## Integración con CI/CD
+
+### GitHub Actions para Monitoreo
+
+```yaml
+name: Deploy with Monitoring
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy application
+      run: |
+        # Deploy logic here
+        echo "Deploying application..."
+    
+    - name: Setup monitoring
+      run: |
+        # Configure Prometheus
+        kubectl apply -f k8s/monitoring/prometheus.yaml
+        
+        # Configure Grafana dashboards
+        kubectl apply -f k8s/monitoring/grafana-dashboard.yaml
+        
+        # Setup alerts
+        kubectl apply -f k8s/monitoring/alerts.yaml
+    
+    - name: Verify deployment health
+      run: |
+        sleep 30 # Wait for deployment
+        curl -f http://your-app.com/health || exit 1
+    
+    - name: Send deployment notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+```
+
+## Mejores Prácticas
+
+### 1. Métricas
+- Define SLIs (Service Level Indicators) claros
+- Usa labels consistentes en métricas
+- Evita alta cardinalidad en labels
+- Implementa métricas de negocio relevantes
+
+### 2. Health Checks
+- Implementa checks rápidos y confiables
+- Diferencia entre liveness y readiness
+- Incluye dependencias críticas
+- Usa timeouts apropiados
+
+### 3. Alertas
+- Crea alertas accionables
+- Evita alert fatigue
+- Usa diferentes niveles de severidad
+- Incluye runbooks en las alertas
+
+### 4. Performance
+- Monitorea la sobrecarga del monitoreo
+- Usa sampling apropiado para traces
+- Optimiza queries de métricas
+- Implementa rate limiting en endpoints de métricas
+
+El sistema de monitoreo de Fox Framework te proporciona visibilidad completa sobre tu aplicación, permitiéndote mantener alta disponibilidad y excelente experiencia de usuario.

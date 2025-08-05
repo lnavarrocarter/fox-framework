@@ -1,0 +1,12 @@
+{
+  "index": "Guías",
+  "authentication": "Autenticación y Autorización",
+  "deployment": "Despliegue en Producción",
+  "databases": "Acceso a Base de Datos",
+  "testing": "Testing de Aplicaciones",
+  "microservices": "Arquitectura de Microservicios",
+  "docker": "Docker y Containerización",
+  "rest-api": "API RESTful",
+  "full-stack": "Aplicación Full-Stack",
+  "best-practices": "Mejores Prácticas"
+}

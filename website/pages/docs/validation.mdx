@@ -1,0 +1,732 @@
+# Sistema de Validación
+
+Fox Framework incluye un potente sistema de validación que permite verificar datos de entrada, parámetros de request, cuerpos JSON y formularios de manera elegante y tipada.
+
+## Características Principales
+
+- **Validación Tipada**: Integración completa con TypeScript
+- **Esquemas Reutilizables**: Define una vez, usa en múltiples lugares
+- **Middleware de Validación**: Integración directa con el sistema de rutas
+- **Mensajes Personalizables**: Control total sobre los mensajes de error
+- **Validación Asíncrona**: Soporte para reglas que requieren operaciones asíncronas
+- **Transformación de Datos**: Conversión automática de tipos
+- **Composición de Validadores**: Combina reglas para crear validaciones complejas
+
+## Uso Básico
+
+### Definición de Esquemas
+
+```typescript
+import { Schema, Validators } from 'fox-framework';
+
+// Definir un esquema para usuario
+const userSchema = new Schema({
+  name: Validators.string().required().min(2).max(100),
+  email: Validators.email().required(),
+  age: Validators.number().min(18).optional(),
+  role: Validators.enum(['admin', 'user', 'guest']).default('user')
+});
+
+// Interfaz generada automáticamente desde el esquema
+type User = typeof userSchema.type;
+// Equivale a:
+// interface User {
+//   name: string;
+//   email: string;
+//   age?: number;
+//   role: 'admin' | 'user' | 'guest';
+// }
+```
+
+### Validación de Objetos
+
+```typescript
+import { validate } from 'fox-framework';
+
+// Datos a validar
+const data = {
+  name: 'John Doe',
+  email: 'john@example.com',
+  age: 25
+};
+
+// Validación sencilla
+try {
+  const validUser = validate(data, userSchema);
+  console.log('Usuario válido:', validUser);
+  // validUser es de tipo User y tiene todas las propiedades validadas
+} catch (error) {
+  console.error('Error de validación:', error.message);
+}
+
+// Validación asíncrona
+async function validateUser(data) {
+  try {
+    const validUser = await validate.async(data, userSchema);
+    return validUser;
+  } catch (error) {
+    throw error;
+  }
+}
+```
+
+### Middleware de Validación
+
+```typescript
+import { Router, validateBody, validateQuery, validateParams } from 'fox-framework';
+
+const router = new Router();
+
+// Definir esquemas
+const createUserSchema = new Schema({
+  name: Validators.string().required(),
+  email: Validators.email().required(),
+  password: Validators.string().min(8).required()
+});
+
+const userIdSchema = new Schema({
+  id: Validators.uuid().required()
+});
+
+const userFiltersSchema = new Schema({
+  role: Validators.enum(['admin', 'user']).optional(),
+  active: Validators.boolean().optional()
+});
+
+// Aplicar validación como middleware
+router.post('/users', 
+  validateBody(createUserSchema),
+  async (req, res) => {
+    // En este punto req.body es de tipo typeof createUserSchema.type
+    // y ha sido validado completamente
+    const { name, email, password } = req.body;
+    const user = await userService.create({ name, email, password });
+    res.status(201).json(user);
+  }
+);
+
+router.get('/users/:id',
+  validateParams(userIdSchema),
+  async (req, res) => {
+    // req.params.id es un UUID válido garantizado
+    const user = await userService.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json(user);
+  }
+);
+
+router.get('/users',
+  validateQuery(userFiltersSchema),
+  async (req, res) => {
+    // req.query contiene filtros validados y convertidos al tipo correcto
+    const users = await userService.findAll(req.query);
+    res.json(users);
+  }
+);
+```
+
+## Validadores Incluidos
+
+Fox Framework incluye validadores para los tipos más comunes:
+
+### Tipos Básicos
+
+```typescript
+// String
+Validators.string()
+  .required()             // Campo obligatorio
+  .min(2)                 // Longitud mínima
+  .max(100)               // Longitud máxima
+  .matches(/^[a-z]+$/)    // Expresión regular
+  .email()                // Debe ser un email válido
+  .url()                  // Debe ser una URL válida
+  .trim()                 // Elimina espacios al inicio y final
+  .lowercase()            // Convierte a minúsculas
+
+// Number
+Validators.number()
+  .required()
+  .min(0)                 // Valor mínimo
+  .max(100)               // Valor máximo
+  .integer()              // Debe ser un entero
+  .positive()             // Debe ser positivo
+  .negative()             // Debe ser negativo
+
+// Boolean
+Validators.boolean()
+  .required()
+
+// Date
+Validators.date()
+  .required()
+  .min(new Date('2023-01-01')) // Fecha mínima
+  .max(new Date())             // Fecha máxima
+  .iso()                       // Debe ser formato ISO
+
+// Array
+Validators.array(Validators.string())
+  .required()
+  .min(1)                 // Mínimo número de elementos
+  .max(10)                // Máximo número de elementos
+  .unique()               // Elementos únicos
+```
+
+### Validadores Avanzados
+
+```typescript
+// Object
+Validators.object({
+  name: Validators.string().required(),
+  address: Validators.object({
+    street: Validators.string().required(),
+    city: Validators.string().required()
+  })
+})
+
+// Union
+Validators.union([
+  Validators.string(),
+  Validators.number()
+])
+
+// Enum
+Validators.enum(['pending', 'completed', 'failed'])
+
+// Custom
+Validators.custom((value) => {
+  if (value !== 'special_value') {
+    return 'Valor debe ser special_value';
+  }
+})
+
+// Conditional
+Validators.object({
+  type: Validators.enum(['personal', 'business']).required(),
+  taxId: Validators.string().when('type', {
+    is: 'business',
+    then: Validators.required(),
+    otherwise: Validators.forbidden()
+  })
+})
+```
+
+## Mensajes Personalizados
+
+Personaliza los mensajes de error para cada validador:
+
+```typescript
+const schema = new Schema({
+  username: Validators.string()
+    .required('El nombre de usuario es obligatorio')
+    .min(3, 'El nombre de usuario debe tener al menos 3 caracteres')
+    .max(20, 'El nombre de usuario no puede tener más de 20 caracteres'),
+  
+  email: Validators.string()
+    .required('El email es obligatorio')
+    .email('Formato de email inválido')
+});
+
+// También puedes configurar mensajes globales
+Schema.setErrorMessages({
+  required: '{field} es un campo obligatorio',
+  min: '{field} debe tener al menos {min} caracteres',
+  max: '{field} no puede tener más de {max} caracteres',
+  email: '{field} debe ser un email válido'
+});
+```
+
+## Transformación de Datos
+
+El sistema permite transformar los datos durante la validación:
+
+```typescript
+const schema = new Schema({
+  // Convertir a número
+  age: Validators.number()
+    .transform((value) => typeof value === 'string' ? parseInt(value, 10) : value),
+  
+  // Formatear fecha
+  createdAt: Validators.date()
+    .transform((value) => new Date(value)),
+  
+  // Normalizar email
+  email: Validators.string()
+    .email()
+    .transform((value) => value.toLowerCase().trim())
+});
+```
+
+## Validación Asíncrona
+
+Para validaciones que requieren operaciones asíncronas (como verificar un email en la base de datos):
+
+```typescript
+import { Schema, Validators } from 'fox-framework';
+import { userRepository } from './repositories';
+
+const registerSchema = new Schema({
+  email: Validators.string()
+    .email()
+    .required()
+    .asyncCustom(async (value) => {
+      const userExists = await userRepository.findByEmail(value);
+      if (userExists) {
+        return 'Este email ya está registrado';
+      }
+    }),
+  
+  username: Validators.string()
+    .required()
+    .asyncCustom(async (value) => {
+      const userExists = await userRepository.findByUsername(value);
+      if (userExists) {
+        return 'Este nombre de usuario ya está en uso';
+      }
+    })
+});
+
+// Uso
+router.post('/register', async (req, res) => {
+  try {
+    const validData = await validate.async(req.body, registerSchema);
+    // Continuar con el registro
+  } catch (error) {
+    res.status(400).json({ errors: error.details });
+  }
+});
+```
+
+## Validación de Formularios
+
+Para validar formularios HTML con soporte para archivos:
+
+```typescript
+import { Schema, Validators } from 'fox-framework';
+
+const fileSchema = new Schema({
+  name: Validators.string().required(),
+  size: Validators.number().max(10 * 1024 * 1024), // 10MB máximo
+  mimetype: Validators.string().matches(/^image\/(jpeg|png|gif)$/),
+});
+
+const formSchema = new Schema({
+  title: Validators.string().required(),
+  description: Validators.string().optional(),
+  categories: Validators.array(Validators.string()).min(1),
+  image: Validators.file(fileSchema).required()
+});
+
+router.post('/upload', 
+  upload.single('image'), // Middleware de multer
+  validateForm(formSchema),
+  (req, res) => {
+    // req.body y req.file ya están validados
+    // req.validatedData contiene todos los campos validados incluyendo archivos
+    const { title, description, categories, image } = req.validatedData;
+    // ...
+  }
+);
+```
+
+## Composición de Esquemas
+
+Puedes componer y reutilizar esquemas para estructuras complejas:
+
+```typescript
+// Esquema base para dirección
+const addressSchema = new Schema({
+  street: Validators.string().required(),
+  city: Validators.string().required(),
+  state: Validators.string().required(),
+  postalCode: Validators.string().required(),
+  country: Validators.string().required()
+});
+
+// Esquema para contacto
+const contactSchema = new Schema({
+  email: Validators.email().required(),
+  phone: Validators.string().optional()
+});
+
+// Esquema para cliente que reutiliza los esquemas anteriores
+const customerSchema = new Schema({
+  name: Validators.string().required(),
+  address: Validators.schema(addressSchema),
+  billingAddress: Validators.schema(addressSchema).optional(),
+  contact: Validators.schema(contactSchema)
+});
+
+// Para casos de herencia
+const employeeSchema = customerSchema.extend({
+  employeeId: Validators.string().required(),
+  department: Validators.string().required()
+});
+```
+
+## Integración con Clases
+
+Para proyectos que utilizan clases, se pueden integrar los esquemas con decoradores:
+
+```typescript
+import { validate, schema, field } from 'fox-framework';
+
+@schema()
+class User {
+  @field(Validators.string().required())
+  name: string;
+
+  @field(Validators.email().required())
+  email: string;
+
+  @field(Validators.number().min(18))
+  age?: number;
+
+  constructor(data?: Partial<User>) {
+    if (data) {
+      Object.assign(this, validate(data, User.schema));
+    }
+  }
+}
+
+// Uso
+try {
+  const user = new User({
+    name: 'John',
+    email: 'john@example.com',
+    age: 30
+  });
+} catch (error) {
+  console.error('Validación fallida:', error.details);
+}
+```
+
+## Personalización Avanzada
+
+### Creando Validadores Personalizados
+
+```typescript
+import { Validator, ValidatorContext } from 'fox-framework';
+
+// Validador personalizado
+class CreditCardValidator extends Validator<string> {
+  private type: 'visa' | 'mastercard' | 'all' = 'all';
+
+  constructor() {
+    super();
+  }
+
+  visa(): this {
+    this.type = 'visa';
+    return this;
+  }
+
+  mastercard(): this {
+    this.type = 'mastercard';
+    return this;
+  }
+
+  validate(value: any, context: ValidatorContext): string | undefined {
+    // Validación básica de tipo
+    if (typeof value !== 'string') {
+      return this.createError('creditCard.base', context);
+    }
+
+    // Eliminar espacios y guiones
+    const sanitized = value.replace(/[\s-]/g, '');
+    
+    // Debe ser solo dígitos
+    if (!/^\d+$/.test(sanitized)) {
+      return this.createError('creditCard.format', context);
+    }
+    
+    // Algoritmo de Luhn para validar número de tarjeta
+    if (!this.luhnCheck(sanitized)) {
+      return this.createError('creditCard.invalid', context);
+    }
+    
+    // Validar tipo específico si se ha solicitado
+    if (this.type === 'visa' && !sanitized.startsWith('4')) {
+      return this.createError('creditCard.visa', context);
+    } else if (this.type === 'mastercard' && !(
+      sanitized.startsWith('51') || 
+      sanitized.startsWith('52') || 
+      sanitized.startsWith('53') || 
+      sanitized.startsWith('54') || 
+      sanitized.startsWith('55')
+    )) {
+      return this.createError('creditCard.mastercard', context);
+    }
+    
+    return undefined; // Validación exitosa
+  }
+  
+  private luhnCheck(cardNumber: string): boolean {
+    let sum = 0;
+    let shouldDouble = false;
+    
+    // Recorrer de derecha a izquierda
+    for (let i = cardNumber.length - 1; i >= 0; i--) {
+      let digit = parseInt(cardNumber.charAt(i));
+      
+      if (shouldDouble) {
+        digit *= 2;
+        if (digit > 9) digit -= 9;
+      }
+      
+      sum += digit;
+      shouldDouble = !shouldDouble;
+    }
+    
+    return sum % 10 === 0;
+  }
+}
+
+// Registrar el validador personalizado
+Validators.register('creditCard', () => new CreditCardValidator());
+
+// Usar el validador personalizado
+const paymentSchema = new Schema({
+  cardNumber: Validators.creditCard().visa(),
+  expiryDate: Validators.string().matches(/^\d{2}\/\d{2}$/),
+  cvv: Validators.string().length(3)
+});
+```
+
+### Extendiendo el Sistema de Validación
+
+```typescript
+import { Schema, Validators, extend } from 'fox-framework';
+
+// Agregar métodos personalizados al sistema de validación
+extend(Validators, {
+  // Validador de contraseña fuerte
+  password() {
+    return Validators.string()
+      .min(8)
+      .matches(/[a-z]/, 'Debe contener al menos una letra minúscula')
+      .matches(/[A-Z]/, 'Debe contener al menos una letra mayúscula')
+      .matches(/[0-9]/, 'Debe contener al menos un número')
+      .matches(/[\W_]/, 'Debe contener al menos un carácter especial');
+  },
+  
+  // Validador de slug
+  slug() {
+    return Validators.string()
+      .matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Debe ser un slug válido (minúsculas, números y guiones)');
+  },
+  
+  // Validador de código postal español
+  postalCodeES() {
+    return Validators.string()
+      .matches(/^[0-9]{5}$/, 'Debe ser un código postal español válido (5 dígitos)');
+  }
+});
+
+// Uso
+const schema = new Schema({
+  username: Validators.slug().required(),
+  password: Validators.password().required(),
+  postalCode: Validators.postalCodeES().optional()
+});
+```
+
+## Desempeño y Optimización
+
+El sistema de validación de Fox Framework está diseñado para ser eficiente incluso con grandes volúmenes de datos:
+
+- **Validación Parcial**: Valida solo los campos necesarios cuando es apropiado
+- **Validación Temprana**: Falla rápido al encontrar el primer error
+- **Memorización**: Caché de resultados para validaciones repetidas
+- **Compilación de Esquemas**: Los esquemas se compilan para ejecución óptima
+
+```typescript
+// Configuración de optimización
+Schema.configure({
+  abortEarly: true,       // Detener en el primer error
+  cacheResults: true,     // Habilitar caché
+  compile: true,          // Compilar esquema para mayor velocidad
+  stripUnknown: true      // Eliminar campos desconocidos
+});
+
+// Para validaciones específicas
+const validData = validate(inputData, userSchema, {
+  abortEarly: false,      // Recopilar todos los errores
+  context: { role: 'admin' }  // Contexto para validación condicional
+});
+```
+
+## Integración con OpenAPI/Swagger
+
+Fox Framework permite generar especificaciones OpenAPI automáticamente desde los esquemas de validación:
+
+```typescript
+import { generateOpenApi } from 'fox-framework';
+
+const userSchema = new Schema({
+  id: Validators.uuid().required(),
+  name: Validators.string().required().min(2).max(100),
+  email: Validators.email().required(),
+  createdAt: Validators.date().required()
+});
+
+// Generar esquema OpenAPI
+const openApiSchema = generateOpenApi(userSchema);
+// Resultado:
+// {
+//   type: 'object',
+//   required: ['id', 'name', 'email', 'createdAt'],
+//   properties: {
+//     id: {
+//       type: 'string',
+//       format: 'uuid'
+//     },
+//     name: {
+//       type: 'string',
+//       minLength: 2,
+//       maxLength: 100
+//     },
+//     email: {
+//       type: 'string',
+//       format: 'email'
+//     },
+//     createdAt: {
+//       type: 'string',
+//       format: 'date-time'
+//     }
+//   }
+// }
+```
+
+## Ejemplo Completo
+
+A continuación se muestra un ejemplo completo de una API usando el sistema de validación:
+
+```typescript
+import { 
+  FoxFactory, 
+  Router, 
+  Schema, 
+  Validators,
+  validateBody,
+  validateParams,
+  validateQuery
+} from 'fox-framework';
+
+// Esquemas de validación
+const createProductSchema = new Schema({
+  name: Validators.string().required().min(3).max(100),
+  description: Validators.string().optional(),
+  price: Validators.number().required().min(0),
+  stock: Validators.number().integer().min(0).default(0),
+  categories: Validators.array(Validators.string()).optional()
+});
+
+const productIdSchema = new Schema({
+  id: Validators.uuid().required()
+});
+
+const productFiltersSchema = new Schema({
+  minPrice: Validators.number().optional(),
+  maxPrice: Validators.number().optional(),
+  category: Validators.string().optional(),
+  sortBy: Validators.enum(['price', 'name', 'stock']).optional().default('name'),
+  sortDir: Validators.enum(['asc', 'desc']).optional().default('asc'),
+  page: Validators.number().integer().min(1).optional().default(1),
+  limit: Validators.number().integer().min(1).max(100).optional().default(20)
+});
+
+// Configuración de rutas
+const router = new Router();
+
+// Crear producto
+router.post('/products', 
+  validateBody(createProductSchema),
+  async (req, res) => {
+    try {
+      const product = await productService.create(req.body);
+      res.status(201).json(product);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Obtener producto por ID
+router.get('/products/:id',
+  validateParams(productIdSchema),
+  async (req, res) => {
+    try {
+      const product = await productService.findById(req.params.id);
+      if (!product) {
+        return res.status(404).json({ error: 'Producto no encontrado' });
+      }
+      res.json(product);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Listar productos con filtros
+router.get('/products',
+  validateQuery(productFiltersSchema),
+  async (req, res) => {
+    try {
+      const { 
+        minPrice, maxPrice, category,
+        sortBy, sortDir, page, limit
+      } = req.query;
+      
+      const filters = { minPrice, maxPrice, category };
+      const pagination = { page, limit };
+      const sorting = { field: sortBy, direction: sortDir };
+      
+      const result = await productService.findAll(filters, pagination, sorting);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Actualizar producto
+router.put('/products/:id',
+  validateParams(productIdSchema),
+  validateBody(createProductSchema),
+  async (req, res) => {
+    try {
+      const product = await productService.update(req.params.id, req.body);
+      if (!product) {
+        return res.status(404).json({ error: 'Producto no encontrado' });
+      }
+      res.json(product);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Eliminar producto
+router.delete('/products/:id',
+  validateParams(productIdSchema),
+  async (req, res) => {
+    try {
+      const deleted = await productService.delete(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Producto no encontrado' });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// Crear servidor
+const server = FoxFactory.createServer({
+  router,
+  port: 3000
+});
+
+server.start();
+```

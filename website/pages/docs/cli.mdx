@@ -1,0 +1,862 @@
+# Herramientas CLI
+
+Fox Framework incluye un potente sistema de línea de comandos (CLI) que facilita la creación, desarrollo y mantenimiento de aplicaciones. Esta herramienta está diseñada para incrementar la productividad del desarrollador, automatizar tareas repetitivas y mantener la consistencia del código.
+
+## Características Principales
+
+- **Scaffolding** de proyectos y componentes
+- **Generación automática** de código (controladores, servicios, etc.)
+- **Migración** y gestión de bases de datos
+- **Testing** y diagnóstico de aplicaciones
+- **Despliegue** y gestión de entornos
+- **Extensible** mediante plugins personalizados
+- **Interactivo** con prompts y asistentes
+- **Documentación** integrada y contextual
+
+## Instalación
+
+La CLI de Fox Framework se puede instalar globalmente para usarla en cualquier proyecto:
+
+```bash
+# Instalación global
+npm install -g fox-framework-cli
+
+# O ejecutarla directamente con npx
+npx fox-framework-cli [comando]
+```
+
+También puedes instalarla como dependencia de desarrollo en tu proyecto:
+
+```bash
+# Instalación local como dependencia de desarrollo
+npm install --save-dev fox-framework-cli
+```
+
+Después de la instalación, la CLI estará disponible a través del comando `fox`:
+
+```bash
+fox --help
+```
+
+## Comandos Básicos
+
+### Crear un Nuevo Proyecto
+
+```bash
+# Crear un nuevo proyecto usando el asistente interactivo
+fox new my-project
+
+# Crear con opciones específicas
+fox new my-project --template api --typescript --docker
+```
+
+Opciones disponibles:
+
+- `--template`: Tipo de proyecto (`api`, `web`, `monorepo`, `microservices`)
+- `--typescript`: Configurar proyecto con TypeScript
+- `--docker`: Incluir configuración Docker
+- `--git`: Inicializar repositorio Git
+- `--install`: Instalar dependencias automáticamente
+- `--skip-prompts`: Usar configuración por defecto sin preguntar
+
+### Generar Componentes
+
+```bash
+# Generar un nuevo controlador
+fox generate controller UserController
+
+# Forma abreviada
+fox g controller UserController
+
+# Con opciones adicionales
+fox g controller UserController --resource --model=User
+```
+
+Tipos de componentes que se pueden generar:
+
+- `controller`: Controladores para gestionar peticiones HTTP
+- `service`: Servicios para lógica de negocio
+- `middleware`: Middleware para procesamiento de peticiones
+- `model`: Modelos de datos
+- `repository`: Repositorios para acceso a datos
+- `validator`: Validadores de datos
+- `interface`: Interfaces TypeScript
+- `test`: Tests unitarios o de integración
+- `view`: Plantillas de vistas
+
+Opciones comunes:
+
+- `--dry-run`: Mostrar qué archivos se crearían sin generarlos realmente
+- `--force`: Sobrescribir archivos existentes
+- `--path`: Ubicación específica donde generar los archivos
+- `--spec`: Generar también archivos de test
+
+### Ejecutar la Aplicación
+
+```bash
+# Iniciar la aplicación en modo desarrollo
+fox start
+
+# Iniciar con opciones específicas
+fox start --port=3000 --env=dev --watch
+```
+
+Opciones:
+
+- `--port`: Puerto en el que iniciar la aplicación
+- `--env`: Entorno (`dev`, `test`, `prod`)
+- `--watch`: Reiniciar automáticamente al detectar cambios
+- `--debug`: Activar modo debug
+- `--inspect`: Activar inspector de Node.js
+
+### Administrar el Proyecto
+
+```bash
+# Ver información sobre el proyecto
+fox info
+
+# Verificar consistencia y buenas prácticas
+fox lint
+
+# Actualizar framework y dependencias
+fox update
+
+# Limpiar archivos temporales y cachés
+fox clean
+```
+
+## Generación de Código
+
+### Controladores
+
+```bash
+# Generar controlador básico
+fox g controller UserController
+
+# Controlador CRUD completo
+fox g controller UserController --resource --model=User
+
+# Controlador con opciones personalizadas
+fox g controller PaymentController --methods=process,verify,refund
+```
+
+Esto generará archivos como:
+
+```
+src/controllers/user.controller.ts
+src/controllers/__tests__/user.controller.test.ts
+```
+
+Ejemplo de controlador generado:
+
+```typescript
+import { Controller, Get, Post, Put, Delete, HttpContext } from 'fox-framework/core';
+import { UserService } from '../services/user.service';
+
+@Controller('/users')
+export class UserController {
+  constructor(private userService: UserService) {}
+
+  @Get('/')
+  async getAll(ctx: HttpContext) {
+    const users = await this.userService.findAll(ctx.query);
+    return users;
+  }
+
+  @Get('/:id')
+  async getOne(ctx: HttpContext) {
+    const user = await this.userService.findById(ctx.params.id);
+    if (!user) {
+      ctx.status = 404;
+      return { error: 'User not found' };
+    }
+    return user;
+  }
+
+  @Post('/')
+  async create(ctx: HttpContext) {
+    const user = await this.userService.create(ctx.body);
+    ctx.status = 201;
+    return user;
+  }
+
+  @Put('/:id')
+  async update(ctx: HttpContext) {
+    const updated = await this.userService.update(ctx.params.id, ctx.body);
+    return updated;
+  }
+
+  @Delete('/:id')
+  async delete(ctx: HttpContext) {
+    await this.userService.delete(ctx.params.id);
+    ctx.status = 204;
+    return null;
+  }
+}
+```
+
+### Servicios
+
+```bash
+# Generar servicio básico
+fox g service UserService
+
+# Servicio con modelo e inyección
+fox g service PaymentService --model=Payment --inject=PaymentGateway,NotificationService
+```
+
+Ejemplo de servicio generado:
+
+```typescript
+import { Injectable } from 'fox-framework/core';
+import { User } from '../models/user.model';
+import { UserRepository } from '../repositories/user.repository';
+
+@Injectable()
+export class UserService {
+  constructor(private userRepository: UserRepository) {}
+
+  async findAll(filters = {}) {
+    return this.userRepository.findAll(filters);
+  }
+
+  async findById(id: string) {
+    return this.userRepository.findById(id);
+  }
+
+  async create(userData: Partial<User>) {
+    // Validación y lógica de negocio aquí
+    return this.userRepository.create(userData);
+  }
+
+  async update(id: string, userData: Partial<User>) {
+    return this.userRepository.update(id, userData);
+  }
+
+  async delete(id: string) {
+    return this.userRepository.delete(id);
+  }
+}
+```
+
+### Middleware
+
+```bash
+# Generar middleware básico
+fox g middleware AuthMiddleware
+
+# Middleware con opciones
+fox g middleware RateLimiterMiddleware --config=rate-limiter
+```
+
+Ejemplo de middleware generado:
+
+```typescript
+import { Middleware, HttpContext, NextFunction } from 'fox-framework/core';
+
+@Middleware()
+export class AuthMiddleware {
+  async handle(ctx: HttpContext, next: NextFunction) {
+    // Obtener y verificar token
+    const token = ctx.headers.authorization?.split('Bearer ')[1];
+    
+    if (!token) {
+      ctx.status = 401;
+      return { error: 'Authorization token required' };
+    }
+    
+    try {
+      // Verificar token y extraer información del usuario
+      const user = await this.verifyToken(token);
+      
+      // Añadir usuario al contexto
+      ctx.auth = { user };
+      
+      // Continuar con la cadena de middleware
+      return next();
+    } catch (error) {
+      ctx.status = 401;
+      return { error: 'Invalid token' };
+    }
+  }
+  
+  private async verifyToken(token: string) {
+    // Implementar verificación de token
+    // ...
+    return { id: '123', role: 'user' };
+  }
+}
+```
+
+### Modelos
+
+```bash
+# Generar modelo básico
+fox g model User
+
+# Modelo con atributos
+fox g model Product --attrs="name:string,price:number,description:string"
+
+# Modelo con relaciones
+fox g model Order --attrs="total:number,status:string" --relations="user:belongsTo,items:hasMany"
+```
+
+Ejemplo de modelo generado:
+
+```typescript
+import { Model, Field, Required, Min, Max, HasMany } from 'fox-framework/db';
+
+@Model('users')
+export class User {
+  @Field({ primary: true })
+  id: string;
+  
+  @Field()
+  @Required()
+  name: string;
+  
+  @Field()
+  @Required()
+  email: string;
+  
+  @Field({ secure: true })
+  @Required()
+  password: string;
+  
+  @Field()
+  role: string = 'user';
+  
+  @Field()
+  createdAt: Date = new Date();
+  
+  @Field()
+  updatedAt: Date = new Date();
+  
+  @HasMany(() => Order)
+  orders: Order[];
+}
+```
+
+### Proyectos Completos
+
+```bash
+# Crear una API REST completa
+fox new my-api --template api
+
+# Crear una aplicación web con frontend
+fox new my-web-app --template web
+
+# Crear una arquitectura de microservicios
+fox new my-system --template microservices
+```
+
+## Gestión de Base de Datos
+
+### Migraciones
+
+```bash
+# Crear una nueva migración
+fox g migration CreateUsersTable
+
+# Ejecutar migraciones pendientes
+fox db:migrate
+
+# Revertir última migración
+fox db:rollback
+
+# Ver estado de migraciones
+fox db:status
+```
+
+Ejemplo de una migración generada:
+
+```typescript
+import { Migration } from 'fox-framework/db';
+
+export default class CreateUsersTable implements Migration {
+  async up(db) {
+    await db.schema.createTable('users', table => {
+      table.uuid('id').primary();
+      table.string('name').notNullable();
+      table.string('email').notNullable().unique();
+      table.string('password').notNullable();
+      table.string('role').defaultTo('user');
+      table.timestamps(true, true);
+    });
+  }
+
+  async down(db) {
+    await db.schema.dropTable('users');
+  }
+}
+```
+
+### Seeders
+
+```bash
+# Crear un seeder
+fox g seeder UsersSeeder
+
+# Ejecutar todos los seeders
+fox db:seed
+
+# Ejecutar un seeder específico
+fox db:seed UsersSeeder
+```
+
+Ejemplo de seeder generado:
+
+```typescript
+import { Seeder } from 'fox-framework/db';
+import { User } from '../models/user.model';
+
+export default class UsersSeeder implements Seeder {
+  async run(db) {
+    // Crear usuarios de ejemplo
+    await db.table('users').insert([
+      {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        name: 'Admin User',
+        email: 'admin@example.com',
+        password: await this.hashPassword('admin123'),
+        role: 'admin'
+      },
+      {
+        id: '550e8400-e29b-41d4-a716-446655440001',
+        name: 'Test User',
+        email: 'user@example.com',
+        password: await this.hashPassword('user123'),
+        role: 'user'
+      }
+    ]);
+  }
+  
+  private async hashPassword(password: string): Promise<string> {
+    // Implementar hash de contraseña
+    return password; // En un caso real, hacer hash
+  }
+}
+```
+
+## Testing
+
+### Ejecutar Tests
+
+```bash
+# Ejecutar todos los tests
+fox test
+
+# Ejecutar tests con cobertura
+fox test --coverage
+
+# Ejecutar tests específicos
+fox test --pattern="user.*"
+
+# Ejecutar en modo watch
+fox test --watch
+```
+
+### Generar Tests
+
+```bash
+# Generar test unitario
+fox g test unit UserService
+
+# Generar test de integración
+fox g test integration UserController
+
+# Generar test end-to-end
+fox g test e2e UserFlow
+```
+
+Ejemplo de test unitario generado:
+
+```typescript
+import { describe, it, expect, beforeEach, mock } from 'fox-framework/testing';
+import { UserService } from '../../services/user.service';
+import { UserRepository } from '../../repositories/user.repository';
+
+describe('UserService', () => {
+  let userService: UserService;
+  let userRepository: jest.Mocked<UserRepository>;
+  
+  beforeEach(() => {
+    // Crear mock del repositorio
+    userRepository = {
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn()
+    } as any;
+    
+    // Crear instancia de servicio con dependencia mockeada
+    userService = new UserService(userRepository);
+  });
+  
+  describe('findAll', () => {
+    it('should return all users', async () => {
+      // Arrange
+      const mockUsers = [
+        { id: '1', name: 'User 1' },
+        { id: '2', name: 'User 2' }
+      ];
+      userRepository.findAll.mockResolvedValue(mockUsers);
+      
+      // Act
+      const result = await userService.findAll();
+      
+      // Assert
+      expect(userRepository.findAll).toHaveBeenCalled();
+      expect(result).toEqual(mockUsers);
+    });
+  });
+  
+  describe('create', () => {
+    it('should create a user', async () => {
+      // Arrange
+      const userData = { name: 'New User', email: 'new@example.com' };
+      const createdUser = { id: '3', ...userData };
+      userRepository.create.mockResolvedValue(createdUser);
+      
+      // Act
+      const result = await userService.create(userData);
+      
+      // Assert
+      expect(userRepository.create).toHaveBeenCalledWith(userData);
+      expect(result).toEqual(createdUser);
+    });
+  });
+  
+  // Más tests...
+});
+```
+
+## Despliegue y Entornos
+
+### Configuración de Entornos
+
+```bash
+# Configurar un nuevo entorno
+fox env:setup production
+
+# Generar archivos .env para distintos entornos
+fox env:create --template
+
+# Verificar configuración de entorno
+fox env:check production
+
+# Listar variables de entorno
+fox env:list
+```
+
+### Despliegue
+
+```bash
+# Preparar para despliegue
+fox deploy:build --env=production
+
+# Desplegar a entorno específico
+fox deploy --target=server1 --env=production
+
+# Configurar opciones de despliegue
+fox deploy:config
+```
+
+## Extensiones y Personalización
+
+### Crear Plugin
+
+```bash
+# Generar estructura básica de plugin
+fox plugin:create fox-plugin-stripe
+
+# Instalar plugin existente
+fox plugin:install fox-plugin-stripe
+```
+
+Estructura típica de un plugin:
+
+```
+fox-plugin-stripe/
+├── README.md
+├── package.json
+├── src/
+│   ├── index.ts
+│   ├── types.ts
+│   ├── services/
+│   │   └── stripe.service.ts
+│   └── controllers/
+│       └── payment.controller.ts
+└── templates/
+    └── config.template.ts
+```
+
+### Crear Comandos Personalizados
+
+Puedes extender la CLI con tus propios comandos creando un archivo `.foxrc.js` en la raíz de tu proyecto:
+
+```javascript
+// .foxrc.js
+module.exports = {
+  commands: {
+    // Comando personalizado
+    'clean:logs': {
+      description: 'Eliminar archivos de log antiguos',
+      action: async (args) => {
+        const { exec } = require('child_process');
+        const days = args.days || 7;
+        
+        console.log(`Eliminando logs de más de ${days} días...`);
+        
+        exec(`find ./logs -type f -name "*.log" -mtime +${days} -delete`, 
+          (error, stdout, stderr) => {
+            if (error) {
+              console.error(`Error: ${error.message}`);
+              return;
+            }
+            console.log('Logs antiguos eliminados correctamente');
+          }
+        );
+      },
+      options: [
+        { name: 'days', type: 'number', description: 'Días para considerar un log como antiguo' }
+      ]
+    }
+  },
+  
+  // Hooks para eventos del ciclo de vida
+  hooks: {
+    'pre-build': () => console.log('Ejecutando tareas antes del build...'),
+    'post-build': () => console.log('Build completado, ejecutando tareas finales...')
+  },
+  
+  // Plantillas personalizadas
+  templates: {
+    'custom-controller': {
+      description: 'Controlador con estructura personalizada',
+      files: {
+        'src/controllers/{name}.controller.ts': require.resolve('./templates/custom-controller.template.ts')
+      }
+    }
+  }
+};
+```
+
+Para usar este comando personalizado:
+
+```bash
+fox clean:logs --days=30
+```
+
+### Configurar Defaults
+
+También puedes configurar opciones por defecto en `.foxrc.js`:
+
+```javascript
+module.exports = {
+  // Configuración global
+  config: {
+    // Estructura de directorios personalizada
+    paths: {
+      controllers: 'src/api/controllers',
+      services: 'src/services',
+      models: 'src/domain/models',
+      repositories: 'src/infrastructure/repositories'
+    },
+    
+    // Opciones por defecto para generadores
+    generators: {
+      controller: {
+        template: 'custom-controller',
+        includeSpec: true
+      },
+      model: {
+        baseClass: 'BaseModel',
+        timestamps: true
+      }
+    }
+  }
+};
+```
+
+## Interacción y UX
+
+### Modo Interactivo
+
+```bash
+# Iniciar CLI en modo interactivo
+fox interactive
+
+# O la versión corta
+fox i
+```
+
+Esto iniciará una interfaz interactiva con:
+
+- Historial de comandos
+- Autocompletado
+- Sugerencias contextuales
+- Navegación de opciones
+
+### Asistentes y Prompts
+
+La CLI utiliza prompts interactivos para guiarte en la creación de componentes:
+
+```bash
+fox create
+```
+
+Mostrará un asistente paso a paso:
+
+1. Selección del tipo de componente
+2. Configuración de opciones
+3. Confirmación y previsualización
+4. Generación de archivos
+
+## Diagnóstico y Solución de Problemas
+
+### Información del Sistema
+
+```bash
+# Ver información detallada del proyecto y entorno
+fox info --detailed
+
+# Verificar si hay problemas conocidos
+fox doctor
+```
+
+Esto mostrará:
+
+- Versiones de dependencias
+- Configuración del entorno
+- Problemas potenciales
+- Sugerencias de optimización
+
+### Logs y Depuración
+
+```bash
+# Ver logs de la CLI
+fox logs
+
+# Ejecutar en modo verbose
+fox [comando] --verbose
+
+# Depurar problemas
+fox debug [problema]
+```
+
+## Comandos Adicionales
+
+### Gestión de Módulos
+
+```bash
+# Generar un nuevo módulo (agrupación lógica)
+fox g module UserManagement
+
+# Listar módulos
+fox module:list
+
+# Describir estructura de un módulo
+fox module:describe UserManagement
+```
+
+### Documentación
+
+```bash
+# Generar documentación automática
+fox docs:generate
+
+# Visualizar documentación localmente
+fox docs:serve
+
+# Verificar cobertura de documentación
+fox docs:coverage
+```
+
+### Análisis de Código
+
+```bash
+# Ejecutar linter
+fox lint
+
+# Arreglar problemas automáticamente
+fox lint --fix
+
+# Analizar estructura y dependencias
+fox analyze
+
+# Verificar cumplimiento de mejores prácticas
+fox quality
+```
+
+## Integración con IDEs
+
+Fox CLI proporciona integración con los principales IDEs:
+
+### Visual Studio Code
+
+Instala la extensión "Fox Framework Tools" para:
+
+- Snippets y autocompletado
+- Comandos integrados en la paleta
+- Diagnóstico en tiempo real
+- Vista de estructura del proyecto
+
+### WebStorm/IntelliJ
+
+Configura los scripts externos en tu IDE:
+
+1. Settings → Tools → External Tools
+2. Añadir comandos fox como herramientas externas
+3. Asignar atajos de teclado
+
+## Buenas Prácticas
+
+### Estructura del Proyecto
+
+La CLI promueve una estructura consistente:
+
+```
+src/
+├── controllers/      # Controladores HTTP
+├── services/         # Lógica de negocio
+├── models/           # Modelos de datos
+├── repositories/     # Acceso a datos
+├── middleware/       # Middleware HTTP
+├── validators/       # Validación de datos
+├── config/           # Configuración
+├── utils/            # Utilidades generales
+└── types/            # Definiciones TypeScript
+```
+
+### Generación vs Modificación
+
+- Usa `--dry-run` para previsualizar cambios
+- Preferiblemente genera código nuevo en vez de modificar existente
+- Para modificaciones estructurales, usa `refactor` en lugar de `generate`
+
+### Trabajo en Equipo
+
+- Comité los archivos `.foxrc.js` para compartir configuración
+- Documenta comandos personalizados
+- Usa `--template` para mantener consistencia en el equipo
+
+## Conclusión
+
+La herramienta CLI de Fox Framework es un componente fundamental del ecosistema, diseñada para acelerar el desarrollo y mantener la consistencia del código. Con funcionalidades para scaffolding, generación de código, testing, despliegue y más, la CLI te permite centrarte en construir tu aplicación en lugar de en tareas repetitivas.
+
+Las características de personalización y extensión permiten adaptar la herramienta a las necesidades específicas de cada equipo y proyecto, mientras que la integración con IDEs y otras herramientas la hacen parte natural del flujo de trabajo del desarrollador.
+
+Para obtener ayuda detallada sobre cualquier comando, utiliza:
+
+```bash
+fox help [comando]
+```
+
+Para mantenerte al día con las últimas actualizaciones y características:
+
+```bash
+fox update
+fox changelog
+```

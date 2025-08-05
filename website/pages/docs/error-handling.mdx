@@ -1,0 +1,1336 @@
+# Manejo de Errores
+
+El sistema de manejo de errores de Fox Framework proporciona mecanismos robustos para capturar, gestionar y responder a errores de manera elegante en tus aplicaciones. Diseñado para ser extensible y configurado según las necesidades específicas de tu proyecto, este sistema facilita la depuración durante el desarrollo y asegura respuestas adecuadas en producción.
+
+## Características Principales
+
+- **Captura global de errores**: Previene la caída de la aplicación ante errores inesperados
+- **Errores tipados**: Jerarquía de errores con información detallada y códigos HTTP
+- **Formatos de respuesta flexibles**: Adaptación automática al formato solicitado (HTML, JSON, XML)
+- **Logging integrado**: Registro detallado de errores para análisis y depuración
+- **Soporte para validación**: Integración con esquemas de validación
+- **Personalizable**: Controladores de errores personalizados por tipo o código HTTP
+- **Middlewares de error**: Encadenamiento de manejadores de errores
+- **Internacionalización**: Mensajes de error en múltiples idiomas
+
+## Fundamentos del Sistema
+
+### Clase Base de Errores
+
+Fox Framework extiende la clase `Error` nativa para proporcionar información adicional útil para la gestión de errores HTTP:
+
+```typescript
+import { HttpStatusCode } from 'fox-framework/core/enums';
+
+export class FoxError extends Error {
+  /** Código de estado HTTP */
+  public statusCode: number;
+  
+  /** Código interno de error (opcional) */
+  public code?: string;
+  
+  /** Detalles adicionales del error */
+  public details?: Record<string, any>;
+  
+  /** Error original que causó esta excepción */
+  public originalError?: Error;
+  
+  /** Indica si el error debe ser registrado */
+  public shouldLog: boolean;
+  
+  constructor(message: string, options?: {
+    statusCode?: number;
+    code?: string;
+    details?: Record<string, any>;
+    originalError?: Error;
+    shouldLog?: boolean;
+  }) {
+    super(message);
+    
+    this.name = this.constructor.name;
+    this.statusCode = options?.statusCode || HttpStatusCode.INTERNAL_SERVER_ERROR;
+    this.code = options?.code;
+    this.details = options?.details;
+    this.originalError = options?.originalError;
+    this.shouldLog = options?.shouldLog !== undefined ? options.shouldLog : true;
+    
+    // Preservar stack trace
+    Error.captureStackTrace(this, this.constructor);
+  }
+  
+  /**
+   * Convierte el error a un objeto plano para serialización
+   */
+  toJSON(): Record<string, any> {
+    return {
+      message: this.message,
+      code: this.code,
+      statusCode: this.statusCode,
+      details: this.details,
+      // No incluimos originalError ni stack en producción
+      ...(process.env.NODE_ENV !== 'production' ? {
+        stack: this.stack
+      } : {})
+    };
+  }
+}
+```
+
+### Errores Especializados
+
+El framework incluye una serie de errores predefinidos para casos comunes:
+
+```typescript
+import { HttpStatusCode } from 'fox-framework/core/enums';
+import { FoxError } from 'fox-framework/core/errors';
+
+export class BadRequestError extends FoxError {
+  constructor(message = 'Petición inválida', options?: Partial<FoxErrorOptions>) {
+    super(message, {
+      statusCode: HttpStatusCode.BAD_REQUEST,
+      code: 'BAD_REQUEST',
+      ...options
+    });
+  }
+}
+
+export class UnauthorizedError extends FoxError {
+  constructor(message = 'No autorizado', options?: Partial<FoxErrorOptions>) {
+    super(message, {
+      statusCode: HttpStatusCode.UNAUTHORIZED,
+      code: 'UNAUTHORIZED',
+      ...options
+    });
+  }
+}
+
+export class ForbiddenError extends FoxError {
+  constructor(message = 'Acceso prohibido', options?: Partial<FoxErrorOptions>) {
+    super(message, {
+      statusCode: HttpStatusCode.FORBIDDEN,
+      code: 'FORBIDDEN',
+      ...options
+    });
+  }
+}
+
+export class NotFoundError extends FoxError {
+  constructor(message = 'Recurso no encontrado', options?: Partial<FoxErrorOptions>) {
+    super(message, {
+      statusCode: HttpStatusCode.NOT_FOUND,
+      code: 'NOT_FOUND',
+      ...options
+    });
+  }
+}
+
+export class MethodNotAllowedError extends FoxError {
+  constructor(message = 'Método no permitido', options?: Partial<FoxErrorOptions>) {
+    super(message, {
+      statusCode: HttpStatusCode.METHOD_NOT_ALLOWED,
+      code: 'METHOD_NOT_ALLOWED',
+      ...options
+    });
+  }
+}
+
+export class ConflictError extends FoxError {
+  constructor(message = 'Conflicto en la operación', options?: Partial<FoxErrorOptions>) {
+    super(message, {
+      statusCode: HttpStatusCode.CONFLICT,
+      code: 'CONFLICT',
+      ...options
+    });
+  }
+}
+
+export class ValidationError extends BadRequestError {
+  constructor(
+    message = 'Error de validación',
+    public validationErrors: Record<string, string[]> = {},
+    options?: Partial<FoxErrorOptions>
+  ) {
+    super(message, {
+      code: 'VALIDATION_ERROR',
+      details: { validationErrors },
+      ...options
+    });
+  }
+}
+
+export class ServiceUnavailableError extends FoxError {
+  constructor(message = 'Servicio no disponible', options?: Partial<FoxErrorOptions>) {
+    super(message, {
+      statusCode: HttpStatusCode.SERVICE_UNAVAILABLE,
+      code: 'SERVICE_UNAVAILABLE',
+      ...options
+    });
+  }
+}
+
+export class InternalServerError extends FoxError {
+  constructor(message = 'Error interno del servidor', options?: Partial<FoxErrorOptions>) {
+    super(message, {
+      statusCode: HttpStatusCode.INTERNAL_SERVER_ERROR,
+      code: 'INTERNAL_SERVER_ERROR',
+      ...options
+    });
+  }
+}
+```
+
+## Configuración del Manejador de Errores
+
+### Configuración Básica
+
+```typescript
+import { FoxFactory } from 'fox-framework/core';
+import { ErrorHandler } from 'fox-framework/core/errors';
+
+// Crear un servidor con configuración del manejador de errores
+const server = FoxFactory.createServer({
+  port: 3000,
+  
+  // Configuración del manejador de errores
+  errorHandler: {
+    // Mostrar detalles de errores en respuestas
+    exposeErrors: process.env.NODE_ENV !== 'production',
+    
+    // Vista para errores (cuando se responde con HTML)
+    errorView: 'errors/error',
+    
+    // Vista específica para error 404
+    notFoundView: 'errors/404',
+    
+    // Logger para errores
+    logger: console,
+    
+    // Función para determinar si un error debe ser registrado
+    shouldLogError: (err) => {
+      // No registrar errores 404 para reducir ruido
+      if (err.statusCode === 404) return false;
+      return true;
+    },
+    
+    // Transformador de errores antes de enviar respuesta
+    errorTransformer: (err, req) => {
+      // Añadir información de contexto a errores
+      return {
+        ...err.toJSON(),
+        requestId: req.id,
+        path: req.path,
+        timestamp: new Date().toISOString()
+      };
+    }
+  },
+  
+  // Resto de la configuración del servidor
+  router
+});
+```
+
+### Middleware para Captura de Errores
+
+Fox Framework proporciona un middleware que captura errores y los gestiona adecuadamente:
+
+```typescript
+import { errorMiddleware } from 'fox-framework/core/middlewares';
+
+// Registrar middleware de errores (normalmente al final de la cadena)
+server.use(errorMiddleware({
+  exposeErrors: process.env.NODE_ENV !== 'production',
+  logger: console,
+  // Otras opciones de configuración
+}));
+
+// O usando la configuración global
+server.useErrorHandler();
+```
+
+## Uso del Sistema de Errores
+
+### Lanzar Errores
+
+#### En Controladores
+
+```typescript
+import {
+  Controller,
+  Get,
+  Post,
+  HttpContext,
+  NotFoundError,
+  ValidationError,
+  UnauthorizedError
+} from 'fox-framework/core';
+
+@Controller('/users')
+export class UserController {
+  constructor(private userService) {}
+  
+  @Get('/:id')
+  async getUser(ctx: HttpContext) {
+    const { id } = ctx.params;
+    
+    // Validar parámetro
+    if (!id || isNaN(Number(id))) {
+      throw new ValidationError('ID de usuario no válido', {
+        id: ['Debe ser un número válido']
+      });
+    }
+    
+    // Buscar usuario
+    const user = await this.userService.findById(id);
+    
+    // Verificar si existe
+    if (!user) {
+      throw new NotFoundError(`Usuario con ID ${id} no encontrado`);
+    }
+    
+    // Verificar permisos
+    if (!ctx.auth.can('view', user)) {
+      throw new UnauthorizedError('No tienes permisos para ver este usuario');
+    }
+    
+    // Devolver usuario
+    return user;
+  }
+  
+  @Post('/')
+  async createUser(ctx: HttpContext) {
+    try {
+      const userData = ctx.body;
+      
+      // Validar datos
+      const validator = ctx.validator.validate(userData, userSchema);
+      
+      if (!validator.isValid()) {
+        throw new ValidationError(
+          'Datos de usuario inválidos',
+          validator.getErrors()
+        );
+      }
+      
+      // Crear usuario
+      const user = await this.userService.create(userData);
+      
+      // Respuesta exitosa
+      return ctx.response.created(user);
+      
+    } catch (error) {
+      // Capturar errores específicos
+      if (error.code === 'DUPLICATE_EMAIL') {
+        throw new ConflictError('El email ya está en uso', {
+          code: 'DUPLICATE_EMAIL',
+          details: { field: 'email' }
+        });
+      }
+      
+      // Re-lanzar otros errores
+      throw error;
+    }
+  }
+}
+```
+
+#### En Servicios
+
+```typescript
+import { NotFoundError, ValidationError, DatabaseError } from 'fox-framework/core/errors';
+
+export class UserService {
+  constructor(private db) {}
+  
+  async findById(id: number): Promise<User> {
+    try {
+      const user = await this.db.users.findUnique({
+        where: { id }
+      });
+      
+      if (!user) {
+        throw new NotFoundError(`Usuario con ID ${id} no encontrado`, {
+          code: 'USER_NOT_FOUND',
+          details: { id }
+        });
+      }
+      
+      return user;
+      
+    } catch (error) {
+      // Transformar errores de base de datos
+      if (error.name === 'PrismaClientKnownRequestError') {
+        throw new DatabaseError('Error de base de datos', {
+          originalError: error,
+          code: `DB_ERROR_${error.code}`
+        });
+      }
+      
+      throw error;
+    }
+  }
+  
+  async create(data: UserCreateDto): Promise<User> {
+    // Validar datos
+    if (!data.email) {
+      throw new ValidationError('Datos de usuario inválidos', {
+        email: ['El email es obligatorio']
+      });
+    }
+    
+    try {
+      // Verificar si el email ya existe
+      const existing = await this.db.users.findUnique({
+        where: { email: data.email }
+      });
+      
+      if (existing) {
+        throw new ConflictError('El email ya está registrado', {
+          code: 'DUPLICATE_EMAIL',
+          details: { field: 'email' }
+        });
+      }
+      
+      // Crear usuario
+      return await this.db.users.create({
+        data
+      });
+      
+    } catch (error) {
+      if (error instanceof FoxError) {
+        throw error;
+      }
+      
+      // Transformar otros errores
+      throw new InternalServerError('Error al crear usuario', {
+        originalError: error
+      });
+    }
+  }
+}
+```
+
+### Helper en Contexto HTTP
+
+El framework proporciona ayudantes en el contexto HTTP para simplificar el lanzamiento de errores comunes:
+
+```typescript
+@Controller('/products')
+export class ProductController {
+  @Get('/:id')
+  async getProduct(ctx: HttpContext) {
+    const { id } = ctx.params;
+    
+    // Usando helpers en lugar de lanzar errores directamente
+    if (!id) {
+      return ctx.response.badRequest('ID de producto requerido');
+    }
+    
+    const product = await this.productService.findById(id);
+    
+    if (!product) {
+      return ctx.response.notFound(`Producto con ID ${id} no encontrado`);
+    }
+    
+    if (product.isPrivate && !ctx.auth.isAuthenticated) {
+      return ctx.response.unauthorized('Necesitas iniciar sesión para ver este producto');
+    }
+    
+    if (product.publishDate > new Date()) {
+      return ctx.response.forbidden('Este producto aún no está disponible');
+    }
+    
+    return product;
+  }
+}
+```
+
+## Personalización del Manejo de Errores
+
+### Manejadores de Error Personalizados
+
+Puedes definir manejadores específicos para diferentes tipos de error:
+
+```typescript
+import { ErrorHandler } from 'fox-framework/core/errors';
+
+const errorHandler = new ErrorHandler({
+  // Configuración base
+  exposeErrors: process.env.NODE_ENV !== 'production',
+  logger: console
+});
+
+// Registrar manejador para errores de validación
+errorHandler.registerHandler(ValidationError, (err, req, res) => {
+  const response = {
+    success: false,
+    message: err.message,
+    errors: err.validationErrors
+  };
+  
+  return res.status(err.statusCode).json(response);
+});
+
+// Registrar manejador para errores de autenticación
+errorHandler.registerHandler(UnauthorizedError, (err, req, res) => {
+  // Redirigir a login si es una petición web
+  const acceptsHtml = req.accepts('html');
+  
+  if (acceptsHtml) {
+    return res.redirect(`/auth/login?returnUrl=${req.path}&error=unauthorized`);
+  }
+  
+  // JSON para API
+  return res.status(err.statusCode).json({
+    success: false,
+    message: err.message,
+    code: err.code
+  });
+});
+
+// Registrar manejador para códigos HTTP específicos
+errorHandler.registerStatusHandler(404, (err, req, res) => {
+  // Si es una petición a la API
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({
+      success: false,
+      message: 'API endpoint not found'
+    });
+  }
+  
+  // Renderizar página 404 para peticiones web
+  return res.status(404).render('errors/404', {
+    message: err.message,
+    path: req.path
+  });
+});
+
+// Aplicar el manejador de errores al servidor
+server.setErrorHandler(errorHandler);
+```
+
+### Middleware de Error Personalizado
+
+```typescript
+import { NextFunction } from 'fox-framework/core/types';
+import { FoxError } from 'fox-framework/core/errors';
+
+// Middleware para errores específicos de base de datos
+export function databaseErrorMiddleware(err: Error, req: Request, res: Response, next: NextFunction) {
+  // Solo procesar errores de base de datos
+  if (err.name === 'SequelizeError' || err.name === 'MongoError') {
+    // Transformar a FoxError
+    const foxError = new DatabaseError('Error de base de datos', {
+      originalError: err,
+      code: 'DB_ERROR',
+      details: {
+        operation: req.method,
+        entity: req.path.split('/')[2] // Extraer entidad de la URL
+      }
+    });
+    
+    // Log detallado para errores de DB
+    console.error('[DATABASE ERROR]', {
+      path: req.path,
+      method: req.method,
+      error: err.message,
+      stack: err.stack,
+      query: (err as any).sql // Para errores SQL
+    });
+    
+    // Continuar con el siguiente manejador de errores
+    return next(foxError);
+  }
+  
+  // Pasar a siguiente manejador si no es un error de DB
+  return next(err);
+}
+
+// Middleware para monitorización de errores
+export function monitoringErrorMiddleware(err: Error, req: Request, res: Response, next: NextFunction) {
+  // Enviar error a sistema de monitorización
+  if (err instanceof FoxError && err.statusCode >= 500) {
+    monitoringService.reportError({
+      message: err.message,
+      code: err.code,
+      stack: err.stack,
+      context: {
+        url: req.url,
+        method: req.method,
+        userId: req.auth?.userId,
+        requestId: req.id
+      }
+    });
+  }
+  
+  // Continuar con el siguiente manejador
+  return next(err);
+}
+
+// Registrar en servidor
+server.use(databaseErrorMiddleware);
+server.use(monitoringErrorMiddleware);
+server.useErrorHandler(); // Middleware de error por defecto al final
+```
+
+## Casos de Uso Avanzados
+
+### Errores de Validación
+
+```typescript
+import { ValidationError } from 'fox-framework/core/errors';
+import { validateSchema } from 'fox-framework/core/validation';
+
+// Definir esquema de validación
+const userSchema = {
+  name: {
+    type: 'string',
+    required: true,
+    minLength: 3,
+    maxLength: 50
+  },
+  email: {
+    type: 'string',
+    required: true,
+    format: 'email'
+  },
+  age: {
+    type: 'number',
+    min: 18
+  },
+  role: {
+    type: 'string',
+    enum: ['user', 'admin', 'editor']
+  }
+};
+
+@Post('/users')
+async createUser(ctx: HttpContext) {
+  // Validar datos contra esquema
+  const { data, errors } = validateSchema(ctx.body, userSchema);
+  
+  // Lanzar error de validación si hay errores
+  if (Object.keys(errors).length > 0) {
+    throw new ValidationError('Datos de usuario inválidos', errors);
+  }
+  
+  // Continuar con datos validados
+  const user = await this.userService.create(data);
+  return ctx.response.created(user);
+}
+```
+
+### Errores en Operaciones Asíncronas
+
+```typescript
+// Utility para manejar operaciones asíncronas
+export const asyncHandler = (fn: (ctx: HttpContext) => Promise<any>) => {
+  return async (ctx: HttpContext) => {
+    try {
+      return await fn(ctx);
+    } catch (error) {
+      // Convertir errores no controlados a FoxError
+      if (!(error instanceof FoxError)) {
+        error = new InternalServerError('Error en la operación', {
+          originalError: error
+        });
+      }
+      
+      throw error;
+    }
+  };
+};
+
+// Uso en controlador
+@Controller('/products')
+export class ProductController {
+  @Get('/')
+  getProducts = asyncHandler(async (ctx: HttpContext) => {
+    // El error será capturado y transformado automáticamente
+    const products = await this.productService.findAll();
+    return products;
+  });
+  
+  @Get('/:id')
+  getProduct = asyncHandler(async (ctx: HttpContext) => {
+    const { id } = ctx.params;
+    const product = await this.productService.findById(id);
+    
+    if (!product) {
+      throw new NotFoundError(`Producto no encontrado: ${id}`);
+    }
+    
+    return product;
+  });
+}
+```
+
+### Errores con Contexto Enriquecido
+
+```typescript
+export class BusinessError extends FoxError {
+  constructor(message: string, options?: {
+    operation?: string;
+    entity?: string;
+    transactionId?: string;
+    source?: string;
+    statusCode?: number;
+    code?: string;
+    details?: Record<string, any>;
+  }) {
+    super(message, {
+      statusCode: options?.statusCode || HttpStatusCode.BAD_REQUEST,
+      code: options?.code || 'BUSINESS_RULE_VIOLATION',
+      details: {
+        operation: options?.operation,
+        entity: options?.entity,
+        transactionId: options?.transactionId,
+        source: options?.source,
+        ...(options?.details || {})
+      }
+    });
+  }
+}
+
+// Uso en un servicio
+export class OrderService {
+  async createOrder(data: OrderData): Promise<Order> {
+    // Verificar reglas de negocio
+    if (data.items.length === 0) {
+      throw new BusinessError('No se puede crear una orden sin productos', {
+        operation: 'createOrder',
+        entity: 'Order',
+        details: {
+          orderData: data
+        }
+      });
+    }
+    
+    // Verificar stock disponible
+    for (const item of data.items) {
+      const product = await this.productRepository.findById(item.productId);
+      
+      if (!product) {
+        throw new BusinessError(`Producto no encontrado: ${item.productId}`, {
+          operation: 'createOrder',
+          entity: 'Product',
+          code: 'PRODUCT_NOT_FOUND'
+        });
+      }
+      
+      if (product.stock < item.quantity) {
+        throw new BusinessError('Stock insuficiente', {
+          operation: 'createOrder',
+          entity: 'Product',
+          code: 'INSUFFICIENT_STOCK',
+          details: {
+            productId: product.id,
+            requested: item.quantity,
+            available: product.stock
+          }
+        });
+      }
+    }
+    
+    // Crear orden...
+  }
+}
+```
+
+### Formato de Errores Personalizado
+
+```typescript
+// Configuración del formato de respuesta de error
+const errorHandler = new ErrorHandler({
+  errorResponseFormatter: (err, req) => {
+    const isApiRequest = req.path.startsWith('/api/') || 
+                         req.headers.accept?.includes('application/json');
+    
+    // Formato para API
+    if (isApiRequest) {
+      return {
+        success: false,
+        error: {
+          message: err.message,
+          code: err.code || 'UNKNOWN_ERROR',
+          status: err.statusCode,
+          ...(err.details && { details: err.details }),
+          ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
+        },
+        timestamp: new Date().toISOString(),
+        path: req.path,
+        method: req.method,
+        requestId: req.id
+      };
+    }
+    
+    // Formato para vistas (HTML)
+    return {
+      title: `Error ${err.statusCode}`,
+      message: err.message,
+      statusCode: err.statusCode,
+      stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined,
+      requestId: req.id
+    };
+  }
+});
+
+server.setErrorHandler(errorHandler);
+```
+
+### Internacionalización de Errores
+
+```typescript
+import { FoxError } from 'fox-framework/core/errors';
+import { i18n } from 'fox-framework/core/i18n';
+
+export class LocalizedError extends FoxError {
+  constructor(
+    messageKey: string,
+    options?: {
+      params?: Record<string, any>;
+      statusCode?: number;
+      code?: string;
+      details?: Record<string, any>;
+    }
+  ) {
+    super('', {
+      statusCode: options?.statusCode || HttpStatusCode.BAD_REQUEST,
+      code: options?.code,
+      details: options?.details
+    });
+    
+    this.messageKey = messageKey;
+    this.messageParams = options?.params || {};
+  }
+  
+  // Claves y parámetros para traducción
+  private messageKey: string;
+  private messageParams: Record<string, any>;
+  
+  // Traducir mensaje cuando se accede
+  get message(): string {
+    return i18n.t(this.messageKey, this.messageParams);
+  }
+}
+
+// Middleware para establecer el idioma
+const languageMiddleware = (req, res, next) => {
+  const lang = req.query.lang || req.cookies.lang || req.headers['accept-language'] || 'es';
+  i18n.setLocale(lang.split(',')[0].slice(0, 2));
+  next();
+};
+
+// Uso en un controlador
+@Controller('/users')
+export class UserController {
+  @Post('/')
+  async createUser(ctx: HttpContext) {
+    try {
+      // Validar datos...
+      if (!ctx.body.email) {
+        throw new LocalizedError('errors.validation.email_required', {
+          code: 'VALIDATION_ERROR',
+          details: { field: 'email' }
+        });
+      }
+      
+      // Verificar si el email ya existe
+      const existingUser = await this.userService.findByEmail(ctx.body.email);
+      
+      if (existingUser) {
+        throw new LocalizedError('errors.users.email_taken', {
+          code: 'DUPLICATE_EMAIL',
+          params: { email: ctx.body.email },
+          statusCode: HttpStatusCode.CONFLICT
+        });
+      }
+      
+      // Crear usuario...
+    } catch (error) {
+      throw error;
+    }
+  }
+}
+
+// Archivos de traducción (locales/es.json)
+{
+  "errors": {
+    "validation": {
+      "email_required": "El campo de correo electrónico es obligatorio",
+      "password_length": "La contraseña debe tener al menos {{min}} caracteres"
+    },
+    "users": {
+      "email_taken": "El correo {{email}} ya está registrado",
+      "not_found": "Usuario no encontrado con ID: {{id}}"
+    }
+  }
+}
+```
+
+## Integración con Servicios Externos
+
+### Captura de Errores en Servicios Externos
+
+```typescript
+import axios from 'axios';
+import { ServiceUnavailableError, BadGatewayError } from 'fox-framework/core/errors';
+
+export class PaymentGatewayService {
+  async processPayment(paymentData: PaymentData): Promise<PaymentResult> {
+    try {
+      // Intentar procesar el pago con API externa
+      const response = await axios.post(
+        'https://payment-gateway.com/api/process',
+        paymentData,
+        { timeout: 5000 }
+      );
+      
+      return response.data;
+      
+    } catch (error) {
+      // Transformar errores de Axios a errores de Fox Framework
+      
+      // Error de timeout
+      if (error.code === 'ECONNABORTED') {
+        throw new ServiceUnavailableError('El servicio de pagos no responde', {
+          code: 'PAYMENT_TIMEOUT',
+          details: {
+            paymentProvider: 'PaymentGateway',
+            operation: 'processPayment'
+          }
+        });
+      }
+      
+      // Error de red
+      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        throw new ServiceUnavailableError('No se puede conectar al servicio de pagos', {
+          code: 'PAYMENT_CONNECTION_ERROR',
+          originalError: error
+        });
+      }
+      
+      // Error de respuesta con datos
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        // Mapeo de errores específicos del gateway
+        if (status === 400) {
+          throw new BadRequestError(data.message || 'Datos de pago inválidos', {
+            code: `PAYMENT_ERROR_${data.errorCode || 'UNKNOWN'}`,
+            details: data
+          });
+        }
+        
+        if (status === 401 || status === 403) {
+          throw new BadGatewayError('Error de autenticación con el servicio de pagos', {
+            code: 'PAYMENT_AUTH_ERROR',
+            details: data
+          });
+        }
+        
+        // Error genérico con respuesta
+        throw new BadGatewayError(
+          data.message || 'Error en el procesamiento del pago',
+          {
+            code: `PAYMENT_ERROR_${status}`,
+            details: data
+          }
+        );
+      }
+      
+      // Error desconocido
+      throw new ServiceUnavailableError('Error en el servicio de pagos', {
+        code: 'PAYMENT_UNKNOWN_ERROR',
+        originalError: error
+      });
+    }
+  }
+}
+```
+
+## Debugging y Diagnóstico
+
+### Mejora de Stack Traces
+
+```typescript
+import { FoxError } from 'fox-framework/core/errors';
+import { StackTraceEnhancer } from 'fox-framework/core/debug';
+
+// Configurar el mejorador de stack traces
+const stackTraceEnhancer = new StackTraceEnhancer({
+  // Directorio base de la aplicación para relativizar rutas
+  appRoot: process.cwd(),
+  
+  // Número de líneas de contexto a mostrar
+  contextLines: 3,
+  
+  // Filtrar archivos del framework
+  filterNodeModules: true,
+  
+  // Incluir variables locales cuando sea posible
+  includeLocals: process.env.NODE_ENV !== 'production'
+});
+
+// Extender FoxError para usar stack traces mejorados
+class EnhancedFoxError extends FoxError {
+  constructor(message: string, options?: FoxErrorOptions) {
+    super(message, options);
+    
+    // Mejorar stack trace en modo desarrollo
+    if (process.env.NODE_ENV !== 'production') {
+      this.stack = stackTraceEnhancer.enhance(this);
+    }
+  }
+}
+
+// Usar en el sistema
+export class ValidationError extends EnhancedFoxError {
+  // Implementación como antes
+}
+```
+
+### Error Aggregator para Problemas Recurrentes
+
+```typescript
+import { ErrorAggregator } from 'fox-framework/core/debug';
+
+// Crear un agregador de errores
+const errorAggregator = new ErrorAggregator({
+  // Tiempo para considerar errores como relacionados
+  timeWindow: 5 * 60 * 1000, // 5 minutos
+  
+  // Umbral de errores similares para generar alerta
+  threshold: 5,
+  
+  // Función para determinar si dos errores son similares
+  similarityChecker: (err1, err2) => {
+    // Considerar similares si tienen el mismo código o mensaje
+    return (
+      err1.code === err2.code ||
+      err1.message === err2.message ||
+      (err1.originalError?.name === err2.originalError?.name)
+    );
+  },
+  
+  // Acción a tomar cuando se detectan errores recurrentes
+  onThresholdReached: (errors) => {
+    console.error(`⚠️ Se han detectado ${errors.length} errores similares en los últimos 5 minutos:`, {
+      code: errors[0].code,
+      message: errors[0].message,
+      occurrences: errors.length,
+      firstOccurrence: errors[0].timestamp,
+      lastOccurrence: errors[errors.length - 1].timestamp
+    });
+    
+    // Notificar al sistema de monitorización
+    monitoringService.sendAlert({
+      type: 'ERROR_SPIKE',
+      message: `Spike de errores detectado: ${errors[0].message}`,
+      count: errors.length,
+      samples: errors.slice(0, 3)
+    });
+  }
+});
+
+// Integrarlo con el sistema de errores
+errorHandler.onError((err, req) => {
+  // Registrar en el agregador
+  errorAggregator.add({
+    code: err.code,
+    message: err.message,
+    statusCode: err.statusCode,
+    path: req.path,
+    method: req.method,
+    timestamp: new Date(),
+    originalError: err.originalError
+  });
+});
+```
+
+## Testing
+
+```typescript
+import { expect } from 'chai';
+import { FoxError, NotFoundError } from 'fox-framework/core/errors';
+
+describe('Error Handler', () => {
+  let server;
+  
+  beforeEach(() => {
+    // Crear servidor para testing
+    server = FoxFactory.createServer({
+      port: 3000,
+      errorHandler: {
+        exposeErrors: true // Mostrar detalles completos en tests
+      }
+    });
+    
+    // Configurar rutas para testing
+    server.router.get('/test/not-found', () => {
+      throw new NotFoundError('Recurso de prueba no encontrado');
+    });
+    
+    server.router.get('/test/custom-error', () => {
+      throw new FoxError('Error personalizado', {
+        statusCode: 418, // I'm a teapot
+        code: 'TEAPOT_ERROR',
+        details: { reason: 'Just testing' }
+      });
+    });
+    
+    server.router.get('/test/async-error', async () => {
+      // Simular error asíncrono
+      await Promise.resolve();
+      throw new Error('Error asíncrono no controlado');
+    });
+  });
+  
+  it('should handle NotFoundError correctly', async () => {
+    // Realizar petición
+    const response = await request(server.app)
+      .get('/test/not-found')
+      .set('Accept', 'application/json');
+    
+    // Verificar respuesta
+    expect(response.status).to.equal(404);
+    expect(response.body).to.have.property('message', 'Recurso de prueba no encontrado');
+    expect(response.body).to.have.property('code', 'NOT_FOUND');
+  });
+  
+  it('should handle custom error with custom status code', async () => {
+    const response = await request(server.app)
+      .get('/test/custom-error')
+      .set('Accept', 'application/json');
+    
+    expect(response.status).to.equal(418);
+    expect(response.body).to.have.property('code', 'TEAPOT_ERROR');
+    expect(response.body).to.have.property('details');
+    expect(response.body.details).to.have.property('reason', 'Just testing');
+  });
+  
+  it('should convert unhandled errors to InternalServerError', async () => {
+    const response = await request(server.app)
+      .get('/test/async-error')
+      .set('Accept', 'application/json');
+    
+    expect(response.status).to.equal(500);
+    expect(response.body).to.have.property('code', 'INTERNAL_SERVER_ERROR');
+    
+    // En modo test, debería incluir el stack
+    expect(response.body).to.have.property('stack');
+  });
+  
+  it('should render HTML error page for browser requests', async () => {
+    const response = await request(server.app)
+      .get('/test/not-found')
+      .set('Accept', 'text/html');
+    
+    expect(response.status).to.equal(404);
+    expect(response.type).to.equal('text/html');
+    expect(response.text).to.include('Recurso de prueba no encontrado');
+  });
+});
+```
+
+## Buenas Prácticas
+
+### Jerarquía de Errores
+
+Organiza tus errores en una jerarquía que refleje tus dominios de negocio:
+
+```typescript
+// Error base del framework
+export class FoxError extends Error { /* ... */ }
+
+// Errores HTTP generales
+export class BadRequestError extends FoxError { /* ... */ }
+export class UnauthorizedError extends FoxError { /* ... */ }
+// ...otros errores HTTP
+
+// Errores de dominio
+export class DomainError extends FoxError { /* ... */ }
+
+// Errores específicos de autenticación
+export class AuthError extends DomainError { /* ... */ }
+export class InvalidCredentialsError extends AuthError { /* ... */ }
+export class AccountLockedError extends AuthError { /* ... */ }
+
+// Errores de negocio
+export class BusinessError extends DomainError { /* ... */ }
+export class InsufficientFundsError extends BusinessError { /* ... */ }
+export class ProductOutOfStockError extends BusinessError { /* ... */ }
+
+// Errores de infraestructura
+export class InfrastructureError extends FoxError { /* ... */ }
+export class DatabaseError extends InfrastructureError { /* ... */ }
+export class CacheError extends InfrastructureError { /* ... */ }
+export class NetworkError extends InfrastructureError { /* ... */ }
+
+// Errores de integración
+export class IntegrationError extends InfrastructureError { /* ... */ }
+export class ApiError extends IntegrationError { /* ... */ }
+export class WebhookError extends IntegrationError { /* ... */ }
+```
+
+### Captura Selectiva de Errores
+
+```typescript
+try {
+  // Operación que puede fallar
+  await riskyOperation();
+} catch (error) {
+  // Capturar solo errores específicos
+  if (error instanceof DatabaseError) {
+    // Manejar error de base de datos
+    logger.error('Error de base de datos', { error });
+    throw new ServiceUnavailableError(
+      'El servicio no está disponible en este momento',
+      { originalError: error }
+    );
+  } else if (error instanceof ValidationError) {
+    // Re-lanzar errores de validación directamente
+    throw error;
+  } else if (error instanceof BusinessError) {
+    // Transformar errores de negocio para la capa de presentación
+    throw new BadRequestError(error.message, {
+      code: error.code,
+      details: error.details
+    });
+  } else {
+    // Error desconocido
+    logger.error('Error inesperado', { error });
+    throw new InternalServerError('Ha ocurrido un error inesperado', {
+      originalError: error
+    });
+  }
+}
+```
+
+### Evitar Filtración de Información Sensible
+
+```typescript
+// Función para sanitizar errores antes de enviarlos al cliente
+function sanitizeErrorForResponse(error: any, isProduction: boolean): Record<string, any> {
+  // Clonar para no modificar el original
+  const sanitized: Record<string, any> = {
+    message: error.message,
+    code: error.code || 'UNKNOWN_ERROR',
+    statusCode: error.statusCode || 500
+  };
+  
+  // En producción, ocultar detalles internos
+  if (isProduction) {
+    // Mensajes genéricos para errores de servidor
+    if (sanitized.statusCode >= 500) {
+      sanitized.message = 'Error interno del servidor';
+    }
+    
+    // Evitar exponer detalles de errores de infraestructura
+    if (error instanceof InfrastructureError) {
+      delete sanitized.details;
+    }
+    
+    // Eliminar información sensible
+    const sensitiveFields = ['password', 'token', 'secret', 'key', 'credential'];
+    
+    if (sanitized.details) {
+      for (const field of sensitiveFields) {
+        if (field in sanitized.details) {
+          sanitized.details[field] = '[REDACTED]';
+        }
+      }
+    }
+    
+    // Nunca incluir stack trace en producción
+    delete sanitized.stack;
+    
+  } else {
+    // En desarrollo, incluir stack y detalles
+    if (error.stack) {
+      sanitized.stack = error.stack;
+    }
+    
+    if (error.details) {
+      sanitized.details = error.details;
+    }
+  }
+  
+  return sanitized;
+}
+
+// Usar en el handler de errores
+errorHandler.onError((err, req, res) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const sanitizedError = sanitizeErrorForResponse(err, isProduction);
+  
+  res.status(err.statusCode || 500).json(sanitizedError);
+});
+```
+
+### Registrar Errores de Forma Efectiva
+
+```typescript
+// Configuración del logger para errores
+const errorLogger = {
+  log: (err: FoxError, req: Request) => {
+    // Determinar nivel de log según el tipo de error
+    let level = 'error';
+    
+    if (err.statusCode < 400) level = 'info';
+    else if (err.statusCode < 500) level = 'warn';
+    else level = 'error';
+    
+    // Base del mensaje de log
+    const logData = {
+      statusCode: err.statusCode,
+      code: err.code,
+      message: err.message,
+      path: req.path,
+      method: req.method,
+      requestId: req.id,
+      userId: req.auth?.userId,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Añadir detalles si están disponibles
+    if (err.details) {
+      logData.details = err.details;
+    }
+    
+    // Añadir stack trace para errores de servidor
+    if (err.statusCode >= 500) {
+      logData.stack = err.stack;
+      
+      // Incluir error original si existe
+      if (err.originalError) {
+        logData.originalError = {
+          message: err.originalError.message,
+          name: err.originalError.name,
+          stack: err.originalError.stack
+        };
+      }
+    }
+    
+    // Log según nivel
+    console[level](`[${level.toUpperCase()}] Error handled:`, logData);
+  }
+};
+
+// Registrar en manejador de errores
+errorHandler.setLogger(errorLogger);
+```
+
+## Conclusión
+
+El sistema de manejo de errores de Fox Framework proporciona una forma robusta y flexible para capturar, gestionar y responder a errores en tus aplicaciones. Con su jerarquía de errores tipados, capacidades de personalización y herramientas de diagnóstico, te permite crear aplicaciones resilientes que manejan fallos de forma elegante tanto en desarrollo como en producción.
+
+Al utilizar este sistema de forma efectiva, podrás:
+
+- Proporcionar experiencias de usuario coherentes incluso cuando ocurren errores
+- Depurar problemas más rápidamente con información contextual enriquecida
+- Implementar estrategias específicas de manejo de errores para diferentes situaciones
+- Mantener un registro detallado de errores para análisis y monitorización
+- Asegurar que las respuestas de error son seguras y apropiadas para cada contexto
+
+Recuerda que un buen manejo de errores no sólo mejora la experiencia del usuario, sino que también facilita enormemente el mantenimiento y la evolución de tu aplicación a lo largo del tiempo.

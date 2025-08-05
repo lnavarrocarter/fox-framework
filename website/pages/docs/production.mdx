@@ -1,0 +1,871 @@
+# Configuración de Producción
+
+Esta guía proporciona las mejores prácticas y configuraciones esenciales para desplegar Fox Framework en entornos de producción de manera segura, escalable y confiable.
+
+## Lista de Verificación Pre-Producción
+
+### ✅ Seguridad
+- [ ] Variables de entorno configuradas correctamente
+- [ ] Secretos almacenados de forma segura
+- [ ] HTTPS/TLS habilitado
+- [ ] CORS configurado apropiadamente
+- [ ] Rate limiting implementado
+- [ ] Validación de entrada robusta
+- [ ] Headers de seguridad configurados
+- [ ] Logs sanitizados (sin secretos)
+
+### ✅ Rendimiento
+- [ ] Caché configurado y optimizado
+- [ ] Pool de conexiones de BD ajustado
+- [ ] Assets estáticos optimizados
+- [ ] Compresión habilitada
+- [ ] CDN configurado
+- [ ] Queries de BD optimizadas
+- [ ] Memory leaks auditados
+
+### ✅ Observabilidad
+- [ ] Logging estructurado configurado
+- [ ] Métricas de aplicación implementadas
+- [ ] Health checks funcionando
+- [ ] Alertas configuradas
+- [ ] Dashboards desplegados
+- [ ] Error tracking activo
+
+### ✅ Reliability
+- [ ] Backups automatizados
+- [ ] Disaster recovery plan
+- [ ] Circuit breakers implementados
+- [ ] Graceful shutdown configurado
+- [ ] Auto-scaling configurado
+- [ ] Load balancing activo
+
+## Configuración del Entorno
+
+### Variables de Entorno de Producción
+
+```env
+# Aplicación
+NODE_ENV=production
+APP_NAME=fox-framework-app
+APP_VERSION=1.0.0
+PORT=3000
+HOST=0.0.0.0
+
+# Base de datos
+DATABASE_URL=postgresql://user:password@db-cluster:5432/production_db
+DATABASE_SSL=true
+DATABASE_POOL_MIN=2
+DATABASE_POOL_MAX=20
+DATABASE_POOL_IDLE_TIMEOUT=10000
+DATABASE_POOL_ACQUIRE_TIMEOUT=10000
+
+# Cache/Redis
+REDIS_URL=redis://redis-cluster:6379
+REDIS_PASSWORD=secure_redis_password
+REDIS_MAX_RETRIES=3
+REDIS_RETRY_DELAY=100
+
+# Seguridad
+JWT_SECRET=ultra-secure-jwt-secret-min-32-chars
+JWT_EXPIRES_IN=7d
+SESSION_SECRET=ultra-secure-session-secret-min-32-chars
+BCRYPT_ROUNDS=12
+
+# CORS
+CORS_ORIGIN=https://yourdomain.com,https://www.yourdomain.com
+CORS_CREDENTIALS=true
+
+# Rate Limiting
+RATE_LIMIT_WINDOW=15
+RATE_LIMIT_MAX=100
+
+# SSL/TLS
+SSL_CERT_PATH=/etc/ssl/certs/app.crt
+SSL_KEY_PATH=/etc/ssl/private/app.key
+
+# Logging
+LOG_LEVEL=info
+LOG_FORMAT=json
+LOG_FILE=/var/log/app/app.log
+LOG_MAX_SIZE=100m
+LOG_MAX_FILES=10
+
+# Monitoring
+PROMETHEUS_ENABLED=true
+PROMETHEUS_PORT=9090
+HEALTH_CHECK_PORT=8080
+
+# Email
+EMAIL_PROVIDER=sendgrid
+EMAIL_API_KEY=your_sendgrid_api_key
+EMAIL_FROM=noreply@yourdomain.com
+
+# Storage
+STORAGE_PROVIDER=aws
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=your-production-bucket
+
+# External APIs
+PAYMENT_GATEWAY_URL=https://api.payment-provider.com
+PAYMENT_GATEWAY_API_KEY=your_payment_api_key
+```
+
+### Configuración Principal de Producción
+
+**src/config/production.ts**
+```typescript
+import { FoxConfig } from 'fox-framework/core';
+import { SecurityConfig } from 'fox-framework/security';
+import { DatabaseConfig } from 'fox-framework/database';
+
+export const productionConfig: FoxConfig = {
+  // Servidor
+  server: {
+    port: parseInt(process.env.PORT || '3000'),
+    host: process.env.HOST || '0.0.0.0',
+    trustProxy: true,
+    keepAliveTimeout: 65000,
+    headersTimeout: 66000,
+    maxHeaderSize: 8192,
+    
+    // SSL/TLS
+    ssl: {
+      enabled: true,
+      cert: process.env.SSL_CERT_PATH,
+      key: process.env.SSL_KEY_PATH,
+      redirectHttp: true
+    }
+  },
+
+  // Base de datos
+  database: {
+    url: process.env.DATABASE_URL!,
+    ssl: {
+      rejectUnauthorized: true,
+      require: true
+    },
+    pool: {
+      min: parseInt(process.env.DATABASE_POOL_MIN || '2'),
+      max: parseInt(process.env.DATABASE_POOL_MAX || '20'),
+      idleTimeoutMillis: parseInt(process.env.DATABASE_POOL_IDLE_TIMEOUT || '10000'),
+      acquireTimeoutMillis: parseInt(process.env.DATABASE_POOL_ACQUIRE_TIMEOUT || '10000')
+    },
+    logging: false, // Deshabilitado en producción por rendimiento
+    retryAttempts: 3,
+    retryDelay: 3000
+  },
+
+  // Cache
+  cache: {
+    type: 'redis',
+    url: process.env.REDIS_URL!,
+    password: process.env.REDIS_PASSWORD,
+    ttl: 3600,
+    maxMemory: '512mb',
+    evictionPolicy: 'allkeys-lru',
+    retryAttempts: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
+    retryDelay: parseInt(process.env.REDIS_RETRY_DELAY || '100')
+  },
+
+  // Seguridad
+  security: {
+    cors: {
+      origin: process.env.CORS_ORIGIN?.split(',') || false,
+      credentials: process.env.CORS_CREDENTIALS === 'true',
+      maxAge: 86400 // 24 horas
+    },
+    
+    helmet: {
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:", "https:"],
+          connectSrc: ["'self'", "https://api.yourdomain.com"]
+        }
+      },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+      }
+    },
+    
+    rateLimit: {
+      windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || '15') * 60 * 1000,
+      max: parseInt(process.env.RATE_LIMIT_MAX || '100'),
+      standardHeaders: true,
+      legacyHeaders: false
+    },
+    
+    jwt: {
+      secret: process.env.JWT_SECRET!,
+      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+      algorithm: 'HS256'
+    }
+  },
+
+  // Logging
+  logging: {
+    level: process.env.LOG_LEVEL || 'info',
+    format: process.env.LOG_FORMAT as 'json' | 'simple' || 'json',
+    transports: [
+      {
+        type: 'console',
+        silent: false
+      },
+      {
+        type: 'file',
+        filename: process.env.LOG_FILE || '/var/log/app/app.log',
+        maxSize: process.env.LOG_MAX_SIZE || '100m',
+        maxFiles: parseInt(process.env.LOG_MAX_FILES || '10')
+      }
+    ]
+  },
+
+  // Monitoring
+  monitoring: {
+    enabled: true,
+    prometheus: {
+      enabled: process.env.PROMETHEUS_ENABLED === 'true',
+      port: parseInt(process.env.PROMETHEUS_PORT || '9090'),
+      path: '/metrics'
+    },
+    health: {
+      enabled: true,
+      port: parseInt(process.env.HEALTH_CHECK_PORT || '8080'),
+      path: '/health'
+    }
+  }
+};
+```
+
+## Optimización de Base de Datos
+
+### Configuración de Pool de Conexiones
+
+```typescript
+export const databaseConfig: DatabaseConfig = {
+  // Pool de conexiones optimizado para producción
+  pool: {
+    min: 2,  // Mínimo de conexiones siempre activas
+    max: 20, // Máximo basado en la capacidad del servidor DB
+    idleTimeoutMillis: 10000,   // 10 segundos
+    acquireTimeoutMillis: 10000, // 10 segundos
+    createTimeoutMillis: 3000,   // 3 segundos
+    destroyTimeoutMillis: 5000,  // 5 segundos
+    reapIntervalMillis: 1000,    // 1 segundo
+    createRetryIntervalMillis: 100
+  },
+
+  // Configuración de performance
+  performance: {
+    // Preparar statements para mejor performance
+    prepareStatements: true,
+    
+    // Query timeout
+    queryTimeout: 30000,
+    
+    // Statement timeout
+    statementTimeout: 10000,
+    
+    // Auto-vacuum configurado
+    autoVacuum: true
+  },
+
+  // Monitoring de queries
+  monitoring: {
+    // Log queries lentas
+    logSlowQueries: true,
+    slowQueryThreshold: 1000, // 1 segundo
+    
+    // Métricas de conexiones
+    trackConnectionMetrics: true
+  }
+};
+```
+
+### Índices y Optimizaciones
+
+```sql
+-- Índices recomendados para performance
+CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
+CREATE INDEX CONCURRENTLY idx_users_active ON users(active) WHERE active = true;
+CREATE INDEX CONCURRENTLY idx_posts_published_at ON posts(published_at) WHERE published = true;
+CREATE INDEX CONCURRENTLY idx_sessions_expires_at ON sessions(expires_at);
+
+-- Índices compuestos para queries complejas
+CREATE INDEX CONCURRENTLY idx_orders_user_status ON orders(user_id, status, created_at);
+CREATE INDEX CONCURRENTLY idx_products_category_price ON products(category_id, price) WHERE active = true;
+
+-- Configuración de autovacuum optimizada
+ALTER TABLE users SET (autovacuum_vacuum_scale_factor = 0.1);
+ALTER TABLE posts SET (autovacuum_vacuum_scale_factor = 0.1);
+ALTER TABLE orders SET (autovacuum_analyze_scale_factor = 0.05);
+```
+
+## Configuración de Cache
+
+### Redis Optimizado para Producción
+
+```typescript
+import { CacheConfig } from 'fox-framework/cache';
+
+export const cacheConfig: CacheConfig = {
+  redis: {
+    // Configuración de conexión
+    url: process.env.REDIS_URL,
+    password: process.env.REDIS_PASSWORD,
+    
+    // Pool de conexiones
+    pool: {
+      min: 2,
+      max: 10
+    },
+    
+    // Configuración de memoria
+    maxMemory: '512mb',
+    evictionPolicy: 'allkeys-lru',
+    
+    // Persistencia (para datos críticos)
+    persistence: {
+      rdb: {
+        enabled: true,
+        saveInterval: 900 // 15 minutos
+      },
+      aof: {
+        enabled: true,
+        policy: 'everysec'
+      }
+    },
+    
+    // Configuración de red
+    network: {
+      keepAlive: true,
+      connectTimeout: 10000,
+      lazyConnect: true,
+      maxRetriesPerRequest: 3,
+      retryDelayOnFailover: 100
+    }
+  },
+  
+  // Estrategias de cache
+  strategies: {
+    // Cache de sesiones (crítico)
+    sessions: {
+      ttl: 86400, // 24 horas
+      refreshOnAccess: true
+    },
+    
+    // Cache de datos de usuario
+    userData: {
+      ttl: 3600, // 1 hora
+      refreshOnAccess: false
+    },
+    
+    // Cache de contenido estático
+    staticContent: {
+      ttl: 604800, // 1 semana
+      refreshOnAccess: false
+    }
+  }
+};
+```
+
+### Implementación de Cache Multi-Layer
+
+```typescript
+export class ProductionCacheManager {
+  private l1Cache: Map<string, any>; // Memory cache
+  private l2Cache: RedisCache;        // Redis cache
+  private l3Cache: DatabaseCache;     // Database cache
+
+  constructor() {
+    this.l1Cache = new Map();
+    this.l2Cache = new RedisCache(cacheConfig.redis);
+    this.l3Cache = new DatabaseCache();
+  }
+
+  async get(key: string): Promise<any> {
+    // L1 (Memory) - Más rápido
+    if (this.l1Cache.has(key)) {
+      return this.l1Cache.get(key);
+    }
+
+    // L2 (Redis) - Rápido y distribuido
+    const l2Value = await this.l2Cache.get(key);
+    if (l2Value !== null) {
+      this.l1Cache.set(key, l2Value);
+      return l2Value;
+    }
+
+    // L3 (Database) - Fallback
+    const l3Value = await this.l3Cache.get(key);
+    if (l3Value !== null) {
+      await this.l2Cache.set(key, l3Value, 3600);
+      this.l1Cache.set(key, l3Value);
+      return l3Value;
+    }
+
+    return null;
+  }
+}
+```
+
+## Gestión de Secretos
+
+### Usando HashiCorp Vault
+
+```typescript
+import { VaultClient } from 'fox-framework/vault';
+
+export class SecretManager {
+  private vault: VaultClient;
+
+  constructor() {
+    this.vault = new VaultClient({
+      endpoint: process.env.VAULT_ENDPOINT,
+      token: process.env.VAULT_TOKEN,
+      namespace: process.env.VAULT_NAMESPACE
+    });
+  }
+
+  async getSecret(path: string): Promise<string> {
+    try {
+      const secret = await this.vault.read(path);
+      return secret.data.value;
+    } catch (error) {
+      throw new Error(`Failed to retrieve secret from path: ${path}`);
+    }
+  }
+
+  async getDatabaseCredentials(): Promise<DatabaseCredentials> {
+    const credentials = await this.vault.read('database/creds/production');
+    return {
+      username: credentials.data.username,
+      password: credentials.data.password,
+      host: credentials.data.host,
+      port: credentials.data.port
+    };
+  }
+}
+```
+
+### Configuración con AWS Secrets Manager
+
+```typescript
+import { SecretsManager } from 'aws-sdk';
+
+export class AWSSecretManager {
+  private secretsManager: SecretsManager;
+
+  constructor() {
+    this.secretsManager = new SecretsManager({
+      region: process.env.AWS_REGION
+    });
+  }
+
+  async getSecret(secretId: string): Promise<any> {
+    try {
+      const result = await this.secretsManager.getSecretValue({
+        SecretId: secretId
+      }).promise();
+
+      return JSON.parse(result.SecretString!);
+    } catch (error) {
+      throw new Error(`Failed to retrieve secret: ${secretId}`);
+    }
+  }
+}
+```
+
+## Configuración de Logging Avanzado
+
+### Logging Estructurado
+
+```typescript
+import { Logger, LogLevel } from 'fox-framework/logging';
+
+export const productionLogger = new Logger({
+  level: LogLevel.INFO,
+  format: 'json',
+  
+  // Campos estándar en todos los logs
+  defaultFields: {
+    service: 'fox-framework-app',
+    version: process.env.APP_VERSION,
+    environment: 'production',
+    hostname: process.env.HOSTNAME
+  },
+  
+  // Transports para diferentes destinos
+  transports: [
+    // Console (para contenedores)
+    {
+      type: 'console',
+      format: 'json',
+      level: 'info'
+    },
+    
+    // Archivo local (rotación automática)
+    {
+      type: 'file',
+      filename: '/var/log/app/app.log',
+      maxSize: '100m',
+      maxFiles: 10,
+      format: 'json'
+    },
+    
+    // Elasticsearch (centralizado)
+    {
+      type: 'elasticsearch',
+      node: process.env.ELASTICSEARCH_URL,
+      index: 'fox-framework-logs',
+      level: 'info'
+    },
+    
+    // CloudWatch (AWS)
+    {
+      type: 'cloudwatch',
+      logGroupName: '/aws/ec2/fox-framework-app',
+      logStreamName: process.env.HOSTNAME,
+      region: process.env.AWS_REGION
+    }
+  ],
+  
+  // Sanitización para production
+  sanitize: {
+    fields: ['password', 'token', 'secret', 'key'],
+    replacement: '[REDACTED]'
+  }
+});
+```
+
+### Correlación de Logs
+
+```typescript
+export class LogCorrelationMiddleware {
+  static middleware() {
+    return (req: Request, res: Response, next: NextFunction) => {
+      // Generar o extraer correlation ID
+      const correlationId = req.headers['x-correlation-id'] || 
+                           req.headers['x-request-id'] || 
+                           this.generateCorrelationId();
+
+      // Agregar al contexto de la request
+      req.correlationId = correlationId;
+      
+      // Agregar header a la respuesta
+      res.setHeader('x-correlation-id', correlationId);
+      
+      // Configurar logger con contexto
+      req.logger = productionLogger.child({
+        correlationId,
+        requestId: correlationId,
+        userId: req.user?.id,
+        userAgent: req.headers['user-agent'],
+        ip: req.ip
+      });
+
+      next();
+    };
+  }
+
+  private static generateCorrelationId(): string {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+}
+```
+
+## Performance y Escalabilidad
+
+### Auto-scaling Configuración
+
+```yaml
+# Kubernetes HPA (Horizontal Pod Autoscaler)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fox-framework-app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fox-framework-app
+  minReplicas: 2
+  maxReplicas: 50
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+```
+
+### Circuit Breaker Pattern
+
+```typescript
+import { CircuitBreaker } from 'fox-framework/patterns';
+
+export class ExternalServiceClient {
+  private circuitBreaker: CircuitBreaker;
+
+  constructor() {
+    this.circuitBreaker = new CircuitBreaker({
+      // Threshold para abrir el circuit
+      failureThreshold: 5,
+      
+      // Tiempo antes de intentar half-open
+      timeout: 60000,
+      
+      // Monitor de circuit breaker
+      monitor: true,
+      
+      // Callback cuando se abre
+      onOpen: () => {
+        logger.warn('Circuit breaker opened for external service');
+      },
+      
+      // Callback cuando se cierra
+      onClose: () => {
+        logger.info('Circuit breaker closed for external service');
+      }
+    });
+  }
+
+  async callExternalAPI(data: any): Promise<any> {
+    return this.circuitBreaker.fire(async () => {
+      const response = await fetch('https://external-api.com/endpoint', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        timeout: 5000
+      });
+
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.status}`);
+      }
+
+      return response.json();
+    });
+  }
+}
+```
+
+## Graceful Shutdown
+
+```typescript
+export class GracefulShutdown {
+  private server: Server;
+  private connections: Set<Socket> = new Set();
+  private isShuttingDown = false;
+
+  constructor(server: Server) {
+    this.server = server;
+    this.setupSignalHandlers();
+    this.trackConnections();
+  }
+
+  private setupSignalHandlers() {
+    const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT', 'SIGQUIT'];
+    
+    signals.forEach(signal => {
+      process.on(signal, async () => {
+        logger.info(`Received ${signal}, starting graceful shutdown`);
+        await this.shutdown();
+      });
+    });
+  }
+
+  private trackConnections() {
+    this.server.on('connection', (socket) => {
+      this.connections.add(socket);
+      
+      socket.on('close', () => {
+        this.connections.delete(socket);
+      });
+    });
+  }
+
+  private async shutdown(): Promise<void> {
+    if (this.isShuttingDown) return;
+    
+    this.isShuttingDown = true;
+
+    try {
+      // 1. Parar de aceptar nuevas conexiones
+      this.server.close();
+      
+      // 2. Esperar que las requests activas terminen (max 30s)
+      await this.waitForActiveConnections(30000);
+      
+      // 3. Cerrar conexiones de base de datos
+      await this.closeDatabaseConnections();
+      
+      // 4. Cerrar conexiones de cache
+      await this.closeCacheConnections();
+      
+      // 5. Finalizar procesos en background
+      await this.stopBackgroundJobs();
+      
+      logger.info('Graceful shutdown completed');
+      process.exit(0);
+      
+    } catch (error) {
+      logger.error('Error during graceful shutdown', { error });
+      process.exit(1);
+    }
+  }
+
+  private async waitForActiveConnections(timeout: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        logger.warn('Force closing remaining connections');
+        this.connections.forEach(socket => socket.destroy());
+        resolve();
+      }, timeout);
+
+      const checkConnections = () => {
+        if (this.connections.size === 0) {
+          clearTimeout(timer);
+          resolve();
+        } else {
+          setTimeout(checkConnections, 100);
+        }
+      };
+
+      checkConnections();
+    });
+  }
+}
+```
+
+## Disaster Recovery
+
+### Backup Automatizado
+
+```typescript
+export class BackupManager {
+  async performBackup(): Promise<void> {
+    const timestamp = new Date().toISOString();
+    const backupId = `backup-${timestamp}`;
+
+    try {
+      // 1. Backup de base de datos
+      await this.backupDatabase(backupId);
+      
+      // 2. Backup de archivos
+      await this.backupFiles(backupId);
+      
+      // 3. Backup de configuración
+      await this.backupConfiguration(backupId);
+      
+      // 4. Verificar integridad
+      await this.verifyBackup(backupId);
+      
+      // 5. Limpiar backups antiguos
+      await this.cleanupOldBackups();
+      
+      logger.info('Backup completed successfully', { backupId });
+      
+    } catch (error) {
+      logger.error('Backup failed', { error, backupId });
+      throw error;
+    }
+  }
+
+  private async backupDatabase(backupId: string): Promise<void> {
+    const backupFile = `/backups/db/${backupId}.sql`;
+    
+    await execAsync(`pg_dump ${process.env.DATABASE_URL} > ${backupFile}`);
+    await this.uploadToS3(backupFile, `database/${backupId}.sql`);
+  }
+}
+```
+
+## Mejores Prácticas de Seguridad
+
+### Middleware de Seguridad
+
+```typescript
+export class ProductionSecurityMiddleware {
+  static configure(app: Express): void {
+    // Security headers
+    app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https:"]
+        }
+      },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+      }
+    }));
+
+    // Rate limiting
+    app.use('/api/', rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutos
+      max: 100,
+      message: 'Too many requests from this IP'
+    }));
+
+    // Request sanitization
+    app.use(this.sanitizeMiddleware());
+    
+    // CORS
+    app.use(cors({
+      origin: process.env.CORS_ORIGIN?.split(','),
+      credentials: true,
+      maxAge: 86400
+    }));
+  }
+
+  private static sanitizeMiddleware() {
+    return (req: Request, res: Response, next: NextFunction) => {
+      // Sanitizar parámetros de query
+      for (const key in req.query) {
+        if (typeof req.query[key] === 'string') {
+          req.query[key] = this.sanitizeString(req.query[key] as string);
+        }
+      }
+      
+      // Sanitizar body
+      if (req.body && typeof req.body === 'object') {
+        this.sanitizeObject(req.body);
+      }
+      
+      next();
+    };
+  }
+}
+```
+
+Esta configuración de producción te proporciona una base sólida para ejecutar Fox Framework en entornos empresariales con alta disponibilidad, seguridad y rendimiento óptimos.
