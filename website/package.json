@@ -4,9 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "GITHUB_PAGES=true next build",
+    "build:local": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "export": "GITHUB_PAGES=true next build && next export",
+    "deploy": "npm run export && touch out/.nojekyll"
   },
   "dependencies": {
     "next": "^13.4.19",

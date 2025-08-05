@@ -20,6 +20,10 @@ const config: DocsThemeConfig = {
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <meta name="description" content="Fox Framework: Un framework web moderno para TypeScript/Node.js" />
       <meta name="og:title" content="Fox Framework" />
+      <meta name="og:description" content="Framework web moderno para TypeScript/Node.js con arquitectura escalable" />
+      <meta name="og:url" content="https://lnavarrocarter.github.io/fox-framework/" />
+      <meta name="og:image" content="https://lnavarrocarter.github.io/fox-framework/fox-framework-og.png" />
+      <link rel="canonical" href="https://lnavarrocarter.github.io/fox-framework/" />
     </>
   ),
   faviconGlyph: '🦊',
@@ -32,6 +36,14 @@ const config: DocsThemeConfig = {
   navigation: {
     prev: true,
     next: true,
+  },
+  // Configuración para GitHub Pages
+  editLink: {
+    text: 'Editar esta página en GitHub →'
+  },
+  feedback: {
+    content: '¿Alguna pregunta? Danos tu feedback →',
+    labels: 'feedback'
   },
 }
 

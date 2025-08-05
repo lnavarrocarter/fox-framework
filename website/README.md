@@ -1,13 +1,86 @@
-# Sitio Web de Fox Framework
+# Fox Framework Documentation Website
 
-Este directorio contiene el código fuente del sitio web oficial de Fox Framework, que sirve como documentación, guía y portal de recursos para desarrolladores.
+Este directorio contiene el sitio web de documentación de Fox Framework, construido con [Nextra](https://nextra.site/) y [Next.js](https://nextjs.org/).
 
-## Tecnologías Utilizadas
+## 🚀 Desarrollo Local
 
-- [Next.js](https://nextjs.org/) - Framework React con renderizado del lado del servidor
-- [Nextra](https://nextra.site/) - Framework de documentación construido sobre Next.js
-- [Tailwind CSS](https://tailwindcss.com/) - Framework de CSS utilitario
-- [MDX](https://mdxjs.com/) - Markdown con componentes JSX
+```bash
+# Instalar dependencias
+npm install
+
+# Ejecutar en modo desarrollo
+npm run dev
+
+# El sitio estará disponible en http://localhost:3000
+```
+
+## 📦 Build y Deploy
+
+### Build Local
+```bash
+# Build para desarrollo local
+npm run build:local
+
+# Build para GitHub Pages
+npm run build
+```
+
+### Deploy Automático
+
+El sitio se despliega automáticamente a GitHub Pages cuando se hacen cambios en:
+- `website/**` 
+- `docs/**`
+- `.github/workflows/deploy-docs.yml`
+
+### Deploy Manual
+
+```bash
+# Build y export para GitHub Pages
+npm run export
+
+# O ejecutar todo el proceso de deploy
+npm run deploy
+```
+
+## 📁 Estructura
+
+```
+website/
+├── pages/           # Páginas de la documentación
+│   ├── docs/        # Documentación principal
+│   ├── guides/      # Guías y tutoriales
+│   ├── examples/    # Ejemplos de código
+│   └── api-reference/ # Referencia de API
+├── public/          # Assets estáticos
+├── components/      # Componentes React personalizados
+├── styles/          # Estilos CSS personalizados
+├── next.config.js   # Configuración de Next.js
+├── theme.config.tsx # Configuración del tema Nextra
+└── package.json     # Dependencies y scripts
+```
+
+## 🌍 URLs
+
+- **Desarrollo**: http://localhost:3000
+- **Producción**: https://lnavarrocarter.github.io/fox-framework/
+
+## 📝 Contribuir
+
+Para contribuir a la documentación:
+
+1. Edita los archivos MDX en `pages/docs/`
+2. Agrega nuevas páginas siguiendo la estructura existente
+3. Actualiza `_meta.json` para el menú de navegación
+4. Haz commit y push - el deploy es automático
+
+## 🛠️ Tecnologías
+
+- **Next.js 13+**: Framework React
+- **Nextra**: Generador de sitios de documentación
+- **TypeScript**: Tipado estático
+- **Tailwind CSS**: Framework CSS
+- **GitHub Pages**: Hosting estático
+- **GitHub Actions**: CI/CD automático
 
 ## Estructura del Proyecto
 
