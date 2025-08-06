@@ -1,0 +1,852 @@
+# Autenticación JWT
+
+Este ejemplo muestra cómo implementar un sistema completo de autenticación JWT con registro, login, protección de rutas y refreshing de tokens.
+
+## Controlador de Autenticación
+
+```typescript
+// src/controllers/auth.controller.ts
+import { Request, Response } from '@foxframework/core';
+import { AuthMiddleware } from '@foxframework/core/security';
+import bcrypt from 'bcrypt';
+import { EmailService } from '../services/email.service';
+
+interface User {
+  id: number;
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: 'user' | 'admin';
+  isActive: boolean;
+  emailVerified: boolean;
+  createdAt: Date;
+  lastLogin?: Date;
+}
+
+interface RegisterRequest {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+}
+
+interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export class AuthController {
+  private users: User[] = [
+    {
+      id: 1,
+      email: 'admin@example.com',
+      password: '$2b$10$rYgQ8gF.XPKdGVLZfCKZHOGfQ8GfQ8GfQ8GfQ8GfQ8GfQ8GfQ8GfQ8', // "admin123"
+      firstName: 'Admin',
+      lastName: 'User',
+      role: 'admin',
+      isActive: true,
+      emailVerified: true,
+      createdAt: new Date('2024-01-01')
+    }
+  ];
+
+  private refreshTokens: Map<string, { userId: number; expiresAt: Date }> = new Map();
+  private emailService = new EmailService();
+
+  // POST /auth/register
+  register = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { email, password, firstName, lastName }: RegisterRequest = req.body;
+
+      // Validación de entrada
+      if (!email || !password || !firstName || !lastName) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'All fields are required'
+        });
+      }
+
+      // Validar formato de email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'Invalid email format'
+        });
+      }
+
+      // Validar complejidad de contraseña
+      if (password.length < 8) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'Password must be at least 8 characters long'
+        });
+      }
+
+      // Verificar si el usuario ya existe
+      const existingUser = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      if (existingUser) {
+        return res.status(409).json({
+          error: 'User already exists',
+          message: 'A user with this email already exists'
+        });
+      }
+
+      // Hash de la contraseña
+      const saltRounds = 12;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // Crear nuevo usuario
+      const newUser: User = {
+        id: this.users.length + 1,
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        firstName,
+        lastName,
+        role: 'user',
+        isActive: true,
+        emailVerified: false,
+        createdAt: new Date()
+      };
+
+      this.users.push(newUser);
+
+      // Generar token de verificación de email
+      const emailVerificationToken = AuthMiddleware.generateToken(
+        { userId: newUser.id, type: 'email-verification' },
+        {
+          secret: process.env.JWT_SECRET || 'your-secret-key',
+          expiresIn: '24h'
+        }
+      );
+
+      // Enviar email de verificación
+      await this.emailService.sendVerificationEmail(
+        newUser.email,
+        newUser.firstName,
+        emailVerificationToken
+      );
+
+      // No devolver la contraseña
+      const { password: _, ...userResponse } = newUser;
+
+      res.status(201).json({
+        message: 'User registered successfully. Please check your email to verify your account.',
+        data: userResponse
+      });
+
+    } catch (error) {
+      console.error('Registration error:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'An error occurred during registration'
+      });
+    }
+  };
+
+  // POST /auth/login
+  login = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { email, password }: LoginRequest = req.body;
+
+      // Validación de entrada
+      if (!email || !password) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'Email and password are required'
+        });
+      }
+
+      // Buscar usuario
+      const user = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      if (!user) {
+        return res.status(401).json({
+          error: 'Authentication failed',
+          message: 'Invalid credentials'
+        });
+      }
+
+      // Verificar que el usuario esté activo
+      if (!user.isActive) {
+        return res.status(401).json({
+          error: 'Account disabled',
+          message: 'Your account has been disabled. Please contact support.'
+        });
+      }
+
+      // Verificar contraseña
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          error: 'Authentication failed',
+          message: 'Invalid credentials'
+        });
+      }
+
+      // Generar tokens
+      const accessToken = AuthMiddleware.generateToken(
+        {
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          type: 'access'
+        },
+        {
+          secret: process.env.JWT_SECRET || 'your-secret-key',
+          expiresIn: '15m'
+        }
+      );
+
+      const refreshToken = AuthMiddleware.generateToken(
+        {
+          userId: user.id,
+          type: 'refresh'
+        },
+        {
+          secret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret',
+          expiresIn: '7d'
+        }
+      );
+
+      // Guardar refresh token
+      this.refreshTokens.set(refreshToken, {
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 días
+      });
+
+      // Actualizar último login
+      user.lastLogin = new Date();
+
+      // Configurar cookie httpOnly para el refresh token
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 días
+      });
+
+      // No devolver la contraseña
+      const { password: _, ...userResponse } = user;
+
+      res.json({
+        message: 'Login successful',
+        data: {
+          user: userResponse,
+          accessToken,
+          expiresIn: 900 // 15 minutes in seconds
+        }
+      });
+
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'An error occurred during login'
+      });
+    }
+  };
+
+  // POST /auth/refresh
+  refreshToken = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const refreshToken = req.cookies.refreshToken;
+
+      if (!refreshToken) {
+        return res.status(401).json({
+          error: 'No refresh token',
+          message: 'Refresh token not found'
+        });
+      }
+
+      // Verificar si el token existe en nuestro store
+      const tokenData = this.refreshTokens.get(refreshToken);
+      if (!tokenData || tokenData.expiresAt < new Date()) {
+        this.refreshTokens.delete(refreshToken);
+        return res.status(401).json({
+          error: 'Invalid refresh token',
+          message: 'Refresh token is invalid or expired'
+        });
+      }
+
+      // Buscar usuario
+      const user = this.users.find(u => u.id === tokenData.userId);
+      if (!user || !user.isActive) {
+        this.refreshTokens.delete(refreshToken);
+        return res.status(401).json({
+          error: 'User not found',
+          message: 'User associated with token not found or inactive'
+        });
+      }
+
+      // Generar nuevo access token
+      const newAccessToken = AuthMiddleware.generateToken(
+        {
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          type: 'access'
+        },
+        {
+          secret: process.env.JWT_SECRET || 'your-secret-key',
+          expiresIn: '15m'
+        }
+      );
+
+      res.json({
+        message: 'Token refreshed successfully',
+        data: {
+          accessToken: newAccessToken,
+          expiresIn: 900 // 15 minutes
+        }
+      });
+
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'An error occurred while refreshing token'
+      });
+    }
+  };
+
+  // POST /auth/logout
+  logout = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const refreshToken = req.cookies.refreshToken;
+
+      // Eliminar refresh token del store
+      if (refreshToken) {
+        this.refreshTokens.delete(refreshToken);
+      }
+
+      // Limpiar cookie
+      res.clearCookie('refreshToken');
+
+      res.json({
+        message: 'Logout successful'
+      });
+
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'An error occurred during logout'
+      });
+    }
+  };
+
+  // GET /auth/profile
+  getProfile = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'User not authenticated'
+        });
+      }
+
+      const user = this.users.find(u => u.id === userId);
+      if (!user) {
+        return res.status(404).json({
+          error: 'User not found',
+          message: 'User profile not found'
+        });
+      }
+
+      // No devolver la contraseña
+      const { password: _, ...userResponse } = user;
+
+      res.json({
+        data: userResponse
+      });
+
+    } catch (error) {
+      console.error('Get profile error:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'An error occurred while fetching profile'
+      });
+    }
+  };
+
+  // POST /auth/verify-email
+  verifyEmail = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { token } = req.body;
+
+      if (!token) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'Verification token is required'
+        });
+      }
+
+      // Verificar token (aquí deberías usar una función de verificación JWT)
+      // const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      // Por simplicidad, asumimos que el token es válido
+
+      const user = this.users.find(u => u.id === 1); // Ejemplo
+      if (user) {
+        user.emailVerified = true;
+      }
+
+      res.json({
+        message: 'Email verified successfully'
+      });
+
+    } catch (error) {
+      console.error('Email verification error:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'An error occurred during email verification'
+      });
+    }
+  };
+
+  // POST /auth/forgot-password
+  forgotPassword = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'Email is required'
+        });
+      }
+
+      const user = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      
+      // Por seguridad, siempre retornamos el mismo mensaje
+      // incluso si el usuario no existe
+      if (user) {
+        const resetToken = AuthMiddleware.generateToken(
+          { userId: user.id, type: 'password-reset' },
+          {
+            secret: process.env.JWT_SECRET || 'your-secret-key',
+            expiresIn: '1h'
+          }
+        );
+
+        await this.emailService.sendPasswordResetEmail(
+          user.email,
+          user.firstName,
+          resetToken
+        );
+      }
+
+      res.json({
+        message: 'If an account with that email exists, we have sent a password reset link.'
+      });
+
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'An error occurred while processing password reset'
+      });
+    }
+  };
+}
+```
+
+## Servicio de Email
+
+```typescript
+// src/services/email.service.ts
+import nodemailer from 'nodemailer';
+
+export class EmailService {
+  private transporter: nodemailer.Transporter;
+
+  constructor() {
+    this.transporter = nodemailer.createTransporter({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: false, // true for 465, false for other ports
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  }
+
+  async sendVerificationEmail(email: string, firstName: string, token: string): Promise<void> {
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+
+    const mailOptions = {
+      from: `"${process.env.APP_NAME}" <${process.env.SMTP_FROM}>`,
+      to: email,
+      subject: 'Verify your email address',
+      html: `
+        <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
+          <h2>Welcome to ${process.env.APP_NAME}, ${firstName}!</h2>
+          <p>Thanks for signing up! Please verify your email address by clicking the button below:</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${verificationUrl}" 
+               style="background-color: #007bff; color: white; padding: 12px 24px; 
+                      text-decoration: none; border-radius: 4px; display: inline-block;">
+              Verify Email Address
+            </a>
+          </div>
+          
+          <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
+          
+          <p><small>This link will expire in 24 hours.</small></p>
+          
+          <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+          <p style="color: #666; font-size: 14px;">
+            If you didn't create an account, you can safely ignore this email.
+          </p>
+        </div>
+      `
+    };
+
+    await this.transporter.sendMail(mailOptions);
+  }
+
+  async sendPasswordResetEmail(email: string, firstName: string, token: string): Promise<void> {
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+
+    const mailOptions = {
+      from: `"${process.env.APP_NAME}" <${process.env.SMTP_FROM}>`,
+      to: email,
+      subject: 'Reset your password',
+      html: `
+        <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
+          <h2>Password Reset Request</h2>
+          <p>Hi ${firstName},</p>
+          <p>You requested to reset your password. Click the button below to create a new password:</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetUrl}" 
+               style="background-color: #dc3545; color: white; padding: 12px 24px; 
+                      text-decoration: none; border-radius: 4px; display: inline-block;">
+              Reset Password
+            </a>
+          </div>
+          
+          <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+          
+          <p><small>This link will expire in 1 hour.</small></p>
+          
+          <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+          <p style="color: #666; font-size: 14px;">
+            If you didn't request this reset, you can safely ignore this email.
+          </p>
+        </div>
+      `
+    };
+
+    await this.transporter.sendMail(mailOptions);
+  }
+
+  async sendWelcomeEmail(email: string, firstName: string): Promise<void> {
+    const mailOptions = {
+      from: `"${process.env.APP_NAME}" <${process.env.SMTP_FROM}>`,
+      to: email,
+      subject: `Welcome to ${process.env.APP_NAME}!`,
+      html: `
+        <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
+          <h2>Welcome to ${process.env.APP_NAME}!</h2>
+          <p>Hi ${firstName},</p>
+          <p>Your email has been verified and your account is now active!</p>
+          
+          <p>You can now:</p>
+          <ul>
+            <li>Access your dashboard</li>
+            <li>Update your profile</li>
+            <li>Start using all our features</li>
+          </ul>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.FRONTEND_URL}/dashboard" 
+               style="background-color: #28a745; color: white; padding: 12px 24px; 
+                      text-decoration: none; border-radius: 4px; display: inline-block;">
+              Go to Dashboard
+            </a>
+          </div>
+          
+          <p>If you have any questions, feel free to contact our support team.</p>
+          
+          <p>Best regards,<br>The ${process.env.APP_NAME} Team</p>
+        </div>
+      `
+    };
+
+    await this.transporter.sendMail(mailOptions);
+  }
+}
+```
+
+## Configuración del Servidor
+
+```typescript
+// src/server.ts
+import { FoxFactory } from '@foxframework/core';
+import { AuthMiddleware, SecurityMiddlewareCore } from '@foxframework/core/security';
+import { AuthController } from './controllers/auth.controller';
+import cookieParser from 'cookie-parser';
+
+const authController = new AuthController();
+
+const app = FoxFactory.createServer({
+  port: 3000,
+  
+  middleware: [
+    // Cookie parser para refresh tokens
+    cookieParser(),
+    
+    // Seguridad
+    SecurityMiddlewareCore.cors({
+      origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+      credentials: true
+    }),
+    SecurityMiddlewareCore.securityHeaders(),
+    SecurityMiddlewareCore.rateLimit({
+      windowMs: 15 * 60 * 1000,
+      maxRequests: 100
+    })
+  ],
+  
+  routes: [
+    // Rutas públicas de autenticación
+    { 
+      path: '/auth/register', 
+      method: 'post', 
+      handler: authController.register 
+    },
+    { 
+      path: '/auth/login', 
+      method: 'post', 
+      handler: authController.login,
+      middleware: [
+        SecurityMiddlewareCore.rateLimit({
+          windowMs: 15 * 60 * 1000,
+          maxRequests: 5, // Más restrictivo para login
+          message: 'Too many login attempts'
+        })
+      ]
+    },
+    { 
+      path: '/auth/refresh', 
+      method: 'post', 
+      handler: authController.refreshToken 
+    },
+    { 
+      path: '/auth/verify-email', 
+      method: 'post', 
+      handler: authController.verifyEmail 
+    },
+    { 
+      path: '/auth/forgot-password', 
+      method: 'post', 
+      handler: authController.forgotPassword 
+    },
+    
+    // Rutas protegidas
+    { 
+      path: '/auth/profile', 
+      method: 'get', 
+      handler: authController.getProfile,
+      middleware: [
+        AuthMiddleware.jwt({
+          secret: process.env.JWT_SECRET || 'your-secret-key',
+          algorithms: ['HS256']
+        })
+      ]
+    },
+    { 
+      path: '/auth/logout', 
+      method: 'post', 
+      handler: authController.logout,
+      middleware: [
+        AuthMiddleware.optionalJwt({
+          secret: process.env.JWT_SECRET || 'your-secret-key',
+          algorithms: ['HS256']
+        })
+      ]
+    }
+  ]
+});
+
+app.start().then(() => {
+  console.log('🦊 Auth API running on http://localhost:3000');
+  console.log('📚 Auth endpoints:');
+  console.log('  POST /auth/register        - Register new user');
+  console.log('  POST /auth/login           - User login');
+  console.log('  POST /auth/refresh         - Refresh access token');
+  console.log('  POST /auth/logout          - User logout');
+  console.log('  GET  /auth/profile         - Get user profile (protected)');
+  console.log('  POST /auth/verify-email    - Verify email address');
+  console.log('  POST /auth/forgot-password - Request password reset');
+});
+```
+
+## Variables de Entorno
+
+```bash
+# .env
+JWT_SECRET=your-super-secret-jwt-key-at-least-32-characters
+JWT_REFRESH_SECRET=your-refresh-secret-key-different-from-access
+NODE_ENV=development
+
+# SMTP Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+SMTP_FROM=noreply@yourapp.com
+
+# App Configuration
+APP_NAME=Fox Framework App
+FRONTEND_URL=http://localhost:3001
+```
+
+## Cliente Frontend
+
+```typescript
+// auth-client.ts
+class AuthClient {
+  private baseUrl: string;
+  private accessToken?: string;
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+    this.loadTokenFromStorage();
+  }
+
+  private loadTokenFromStorage() {
+    this.accessToken = localStorage.getItem('accessToken') || undefined;
+  }
+
+  private saveTokenToStorage(token: string) {
+    this.accessToken = token;
+    localStorage.setItem('accessToken', token);
+  }
+
+  private removeTokenFromStorage() {
+    this.accessToken = undefined;
+    localStorage.removeItem('accessToken');
+  }
+
+  async register(userData: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+  }) {
+    const response = await fetch(`${this.baseUrl}/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData),
+    });
+
+    return response.json();
+  }
+
+  async login(email: string, password: string) {
+    const response = await fetch(`${this.baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include', // Para incluir cookies
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json();
+    
+    if (response.ok && data.data?.accessToken) {
+      this.saveTokenToStorage(data.data.accessToken);
+    }
+
+    return data;
+  }
+
+  async logout() {
+    await fetch(`${this.baseUrl}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        ...(this.accessToken && { Authorization: `Bearer ${this.accessToken}` }),
+      },
+    });
+
+    this.removeTokenFromStorage();
+  }
+
+  async getProfile() {
+    const response = await fetch(`${this.baseUrl}/auth/profile`, {
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+    });
+
+    return response.json();
+  }
+
+  async refreshToken() {
+    const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+
+    const data = await response.json();
+    
+    if (response.ok && data.data?.accessToken) {
+      this.saveTokenToStorage(data.data.accessToken);
+    }
+
+    return data;
+  }
+
+  isAuthenticated(): boolean {
+    return !!this.accessToken;
+  }
+
+  getToken(): string | undefined {
+    return this.accessToken;
+  }
+}
+
+// Uso del cliente
+const authClient = new AuthClient('http://localhost:3000');
+
+// Registro
+authClient.register({
+  email: 'user@example.com',
+  password: 'securePassword123',
+  firstName: 'John',
+  lastName: 'Doe'
+}).then(response => {
+  console.log('User registered:', response);
+});
+
+// Login
+authClient.login('user@example.com', 'securePassword123')
+  .then(response => {
+    if (response.data?.accessToken) {
+      console.log('Login successful');
+      // Redirigir al dashboard
+    }
+  });
+```
+
+## Características Destacadas
+
+- **JWT con Refresh Tokens**: Sistema completo de tokens de acceso y renovación
+- **Integración SMTP**: Envío de emails de verificación y recuperación de contraseña
+- **Seguridad robusta**: Hashing de contraseñas, rate limiting, validaciones
+- **Gestión de sesiones**: Cookies httpOnly para refresh tokens
+- **Middleware de autenticación**: Protección flexible de rutas
+- **Emails HTML**: Templates atractivos para notificaciones por email
+- **Cliente TypeScript**: Cliente completo con manejo de tokens automático

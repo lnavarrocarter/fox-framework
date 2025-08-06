@@ -1,0 +1,923 @@
+# Despliegue con Docker
+
+Este ejemplo muestra cómo containerizar y desplegar aplicaciones Fox Framework usando Docker, Docker Compose, y orquestación con Kubernetes y servicios externos como bases de datos, caching y monitoreo.
+
+## Dockerfile Optimizado Multi-Stage
+
+```dockerfile
+# Dockerfile
+# Stage 1: Build
+FROM node:18-alpine AS builder
+
+# Instalar dependencias del sistema necesarias
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git
+
+# Crear directorio de trabajo
+WORKDIR /app
+
+# Copiar archivos de configuración
+COPY package*.json tsconfig.json ./
+COPY tsfox/ ./tsfox/
+
+# Instalar dependencias
+RUN npm ci --only=production && npm cache clean --force
+
+# Copiar código fuente
+COPY src/ ./src/
+
+# Compilar TypeScript
+RUN npm run build
+
+# Stage 2: Production
+FROM node:18-alpine AS production
+
+# Crear usuario no-root
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S fox -u 1001
+
+# Instalar dependencias del sistema
+RUN apk add --no-cache \
+    dumb-init \
+    curl
+
+# Crear directorios
+WORKDIR /app
+RUN mkdir -p logs temp uploads
+
+# Copiar archivos desde builder
+COPY --from=builder --chown=fox:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=fox:nodejs /app/dist ./dist
+COPY --from=builder --chown=fox:nodejs /app/package*.json ./
+
+# Copiar assets estáticos si existen
+COPY --chown=fox:nodejs public/ ./public/
+COPY --chown=fox:nodejs views/ ./views/
+
+# Configurar variables de entorno
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV LOG_LEVEL=info
+ENV TEMP_DIR=/app/temp
+ENV UPLOAD_DIR=/app/uploads
+
+# Configurar usuario
+USER fox
+
+# Exponer puerto
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+# Usar dumb-init para manejo correcto de señales
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "dist/server.js"]
+```
+
+## Docker Compose para Desarrollo
+
+```yaml
+# docker-compose.dev.yml
+version: '3.8'
+
+services:
+  # Aplicación principal
+  fox-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=fox_development
+      - DB_USER=fox_user
+      - DB_PASS=fox_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - JWT_SECRET=dev-secret-key
+    volumes:
+      - ./src:/app/src:ro
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fox-network
+    restart: unless-stopped
+
+  # Base de datos PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=fox_development
+      - POSTGRES_USER=fox_user
+      - POSTGRES_PASSWORD=fox_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fox_user -d fox_development"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fox-network
+    restart: unless-stopped
+
+  # Redis para caché y sesiones
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fox-network
+    restart: unless-stopped
+
+  # MailHog para testing de emails
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - fox-network
+    restart: unless-stopped
+
+  # Nginx como reverse proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+      - ./public:/var/www/public:ro
+    depends_on:
+      - fox-app
+    networks:
+      - fox-network
+    restart: unless-stopped
+
+networks:
+  fox-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+## Docker Compose para Producción
+
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
+
+services:
+  # Aplicación principal con múltiples réplicas
+  fox-app:
+    image: your-registry/fox-framework:${VERSION:-latest}
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=postgres-master
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - REDIS_HOST=redis-cluster
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - JWT_SECRET=${JWT_SECRET}
+      - SENTRY_DSN=${SENTRY_DSN}
+    volumes:
+      - app_logs:/app/logs
+      - app_uploads:/app/uploads
+    secrets:
+      - db_password
+      - jwt_secret
+      - smtp_credentials
+    networks:
+      - fox-production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # PostgreSQL con configuración de producción
+  postgres-master:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - postgres_master_data:/var/lib/postgresql/data
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./docker/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    secrets:
+      - db_password
+    networks:
+      - fox-production
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+  # Redis Cluster para alta disponibilidad
+  redis-cluster:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - redis_cluster_data:/data
+    networks:
+      - fox-production
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Load Balancer con HAProxy
+  haproxy:
+    image: haproxy:2.6-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8404:8404"  # Stats
+    volumes:
+      - ./docker/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./docker/ssl:/etc/ssl/certs:ro
+    depends_on:
+      - fox-app
+    networks:
+      - fox-production
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+  # Monitoring con Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - fox-production
+
+  # Grafana para visualización
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - fox-production
+
+  # Elasticsearch para logs
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - fox-production
+
+  # Logstash para procesamiento de logs
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.9.0
+    volumes:
+      - ./docker/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - app_logs:/var/log/app:ro
+    networks:
+      - fox-production
+    depends_on:
+      - elasticsearch
+
+  # Kibana para análisis de logs
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.9.0
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - fox-production
+    depends_on:
+      - elasticsearch
+
+secrets:
+  db_password:
+    external: true
+  jwt_secret:
+    external: true
+  smtp_credentials:
+    external: true
+
+networks:
+  fox-production:
+    driver: overlay
+    attachable: true
+
+volumes:
+  postgres_master_data:
+  redis_cluster_data:
+  app_logs:
+  app_uploads:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
+```
+
+## Configuración Nginx
+
+```nginx
+# docker/nginx/nginx.conf
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+    use epoll;
+    multi_accept on;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    # Logging
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for" '
+                    'rt=$request_time uct="$upstream_connect_time" '
+                    'uht="$upstream_header_time" urt="$upstream_response_time"';
+
+    access_log /var/log/nginx/access.log main;
+
+    # Performance
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 50M;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/json
+        application/javascript
+        application/xml+rss
+        application/atom+xml
+        image/svg+xml;
+
+    # Rate limiting
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req_zone $binary_remote_addr zone=login:10m rate=1r/s;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Upstream para la aplicación Fox
+    upstream fox_app {
+        least_conn;
+        server fox-app:3000 max_fails=3 fail_timeout=30s;
+        keepalive 32;
+    }
+
+    # Configuración principal del servidor
+    server {
+        listen 80;
+        server_name localhost;
+
+        # Redirigir HTTP a HTTPS en producción
+        # return 301 https://$server_name$request_uri;
+
+        # Root y índice
+        root /var/www/public;
+        index index.html;
+
+        # Archivos estáticos
+        location /static/ {
+            expires 1y;
+            add_header Cache-Control "public, no-transform";
+            access_log off;
+        }
+
+        location /uploads/ {
+            expires 30d;
+            add_header Cache-Control "public";
+            access_log off;
+        }
+
+        # API routes con rate limiting
+        location /api/ {
+            limit_req zone=api burst=20 nodelay;
+            
+            proxy_pass http://fox_app;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+            
+            # Timeouts
+            proxy_connect_timeout 10s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+        }
+
+        # Login endpoint con rate limiting más estricto
+        location /api/auth/login {
+            limit_req zone=login burst=5 nodelay;
+            
+            proxy_pass http://fox_app;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # Health check
+        location /health {
+            proxy_pass http://fox_app;
+            access_log off;
+        }
+
+        # WebSocket support
+        location /ws/ {
+            proxy_pass http://fox_app;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # Fallback para SPA
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Error pages
+        error_page 404 /404.html;
+        error_page 500 502 503 504 /50x.html;
+        
+        location = /50x.html {
+            root /var/www/html;
+        }
+    }
+
+    # SSL configuration (para producción)
+    server {
+        listen 443 ssl http2;
+        server_name localhost;
+
+        ssl_certificate /etc/nginx/ssl/cert.pem;
+        ssl_certificate_key /etc/nginx/ssl/key.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        ssl_prefer_server_ciphers on;
+
+        # Resto de la configuración igual al servidor HTTP
+        # ... (mismo contenido que arriba)
+    }
+}
+```
+
+## Scripts de Deployment
+
+```bash
+#!/bin/bash
+# scripts/deploy.sh
+
+set -euo pipefail
+
+# Variables
+REGISTRY="your-registry.com"
+IMAGE_NAME="fox-framework"
+VERSION=${1:-$(git rev-parse --short HEAD)}
+ENVIRONMENT=${2:-staging}
+
+echo "🚀 Starting deployment of $IMAGE_NAME:$VERSION to $ENVIRONMENT"
+
+# Build Docker image
+echo "📦 Building Docker image..."
+docker build -t $REGISTRY/$IMAGE_NAME:$VERSION .
+docker tag $REGISTRY/$IMAGE_NAME:$VERSION $REGISTRY/$IMAGE_NAME:latest
+
+# Push to registry
+echo "📤 Pushing to registry..."
+docker push $REGISTRY/$IMAGE_NAME:$VERSION
+docker push $REGISTRY/$IMAGE_NAME:latest
+
+# Deploy based on environment
+case $ENVIRONMENT in
+  "development")
+    echo "🔧 Deploying to development..."
+    docker-compose -f docker-compose.dev.yml pull
+    docker-compose -f docker-compose.dev.yml up -d
+    ;;
+  "staging")
+    echo "🎭 Deploying to staging..."
+    docker-compose -f docker-compose.staging.yml pull
+    docker-compose -f docker-compose.staging.yml up -d
+    ;;
+  "production")
+    echo "🎯 Deploying to production..."
+    # Usar Docker Swarm o Kubernetes
+    docker stack deploy -c docker-compose.prod.yml fox-production
+    ;;
+  *)
+    echo "❌ Unknown environment: $ENVIRONMENT"
+    exit 1
+    ;;
+esac
+
+# Health check
+echo "🏥 Performing health check..."
+sleep 30
+if curl -f http://localhost/health; then
+    echo "✅ Deployment successful!"
+else
+    echo "❌ Health check failed!"
+    exit 1
+fi
+
+echo "🎉 Deployment completed successfully!"
+```
+
+## Kubernetes Deployment
+
+```yaml
+# k8s/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fox-framework
+  labels:
+    name: fox-framework
+
+---
+# k8s/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fox-app-config
+  namespace: fox-framework
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+
+---
+# k8s/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fox-app-secrets
+  namespace: fox-framework
+type: Opaque
+data:
+  DB_PASSWORD: <base64-encoded-password>
+  JWT_SECRET: <base64-encoded-jwt-secret>
+  SMTP_PASS: <base64-encoded-smtp-password>
+
+---
+# k8s/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fox-app
+  namespace: fox-framework
+  labels:
+    app: fox-app
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: fox-app
+  template:
+    metadata:
+      labels:
+        app: fox-app
+    spec:
+      containers:
+      - name: fox-app
+        image: your-registry/fox-framework:latest
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: fox-app-config
+        - secretRef:
+            name: fox-app-secrets
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: app-logs
+          mountPath: /app/logs
+        - name: app-uploads
+          mountPath: /app/uploads
+      volumes:
+      - name: app-logs
+        persistentVolumeClaim:
+          claimName: fox-logs-pvc
+      - name: app-uploads
+        persistentVolumeClaim:
+          claimName: fox-uploads-pvc
+
+---
+# k8s/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: fox-app-service
+  namespace: fox-framework
+spec:
+  selector:
+    app: fox-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+  type: ClusterIP
+
+---
+# k8s/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fox-app-ingress
+  namespace: fox-framework
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - api.yourapp.com
+    secretName: fox-app-tls
+  rules:
+  - host: api.yourapp.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: fox-app-service
+            port:
+              number: 80
+
+---
+# k8s/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fox-app-hpa
+  namespace: fox-framework
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fox-app
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+```
+
+## Monitoring y Logging
+
+```yaml
+# docker/prometheus/prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  - job_name: 'fox-app'
+    static_configs:
+      - targets: ['fox-app:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+```
+
+## Variables de Entorno
+
+```bash
+# .env.production
+# Application
+NODE_ENV=production
+PORT=3000
+LOG_LEVEL=info
+
+# Database
+DB_HOST=postgres-cluster
+DB_PORT=5432
+DB_NAME=fox_production
+DB_USER=fox_user
+DB_PASS=super-secure-password
+
+# Redis
+REDIS_HOST=redis-cluster
+REDIS_PORT=6379
+REDIS_PASSWORD=redis-secure-password
+
+# JWT
+JWT_SECRET=super-secure-jwt-secret-key
+JWT_REFRESH_SECRET=super-secure-refresh-secret
+
+# SMTP
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_USER=apikey
+SMTP_PASS=sendgrid-api-key
+
+# Monitoring
+SENTRY_DSN=https://your-sentry-dsn
+PROMETHEUS_ENDPOINT=/metrics
+
+# File uploads
+MAX_FILE_SIZE=50MB
+UPLOAD_DIR=/app/uploads
+ALLOWED_FILE_TYPES=jpg,jpeg,png,pdf,doc,docx
+```
+
+## Características Destacadas
+
+- **Multi-Stage Builds**: Optimización de tamaño de imagen y seguridad
+- **Health Checks**: Monitoreo automático de salud de contenedores
+- **Load Balancing**: Distribución de carga con Nginx y HAProxy
+- **Auto-scaling**: Escalado horizontal automático con Kubernetes HPA
+- **SSL/TLS**: Configuración completa de HTTPS con certificados
+- **Monitoring Stack**: Prometheus, Grafana, ELK para observabilidad
+- **Secret Management**: Manejo seguro de credenciales y configuración
+- **Rolling Updates**: Despliegues sin downtime
+- **Resource Limits**: Control de recursos CPU y memoria
+- **Persistent Storage**: Volúmenes persistentes para datos y logs

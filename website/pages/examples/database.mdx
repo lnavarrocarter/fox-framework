@@ -1,0 +1,1100 @@
+# Acceso a Base de Datos
+
+Este ejemplo muestra cómo usar el sistema de abstracción de base de datos de Fox Framework con múltiples proveedores, conexiones, transacciones y el patrón Repository.
+
+## Configuración de Base de Datos
+
+```typescript
+// src/config/database.config.ts
+import { DatabaseFactory, DatabaseProvider } from '@foxframework/core/database';
+
+export interface DatabaseConfig {
+  provider: 'postgresql' | 'mysql' | 'sqlite' | 'mongodb' | 'redis';
+  host?: string;
+  port?: number;
+  database: string;
+  username?: string;
+  password?: string;
+  ssl?: boolean;
+  poolSize?: number;
+  connectionTimeout?: number;
+}
+
+export class DatabaseManager {
+  private connections: Map<string, DatabaseProvider> = new Map();
+
+  async createConnection(name: string, config: DatabaseConfig): Promise<DatabaseProvider> {
+    const connection = await DatabaseFactory.create({
+      provider: config.provider,
+      connection: {
+        host: config.host || 'localhost',
+        port: config.port || this.getDefaultPort(config.provider),
+        database: config.database,
+        username: config.username,
+        password: config.password,
+        ssl: config.ssl || false
+      },
+      pool: {
+        min: 2,
+        max: config.poolSize || 10,
+        idle: 10000,
+        acquire: config.connectionTimeout || 30000
+      },
+      options: {
+        logging: process.env.NODE_ENV === 'development',
+        synchronize: process.env.NODE_ENV === 'development',
+        migrations: {
+          run: true,
+          directory: './migrations'
+        }
+      }
+    });
+
+    await connection.connect();
+    this.connections.set(name, connection);
+    
+    console.log(`📊 Connected to ${config.provider} database: ${name}`);
+    return connection;
+  }
+
+  getConnection(name: string = 'default'): DatabaseProvider {
+    const connection = this.connections.get(name);
+    if (!connection) {
+      throw new Error(`Database connection '${name}' not found`);
+    }
+    return connection;
+  }
+
+  async closeAll(): Promise<void> {
+    for (const [name, connection] of this.connections) {
+      await connection.disconnect();
+      console.log(`🔌 Disconnected from database: ${name}`);
+    }
+    this.connections.clear();
+  }
+
+  private getDefaultPort(provider: string): number {
+    const defaultPorts = {
+      postgresql: 5432,
+      mysql: 3306,
+      sqlite: 0, // No port needed
+      mongodb: 27017,
+      redis: 6379
+    };
+    return defaultPorts[provider as keyof typeof defaultPorts] || 5432;
+  }
+}
+```
+
+## Modelos y Schemas
+
+```typescript
+// src/models/user.model.ts
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from '@foxframework/core/database';
+
+@Entity('users')
+@Index(['email'], { unique: true })
+@Index(['createdAt'])
+export class User {
+  @PrimaryGeneratedColumn()
+  id!: number;
+
+  @Column({ type: 'varchar', length: 255, unique: true })
+  email!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  firstName!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  lastName!: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  password!: string;
+
+  @Column({ type: 'enum', enum: ['user', 'admin', 'moderator'], default: 'user' })
+  role!: 'user' | 'admin' | 'moderator';
+
+  @Column({ type: 'boolean', default: true })
+  isActive!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  emailVerified!: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastLoginAt?: Date;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata?: Record<string, any>;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+
+  // Virtual properties
+  get fullName(): string {
+    return `${this.firstName} ${this.lastName}`;
+  }
+
+  // Methods
+  updateLastLogin(): void {
+    this.lastLoginAt = new Date();
+  }
+
+  setMetadata(key: string, value: any): void {
+    if (!this.metadata) {
+      this.metadata = {};
+    }
+    this.metadata[key] = value;
+  }
+
+  getMetadata(key: string): any {
+    return this.metadata?.[key];
+  }
+}
+
+// src/models/product.model.ts
+@Entity('products')
+@Index(['categoryId'])
+@Index(['price'])
+@Index(['isActive'])
+export class Product {
+  @PrimaryGeneratedColumn()
+  id!: number;
+
+  @Column({ type: 'varchar', length: 255 })
+  name!: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Column({ type: 'varchar', length: 100, unique: true })
+  sku!: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  price!: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  comparePrice?: number;
+
+  @Column({ type: 'int', default: 0 })
+  stockQuantity!: number;
+
+  @Column({ type: 'int', nullable: true })
+  categoryId?: number;
+
+  @Column({ type: 'jsonb', nullable: true })
+  images?: string[];
+
+  @Column({ type: 'jsonb', nullable: true })
+  attributes?: Record<string, any>;
+
+  @Column({ type: 'boolean', default: true })
+  isActive!: boolean;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+
+  // Methods
+  get isOnSale(): boolean {
+    return this.comparePrice !== null && this.comparePrice > this.price;
+  }
+
+  get discountPercentage(): number {
+    if (!this.isOnSale) return 0;
+    return Math.round(((this.comparePrice! - this.price) / this.comparePrice!) * 100);
+  }
+
+  updateStock(quantity: number): void {
+    this.stockQuantity = Math.max(0, this.stockQuantity + quantity);
+  }
+
+  isInStock(): boolean {
+    return this.stockQuantity > 0;
+  }
+}
+
+// src/models/order.model.ts
+@Entity('orders')
+@Index(['userId'])
+@Index(['status'])
+@Index(['createdAt'])
+export class Order {
+  @PrimaryGeneratedColumn()
+  id!: number;
+
+  @Column({ type: 'varchar', length: 50, unique: true })
+  orderNumber!: string;
+
+  @Column({ type: 'int' })
+  userId!: number;
+
+  @Column({ type: 'enum', enum: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'], default: 'pending' })
+  status!: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  subtotal!: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  tax!: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  shipping!: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  total!: number;
+
+  @Column({ type: 'jsonb' })
+  items!: OrderItem[];
+
+  @Column({ type: 'jsonb', nullable: true })
+  shippingAddress?: Address;
+
+  @Column({ type: 'jsonb', nullable: true })
+  billingAddress?: Address;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+
+  // Methods
+  addItem(productId: number, quantity: number, price: number, name: string): void {
+    const existingItem = this.items.find(item => item.productId === productId);
+    
+    if (existingItem) {
+      existingItem.quantity += quantity;
+      existingItem.total = existingItem.quantity * existingItem.price;
+    } else {
+      this.items.push({
+        productId,
+        quantity,
+        price,
+        name,
+        total: quantity * price
+      });
+    }
+    
+    this.calculateTotals();
+  }
+
+  removeItem(productId: number): void {
+    this.items = this.items.filter(item => item.productId !== productId);
+    this.calculateTotals();
+  }
+
+  private calculateTotals(): void {
+    this.subtotal = this.items.reduce((sum, item) => sum + item.total, 0);
+    this.total = this.subtotal + this.tax + this.shipping;
+  }
+
+  updateStatus(status: Order['status']): void {
+    this.status = status;
+    this.updatedAt = new Date();
+  }
+}
+
+interface OrderItem {
+  productId: number;
+  name: string;
+  quantity: number;
+  price: number;
+  total: number;
+}
+
+interface Address {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+}
+```
+
+## Repository Pattern
+
+```typescript
+// src/repositories/base.repository.ts
+import { DatabaseProvider, QueryBuilder, Transaction } from '@foxframework/core/database';
+
+export abstract class BaseRepository<T> {
+  protected db: DatabaseProvider;
+  protected tableName: string;
+
+  constructor(db: DatabaseProvider, tableName: string) {
+    this.db = db;
+    this.tableName = tableName;
+  }
+
+  async findById(id: number, transaction?: Transaction): Promise<T | null> {
+    const query = this.db.createQueryBuilder()
+      .select('*')
+      .from(this.tableName)
+      .where('id = ?', [id]);
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    const result = await query.getOne();
+    return result ? this.mapToEntity(result) : null;
+  }
+
+  async findAll(options?: {
+    where?: Record<string, any>;
+    orderBy?: string;
+    limit?: number;
+    offset?: number;
+    transaction?: Transaction;
+  }): Promise<T[]> {
+    const query = this.db.createQueryBuilder()
+      .select('*')
+      .from(this.tableName);
+
+    if (options?.where) {
+      Object.entries(options.where).forEach(([key, value]) => {
+        query.andWhere(`${key} = ?`, [value]);
+      });
+    }
+
+    if (options?.orderBy) {
+      query.orderBy(options.orderBy);
+    }
+
+    if (options?.limit) {
+      query.limit(options.limit);
+    }
+
+    if (options?.offset) {
+      query.offset(options.offset);
+    }
+
+    if (options?.transaction) {
+      query.setTransaction(options.transaction);
+    }
+
+    const results = await query.getMany();
+    return results.map(result => this.mapToEntity(result));
+  }
+
+  async create(data: Partial<T>, transaction?: Transaction): Promise<T> {
+    const query = this.db.createQueryBuilder()
+      .insert()
+      .into(this.tableName)
+      .values(this.mapFromEntity(data));
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    const result = await query.execute();
+    return this.findById(result.insertId, transaction) as Promise<T>;
+  }
+
+  async update(id: number, data: Partial<T>, transaction?: Transaction): Promise<T | null> {
+    const query = this.db.createQueryBuilder()
+      .update(this.tableName)
+      .set(this.mapFromEntity(data))
+      .where('id = ?', [id]);
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    await query.execute();
+    return this.findById(id, transaction);
+  }
+
+  async delete(id: number, transaction?: Transaction): Promise<boolean> {
+    const query = this.db.createQueryBuilder()
+      .delete()
+      .from(this.tableName)
+      .where('id = ?', [id]);
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    const result = await query.execute();
+    return result.affectedRows > 0;
+  }
+
+  async count(where?: Record<string, any>, transaction?: Transaction): Promise<number> {
+    const query = this.db.createQueryBuilder()
+      .select('COUNT(*) as count')
+      .from(this.tableName);
+
+    if (where) {
+      Object.entries(where).forEach(([key, value]) => {
+        query.andWhere(`${key} = ?`, [value]);
+      });
+    }
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    const result = await query.getOne();
+    return result?.count || 0;
+  }
+
+  protected abstract mapToEntity(data: any): T;
+  protected abstract mapFromEntity(entity: Partial<T>): Record<string, any>;
+}
+
+// src/repositories/user.repository.ts
+export class UserRepository extends BaseRepository<User> {
+  constructor(db: DatabaseProvider) {
+    super(db, 'users');
+  }
+
+  async findByEmail(email: string, transaction?: Transaction): Promise<User | null> {
+    const query = this.db.createQueryBuilder()
+      .select('*')
+      .from(this.tableName)
+      .where('email = ?', [email]);
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    const result = await query.getOne();
+    return result ? this.mapToEntity(result) : null;
+  }
+
+  async findByRole(role: string, transaction?: Transaction): Promise<User[]> {
+    return this.findAll({
+      where: { role },
+      transaction
+    });
+  }
+
+  async updateLastLogin(userId: number, transaction?: Transaction): Promise<void> {
+    const query = this.db.createQueryBuilder()
+      .update(this.tableName)
+      .set({ lastLoginAt: new Date() })
+      .where('id = ?', [userId]);
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    await query.execute();
+  }
+
+  async searchUsers(searchTerm: string, limit: number = 10, transaction?: Transaction): Promise<User[]> {
+    const query = this.db.createQueryBuilder()
+      .select('*')
+      .from(this.tableName)
+      .where('firstName ILIKE ? OR lastName ILIKE ? OR email ILIKE ?', 
+        [`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`])
+      .limit(limit);
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    const results = await query.getMany();
+    return results.map(result => this.mapToEntity(result));
+  }
+
+  protected mapToEntity(data: any): User {
+    const user = new User();
+    Object.assign(user, data);
+    return user;
+  }
+
+  protected mapFromEntity(entity: Partial<User>): Record<string, any> {
+    const { id, createdAt, updatedAt, ...data } = entity as any;
+    return data;
+  }
+}
+
+// src/repositories/product.repository.ts
+export class ProductRepository extends BaseRepository<Product> {
+  constructor(db: DatabaseProvider) {
+    super(db, 'products');
+  }
+
+  async findBySku(sku: string, transaction?: Transaction): Promise<Product | null> {
+    const query = this.db.createQueryBuilder()
+      .select('*')
+      .from(this.tableName)
+      .where('sku = ?', [sku]);
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    const result = await query.getOne();
+    return result ? this.mapToEntity(result) : null;
+  }
+
+  async findByCategory(categoryId: number, transaction?: Transaction): Promise<Product[]> {
+    return this.findAll({
+      where: { categoryId, isActive: true },
+      orderBy: 'name ASC',
+      transaction
+    });
+  }
+
+  async findInPriceRange(minPrice: number, maxPrice: number, transaction?: Transaction): Promise<Product[]> {
+    const query = this.db.createQueryBuilder()
+      .select('*')
+      .from(this.tableName)
+      .where('price >= ? AND price <= ? AND isActive = ?', [minPrice, maxPrice, true])
+      .orderBy('price ASC');
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    const results = await query.getMany();
+    return results.map(result => this.mapToEntity(result));
+  }
+
+  async searchProducts(searchTerm: string, limit: number = 20, transaction?: Transaction): Promise<Product[]> {
+    const query = this.db.createQueryBuilder()
+      .select('*')
+      .from(this.tableName)
+      .where('name ILIKE ? OR description ILIKE ? AND isActive = ?', 
+        [`%${searchTerm}%`, `%${searchTerm}%`, true])
+      .orderBy('name ASC')
+      .limit(limit);
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    const results = await query.getMany();
+    return results.map(result => this.mapToEntity(result));
+  }
+
+  async updateStock(productId: number, quantity: number, transaction?: Transaction): Promise<void> {
+    const query = this.db.createQueryBuilder()
+      .update(this.tableName)
+      .set({ stockQuantity: quantity })
+      .where('id = ?', [productId]);
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    await query.execute();
+  }
+
+  protected mapToEntity(data: any): Product {
+    const product = new Product();
+    Object.assign(product, data);
+    return product;
+  }
+
+  protected mapFromEntity(entity: Partial<Product>): Record<string, any> {
+    const { id, createdAt, updatedAt, ...data } = entity as any;
+    return data;
+  }
+}
+```
+
+## Services con Transacciones
+
+```typescript
+// src/services/order.service.ts
+import { DatabaseProvider, Transaction } from '@foxframework/core/database';
+import { EventEmitter } from '@foxframework/core/events';
+import { UserRepository } from '../repositories/user.repository';
+import { ProductRepository } from '../repositories/product.repository';
+import { OrderRepository } from '../repositories/order.repository';
+import { User } from '../models/user.model';
+import { Product } from '../models/product.model';
+import { Order } from '../models/order.model';
+
+export interface CreateOrderData {
+  userId: number;
+  items: {
+    productId: number;
+    quantity: number;
+  }[];
+  shippingAddress: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+  };
+  billingAddress?: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+  };
+}
+
+export class OrderService {
+  private db: DatabaseProvider;
+  private userRepository: UserRepository;
+  private productRepository: ProductRepository;
+  private orderRepository: OrderRepository;
+  private eventEmitter: EventEmitter;
+
+  constructor(db: DatabaseProvider) {
+    this.db = db;
+    this.userRepository = new UserRepository(db);
+    this.productRepository = new ProductRepository(db);
+    this.orderRepository = new OrderRepository(db);
+    this.eventEmitter = new EventEmitter();
+  }
+
+  async createOrder(orderData: CreateOrderData): Promise<Order> {
+    return this.db.transaction(async (transaction: Transaction) => {
+      // Verificar que el usuario existe
+      const user = await this.userRepository.findById(orderData.userId, transaction);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Verificar productos y calcular totales
+      let subtotal = 0;
+      const orderItems: any[] = [];
+
+      for (const item of orderData.items) {
+        const product = await this.productRepository.findById(item.productId, transaction);
+        if (!product) {
+          throw new Error(`Product with ID ${item.productId} not found`);
+        }
+
+        if (!product.isActive) {
+          throw new Error(`Product ${product.name} is not active`);
+        }
+
+        if (product.stockQuantity < item.quantity) {
+          throw new Error(`Insufficient stock for product ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`);
+        }
+
+        // Reducir stock del producto
+        await this.productRepository.updateStock(
+          product.id, 
+          product.stockQuantity - item.quantity, 
+          transaction
+        );
+
+        const itemTotal = product.price * item.quantity;
+        subtotal += itemTotal;
+
+        orderItems.push({
+          productId: product.id,
+          name: product.name,
+          quantity: item.quantity,
+          price: product.price,
+          total: itemTotal
+        });
+      }
+
+      // Calcular impuestos y envío
+      const tax = subtotal * 0.08; // 8% tax
+      const shipping = subtotal > 100 ? 0 : 10; // Free shipping over $100
+      const total = subtotal + tax + shipping;
+
+      // Generar número de orden único
+      const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+      // Crear la orden
+      const order = await this.orderRepository.create({
+        orderNumber,
+        userId: orderData.userId,
+        status: 'pending',
+        subtotal,
+        tax,
+        shipping,
+        total,
+        items: orderItems,
+        shippingAddress: orderData.shippingAddress,
+        billingAddress: orderData.billingAddress || orderData.shippingAddress
+      }, transaction);
+
+      // Emitir evento
+      this.eventEmitter.emit('order.created', {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        userId: order.userId,
+        total: order.total,
+        email: user.email
+      });
+
+      return order;
+    });
+  }
+
+  async updateOrderStatus(orderId: number, status: Order['status']): Promise<Order | null> {
+    return this.db.transaction(async (transaction: Transaction) => {
+      const order = await this.orderRepository.findById(orderId, transaction);
+      if (!order) {
+        throw new Error('Order not found');
+      }
+
+      // Validar transición de estado
+      if (!this.isValidStatusTransition(order.status, status)) {
+        throw new Error(`Invalid status transition from ${order.status} to ${status}`);
+      }
+
+      // Si se cancela la orden, devolver stock a los productos
+      if (status === 'cancelled' && order.status !== 'cancelled') {
+        for (const item of order.items) {
+          const product = await this.productRepository.findById(item.productId, transaction);
+          if (product) {
+            await this.productRepository.updateStock(
+              product.id, 
+              product.stockQuantity + item.quantity, 
+              transaction
+            );
+          }
+        }
+      }
+
+      const updatedOrder = await this.orderRepository.update(orderId, { status }, transaction);
+
+      // Emitir evento
+      this.eventEmitter.emit('order.status_updated', {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        oldStatus: order.status,
+        newStatus: status,
+        userId: order.userId
+      });
+
+      return updatedOrder;
+    });
+  }
+
+  async getOrdersByUser(userId: number, options?: {
+    status?: Order['status'];
+    limit?: number;
+    offset?: number;
+  }): Promise<{ orders: Order[]; total: number }> {
+    const whereClause: any = { userId };
+    if (options?.status) {
+      whereClause.status = options.status;
+    }
+
+    const orders = await this.orderRepository.findAll({
+      where: whereClause,
+      orderBy: 'createdAt DESC',
+      limit: options?.limit || 10,
+      offset: options?.offset || 0
+    });
+
+    const total = await this.orderRepository.count(whereClause);
+
+    return { orders, total };
+  }
+
+  async getOrderAnalytics(startDate: Date, endDate: Date): Promise<any> {
+    const query = this.db.createQueryBuilder()
+      .select([
+        'COUNT(*) as totalOrders',
+        'SUM(total) as totalRevenue',
+        'AVG(total) as averageOrderValue',
+        'COUNT(CASE WHEN status = \'delivered\' THEN 1 END) as deliveredOrders',
+        'COUNT(CASE WHEN status = \'cancelled\' THEN 1 END) as cancelledOrders'
+      ])
+      .from('orders')
+      .where('createdAt >= ? AND createdAt <= ?', [startDate, endDate]);
+
+    return query.getOne();
+  }
+
+  private isValidStatusTransition(currentStatus: Order['status'], newStatus: Order['status']): boolean {
+    const validTransitions: Record<Order['status'], Order['status'][]> = {
+      'pending': ['confirmed', 'cancelled'],
+      'confirmed': ['shipped', 'cancelled'],
+      'shipped': ['delivered', 'cancelled'],
+      'delivered': [],
+      'cancelled': []
+    };
+
+    return validTransitions[currentStatus].includes(newStatus);
+  }
+}
+```
+
+## Controlador con Integración Completa
+
+```typescript
+// src/controllers/order.controller.ts
+import { Request, Response } from '@foxframework/core';
+import { OrderService, CreateOrderData } from '../services/order.service';
+import { DatabaseManager } from '../config/database.config';
+
+export class OrderController {
+  private orderService: OrderService;
+
+  constructor(dbManager: DatabaseManager) {
+    const db = dbManager.getConnection('default');
+    this.orderService = new OrderService(db);
+  }
+
+  // POST /orders
+  createOrder = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const orderData: CreateOrderData = req.body;
+
+      // Validación
+      if (!orderData.userId || !orderData.items || !orderData.shippingAddress) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'userId, items, and shippingAddress are required'
+        });
+      }
+
+      if (orderData.items.length === 0) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'Order must contain at least one item'
+        });
+      }
+
+      const order = await this.orderService.createOrder(orderData);
+
+      res.status(201).json({
+        data: order,
+        message: 'Order created successfully'
+      });
+
+    } catch (error) {
+      console.error('Create order error:', error);
+      res.status(500).json({
+        error: 'Order creation failed',
+        message: error instanceof Error ? error.message : 'An unexpected error occurred'
+      });
+    }
+  };
+
+  // GET /orders/user/:userId
+  getUserOrders = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const { status, page = 1, limit = 10 } = req.query;
+
+      const offset = (Number(page) - 1) * Number(limit);
+
+      const result = await this.orderService.getOrdersByUser(userId, {
+        status: status as any,
+        limit: Number(limit),
+        offset
+      });
+
+      res.json({
+        data: result.orders,
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          total: result.total,
+          totalPages: Math.ceil(result.total / Number(limit))
+        }
+      });
+
+    } catch (error) {
+      console.error('Get user orders error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch orders',
+        message: 'An error occurred while fetching user orders'
+      });
+    }
+  };
+
+  // PUT /orders/:id/status
+  updateOrderStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const orderId = parseInt(req.params.id);
+      const { status } = req.body;
+
+      if (!status) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'Status is required'
+        });
+      }
+
+      const validStatuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: `Status must be one of: ${validStatuses.join(', ')}`
+        });
+      }
+
+      const order = await this.orderService.updateOrderStatus(orderId, status);
+
+      if (!order) {
+        return res.status(404).json({
+          error: 'Order not found',
+          message: `Order with ID ${orderId} not found`
+        });
+      }
+
+      res.json({
+        data: order,
+        message: 'Order status updated successfully'
+      });
+
+    } catch (error) {
+      console.error('Update order status error:', error);
+      res.status(500).json({
+        error: 'Status update failed',
+        message: error instanceof Error ? error.message : 'An unexpected error occurred'
+      });
+    }
+  };
+
+  // GET /orders/analytics
+  getAnalytics = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { startDate, endDate } = req.query;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'startDate and endDate are required'
+        });
+      }
+
+      const analytics = await this.orderService.getOrderAnalytics(
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+
+      res.json({
+        data: analytics
+      });
+
+    } catch (error) {
+      console.error('Get analytics error:', error);
+      res.status(500).json({
+        error: 'Analytics failed',
+        message: 'An error occurred while fetching analytics'
+      });
+    }
+  };
+}
+```
+
+## Configuración del Servidor
+
+```typescript
+// src/server.ts
+import { FoxFactory } from '@foxframework/core';
+import { DatabaseManager } from './config/database.config';
+import { OrderController } from './controllers/order.controller';
+
+async function createServer() {
+  // Configurar conexiones de base de datos
+  const dbManager = new DatabaseManager();
+
+  // Conexión principal (PostgreSQL)
+  await dbManager.createConnection('default', {
+    provider: 'postgresql',
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME || 'fox_app',
+    username: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASS || 'password',
+    poolSize: 20
+  });
+
+  // Conexión para caché (Redis)
+  await dbManager.createConnection('cache', {
+    provider: 'redis',
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    database: process.env.REDIS_DB || '0'
+  });
+
+  // Crear controladores
+  const orderController = new OrderController(dbManager);
+
+  // Crear servidor
+  const app = FoxFactory.createServer({
+    port: 3000,
+    
+    routes: [
+      // Order routes
+      { path: '/orders', method: 'post', handler: orderController.createOrder },
+      { path: '/orders/user/:userId', method: 'get', handler: orderController.getUserOrders },
+      { path: '/orders/:id/status', method: 'put', handler: orderController.updateOrderStatus },
+      { path: '/orders/analytics', method: 'get', handler: orderController.getAnalytics },
+      
+      // Health check
+      {
+        path: '/health',
+        method: 'get',
+        handler: (req, res) => {
+          res.json({
+            status: 'healthy',
+            database: 'connected',
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+    ]
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', async () => {
+    console.log('🔌 Closing database connections...');
+    await dbManager.closeAll();
+    process.exit(0);
+  });
+
+  return app;
+}
+
+createServer().then(app => {
+  app.start().then(() => {
+    console.log('🦊 Database API running on http://localhost:3000');
+    console.log('📊 Database connections established');
+    console.log('📚 Available endpoints:');
+    console.log('  POST /orders              - Create new order');
+    console.log('  GET  /orders/user/:userId - Get user orders');
+    console.log('  PUT  /orders/:id/status   - Update order status');
+    console.log('  GET  /orders/analytics    - Get order analytics');
+  });
+});
+```
+
+## Variables de Entorno
+
+```bash
+# .env
+# PostgreSQL Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=fox_app
+DB_USER=postgres
+DB_PASS=password
+
+# Redis Cache
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+
+# Application
+NODE_ENV=development
+```
+
+## Características Destacadas
+
+- **Multi-Provider Support**: PostgreSQL, MySQL, SQLite, MongoDB, Redis
+- **Repository Pattern**: Abstracción limpia de acceso a datos
+- **Transaction Support**: Operaciones ACID con rollback automático
+- **Query Builder**: API fluida para consultas complejas
+- **Connection Pooling**: Gestión eficiente de conexiones
+- **Model Decorators**: Definición declarativa de esquemas
+- **Database Migrations**: Versionado de esquema de base de datos
+- **Type Safety**: TypeScript estricto en toda la capa de datos
+- **Performance Optimized**: Índices, lazy loading y caching

@@ -1,0 +1,405 @@
+# API RESTful
+
+Este ejemplo muestra cómo crear una API RESTful completa con autenticación, validación y middleware de seguridad.
+
+## Ejemplo Básico: API de Tareas
+
+```typescript
+// src/controllers/todo.controller.ts
+import { FoxFactory, Request, Response } from '@foxframework/core';
+import { validateRequest, AuthMiddleware } from '@foxframework/core/security';
+
+interface Todo {
+  id: number;
+  title: string;
+  completed: boolean;
+  userId: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export class TodoController {
+  private todos: Todo[] = [
+    { 
+      id: 1, 
+      title: 'Aprender Fox Framework', 
+      completed: false, 
+      userId: 1,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    { 
+      id: 2, 
+      title: 'Crear un API REST', 
+      completed: false, 
+      userId: 1,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+  ];
+
+  // GET /api/todos
+  getAll = (req: Request, res: Response): void => {
+    const { page = 1, limit = 10, completed } = req.query;
+    
+    let filteredTodos = this.todos;
+    
+    // Filtrar por estado si se especifica
+    if (completed !== undefined) {
+      filteredTodos = this.todos.filter(t => 
+        t.completed === (completed === 'true')
+      );
+    }
+    
+    // Paginación
+    const startIndex = (Number(page) - 1) * Number(limit);
+    const endIndex = startIndex + Number(limit);
+    const paginatedTodos = filteredTodos.slice(startIndex, endIndex);
+    
+    res.json({
+      data: paginatedTodos,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total: filteredTodos.length,
+        totalPages: Math.ceil(filteredTodos.length / Number(limit))
+      }
+    });
+  };
+
+  // GET /api/todos/:id
+  getById = (req: Request, res: Response): void => {
+    const id = parseInt(req.params.id);
+    const todo = this.todos.find(t => t.id === id);
+    
+    if (!todo) {
+      return res.status(404).json({ 
+        error: 'Todo not found',
+        message: `Todo with id ${id} does not exist`
+      });
+    }
+    
+    res.json({ data: todo });
+  };
+
+  // POST /api/todos
+  create = (req: Request, res: Response): void => {
+    const { title } = req.body;
+    
+    if (!title || title.trim().length === 0) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        message: 'Title is required and cannot be empty'
+      });
+    }
+
+    if (title.length > 100) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'Title cannot exceed 100 characters'
+      });
+    }
+    
+    const newTodo: Todo = {
+      id: this.todos.length + 1,
+      title: title.trim(),
+      completed: false,
+      userId: req.user?.id || 1,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    this.todos.push(newTodo);
+    res.status(201).json({ 
+      data: newTodo,
+      message: 'Todo created successfully'
+    });
+  };
+
+  // PUT /api/todos/:id
+  update = (req: Request, res: Response): void => {
+    const id = parseInt(req.params.id);
+    const { title, completed } = req.body;
+    
+    const todoIndex = this.todos.findIndex(t => t.id === id);
+    
+    if (todoIndex === -1) {
+      return res.status(404).json({ 
+        error: 'Todo not found',
+        message: `Todo with id ${id} does not exist`
+      });
+    }
+
+    // Validar que al menos un campo se está actualizando
+    if (title === undefined && completed === undefined) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'At least one field (title or completed) must be provided'
+      });
+    }
+    
+    const updatedTodo = {
+      ...this.todos[todoIndex],
+      ...(title !== undefined && { title: title.trim() }),
+      ...(completed !== undefined && { completed }),
+      updatedAt: new Date()
+    };
+    
+    this.todos[todoIndex] = updatedTodo;
+    
+    res.json({ 
+      data: updatedTodo,
+      message: 'Todo updated successfully'
+    });
+  };
+
+  // DELETE /api/todos/:id
+  delete = (req: Request, res: Response): void => {
+    const id = parseInt(req.params.id);
+    const todoIndex = this.todos.findIndex(t => t.id === id);
+    
+    if (todoIndex === -1) {
+      return res.status(404).json({ 
+        error: 'Todo not found',
+        message: `Todo with id ${id} does not exist`
+      });
+    }
+    
+    const deletedTodo = this.todos.splice(todoIndex, 1)[0];
+    
+    res.json({ 
+      data: deletedTodo,
+      message: 'Todo deleted successfully'
+    });
+  };
+}
+```
+
+## Configuración del Servidor
+
+```typescript
+// src/server.ts
+import { FoxFactory } from '@foxframework/core';
+import { AuthMiddleware, SecurityMiddlewareCore } from '@foxframework/core/security';
+import { TodoController } from './controllers/todo.controller';
+
+const todoController = new TodoController();
+
+// Crear servidor con middleware de seguridad
+const app = FoxFactory.createServer({
+  port: 3000,
+  
+  // Middleware global
+  middleware: [
+    // Seguridad básica
+    SecurityMiddlewareCore.cors({
+      origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+      credentials: true
+    }),
+    SecurityMiddlewareCore.securityHeaders(),
+    SecurityMiddlewareCore.rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutos
+      maxRequests: 100,
+      message: 'Too many requests from this IP'
+    }),
+    
+    // Autenticación JWT opcional para rutas públicas
+    AuthMiddleware.optionalJwt({
+      secret: process.env.JWT_SECRET || 'your-secret-key',
+      algorithms: ['HS256']
+    })
+  ],
+  
+  // Rutas de la API
+  routes: [
+    // Rutas públicas (solo lectura)
+    { 
+      path: '/api/todos', 
+      method: 'get', 
+      handler: todoController.getAll 
+    },
+    { 
+      path: '/api/todos/:id', 
+      method: 'get', 
+      handler: todoController.getById 
+    },
+    
+    // Rutas protegidas (requieren autenticación)
+    { 
+      path: '/api/todos', 
+      method: 'post', 
+      handler: todoController.create,
+      middleware: [
+        AuthMiddleware.jwt({
+          secret: process.env.JWT_SECRET || 'your-secret-key',
+          algorithms: ['HS256']
+        })
+      ]
+    },
+    { 
+      path: '/api/todos/:id', 
+      method: 'put', 
+      handler: todoController.update,
+      middleware: [
+        AuthMiddleware.jwt({
+          secret: process.env.JWT_SECRET || 'your-secret-key',
+          algorithms: ['HS256']
+        })
+      ]
+    },
+    { 
+      path: '/api/todos/:id', 
+      method: 'delete', 
+      handler: todoController.delete,
+      middleware: [
+        AuthMiddleware.jwt({
+          secret: process.env.JWT_SECRET || 'your-secret-key',
+          algorithms: ['HS256']
+        })
+      ]
+    }
+  ]
+});
+
+// Iniciar servidor
+app.start().then(() => {
+  console.log('🦊 Todo API running on http://localhost:3000');
+  console.log('📚 Endpoints available:');
+  console.log('  GET    /api/todos     - List all todos');
+  console.log('  GET    /api/todos/:id - Get todo by ID');
+  console.log('  POST   /api/todos     - Create new todo (auth required)');
+  console.log('  PUT    /api/todos/:id - Update todo (auth required)');
+  console.log('  DELETE /api/todos/:id - Delete todo (auth required)');
+});
+```
+
+## Ejemplo de Cliente
+
+```typescript
+// client-example.ts
+interface ApiResponse<T> {
+  data: T;
+  message?: string;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+class TodoApiClient {
+  private baseUrl: string;
+  private token?: string;
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+  }
+
+  setAuthToken(token: string) {
+    this.token = token;
+  }
+
+  private async request<T>(
+    endpoint: string, 
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'API request failed');
+    }
+
+    return response.json();
+  }
+
+  // Métodos públicos
+  async getAllTodos(params?: { page?: number; limit?: number; completed?: boolean }) {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.completed !== undefined) queryParams.append('completed', params.completed.toString());
+    
+    const query = queryParams.toString();
+    return this.request<Todo[]>(`/api/todos${query ? `?${query}` : ''}`);
+  }
+
+  async getTodoById(id: number) {
+    return this.request<Todo>(`/api/todos/${id}`);
+  }
+
+  // Métodos que requieren autenticación
+  async createTodo(title: string) {
+    return this.request<Todo>('/api/todos', {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    });
+  }
+
+  async updateTodo(id: number, updates: { title?: string; completed?: boolean }) {
+    return this.request<Todo>(`/api/todos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteTodo(id: number) {
+    return this.request<Todo>(`/api/todos/${id}`, {
+      method: 'DELETE',
+    });
+  }
+}
+
+// Uso del cliente
+const client = new TodoApiClient('http://localhost:3000');
+
+// Obtener todos los todos
+client.getAllTodos({ page: 1, limit: 5 })
+  .then(response => {
+    console.log('Todos:', response.data);
+    console.log('Pagination:', response.pagination);
+  });
+
+// Crear un nuevo todo (requiere autenticación)
+client.setAuthToken('your-jwt-token');
+client.createTodo('Nuevo todo desde cliente')
+  .then(response => {
+    console.log('Todo creado:', response.data);
+  })
+  .catch(error => {
+    console.error('Error:', error.message);
+  });
+```
+
+## Variables de Entorno
+
+```bash
+# .env
+JWT_SECRET=your-super-secret-jwt-key
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+NODE_ENV=development
+```
+
+## Características Destacadas
+
+- **Autenticación JWT**: Rutas protegidas con middleware de autenticación
+- **Validación de datos**: Validación robusta en controladores
+- **Manejo de errores**: Respuestas consistentes con códigos HTTP apropiados
+- **Paginación**: Soporte para paginación en endpoints de listado
+- **Seguridad**: CORS, rate limiting y headers de seguridad
+- **Middleware modular**: Aplicación selectiva de middleware por ruta
+- **Cliente TypeScript**: Ejemplo de cliente con tipos seguros

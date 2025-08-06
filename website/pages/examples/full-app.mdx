@@ -1,0 +1,1666 @@
+# Aplicación Completa
+
+Este ejemplo muestra cómo crear una aplicación web completa usando Fox Framework, integrando todas las características principales: autenticación JWT, base de datos, eventos, microservicios, SMTP, cache, y despliegue con Docker.
+
+## Arquitectura de la Aplicación
+
+La aplicación es un **E-commerce Platform** completo que incluye:
+
+- **API Gateway**: Punto de entrada único para todos los servicios
+- **User Service**: Gestión de usuarios y autenticación
+- **Product Service**: Catálogo de productos
+- **Order Service**: Procesamiento de pedidos
+- **Notification Service**: Emails y notificaciones push
+- **Payment Service**: Procesamiento de pagos
+- **Analytics Service**: Métricas y reportes
+- **Admin Dashboard**: Panel de administración
+
+## Estructura del Proyecto
+
+```
+fox-ecommerce/
+├── docker-compose.yml
+├── .env
+├── gateway/
+│   ├── Dockerfile
+│   ├── package.json
+│   └── src/
+│       ├── server.ts
+│       ├── middleware/
+│       └── routes/
+├── services/
+│   ├── user-service/
+│   ├── product-service/
+│   ├── order-service/
+│   ├── notification-service/
+│   ├── payment-service/
+│   └── analytics-service/
+├── shared/
+│   ├── events/
+│   ├── database/
+│   ├── cache/
+│   └── utils/
+├── frontend/
+│   ├── customer-app/
+│   └── admin-dashboard/
+└── infrastructure/
+    ├── nginx/
+    ├── postgres/
+    ├── redis/
+    └── monitoring/
+```
+
+## API Gateway Principal
+
+```typescript
+// gateway/src/server.ts
+import { FoxFactory, Request, Response } from '@foxframework/core';
+import { AuthMiddleware, SecurityMiddlewareCore } from '@foxframework/core/security';
+import { CircuitBreaker, ServiceRegistry } from '@foxframework/core/microservices';
+import { CacheMiddleware } from '@foxframework/core/cache';
+import { LoggerFactory } from '@foxframework/core/logging';
+import { MetricsCollector } from '@foxframework/core/metrics';
+import axios from 'axios';
+
+interface ServiceConfig {
+  name: string;
+  url: string;
+  timeout: number;
+  retries: number;
+  circuitBreaker: {
+    errorThreshold: number;
+    resetTimeout: number;
+  };
+}
+
+export class EcommerceGateway {
+  private logger = LoggerFactory.create({ service: 'gateway' });
+  private metrics = new MetricsCollector();
+  private circuitBreakers = new Map<string, CircuitBreaker>();
+  private serviceRegistry = new ServiceRegistry();
+
+  private services: ServiceConfig[] = [
+    {
+      name: 'user-service',
+      url: process.env.USER_SERVICE_URL || 'http://user-service:3001',
+      timeout: 5000,
+      retries: 3,
+      circuitBreaker: { errorThreshold: 5, resetTimeout: 30000 }
+    },
+    {
+      name: 'product-service',
+      url: process.env.PRODUCT_SERVICE_URL || 'http://product-service:3002',
+      timeout: 5000,
+      retries: 3,
+      circuitBreaker: { errorThreshold: 5, resetTimeout: 30000 }
+    },
+    {
+      name: 'order-service',
+      url: process.env.ORDER_SERVICE_URL || 'http://order-service:3003',
+      timeout: 5000,
+      retries: 3,
+      circuitBreaker: { errorThreshold: 5, resetTimeout: 30000 }
+    },
+    {
+      name: 'payment-service',
+      url: process.env.PAYMENT_SERVICE_URL || 'http://payment-service:3004',
+      timeout: 5000,
+      retries: 3,
+      circuitBreaker: { errorThreshold: 5, resetTimeout: 30000 }
+    },
+    {
+      name: 'notification-service',
+      url: process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:3005',
+      timeout: 5000,
+      retries: 3,
+      circuitBreaker: { errorThreshold: 5, resetTimeout: 30000 }
+    },
+    {
+      name: 'analytics-service',
+      url: process.env.ANALYTICS_SERVICE_URL || 'http://analytics-service:3006',
+      timeout: 5000,
+      retries: 3,
+      circuitBreaker: { errorThreshold: 5, resetTimeout: 30000 }
+    }
+  ];
+
+  constructor() {
+    this.initializeCircuitBreakers();
+  }
+
+  private initializeCircuitBreakers(): void {
+    this.services.forEach(service => {
+      const breaker = new CircuitBreaker({
+        timeout: service.timeout,
+        errorThreshold: service.circuitBreaker.errorThreshold,
+        resetTimeout: service.circuitBreaker.resetTimeout,
+        monitoringPeriod: 60000
+      });
+
+      this.circuitBreakers.set(service.name, breaker);
+    });
+  }
+
+  private getServiceConfig(serviceName: string): ServiceConfig | undefined {
+    return this.services.find(s => s.name === serviceName);
+  }
+
+  private async proxyRequest(serviceName: string, req: Request, res: Response): Promise<void> {
+    const startTime = Date.now();
+    const serviceConfig = this.getServiceConfig(serviceName);
+    
+    if (!serviceConfig) {
+      return res.status(404).json({
+        error: 'Service not found',
+        message: `Service ${serviceName} is not configured`
+      });
+    }
+
+    const circuitBreaker = this.circuitBreakers.get(serviceName);
+    if (!circuitBreaker) {
+      return res.status(500).json({
+        error: 'Circuit breaker not found',
+        message: `Circuit breaker for ${serviceName} is not configured`
+      });
+    }
+
+    try {
+      // Log de request
+      this.logger.info('Gateway request', {
+        service: serviceName,
+        method: req.method,
+        path: req.path,
+        userAgent: req.get('User-Agent'),
+        ip: req.ip
+      });
+
+      // Construir URL del servicio
+      const serviceUrl = `${serviceConfig.url}${req.originalUrl.replace(`/${serviceName}`, '')}`;
+
+      // Preparar headers
+      const headers = { ...req.headers };
+      delete headers.host;
+      headers['x-gateway-request-id'] = req.id || `gw-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      headers['x-forwarded-for'] = req.ip;
+      headers['x-service-name'] = serviceName;
+
+      // Ejecutar request a través del circuit breaker
+      const response = await circuitBreaker.execute(async () => {
+        return await axios({
+          method: req.method.toLowerCase() as any,
+          url: serviceUrl,
+          headers,
+          data: req.body,
+          params: req.query,
+          timeout: serviceConfig.timeout,
+          validateStatus: () => true
+        });
+      });
+
+      // Métricas
+      const duration = Date.now() - startTime;
+      this.metrics.recordHttpRequest({
+        method: req.method,
+        route: req.route?.path || req.path,
+        statusCode: response.status,
+        duration,
+        service: serviceName
+      });
+
+      // Log de response
+      this.logger.info('Gateway response', {
+        service: serviceName,
+        status: response.status,
+        duration,
+        size: response.headers['content-length']
+      });
+
+      // Enviar respuesta
+      res.status(response.status);
+      
+      // Copiar headers relevantes
+      Object.entries(response.headers).forEach(([key, value]) => {
+        if (!key.startsWith('x-') && key !== 'content-encoding' && key !== 'transfer-encoding') {
+          res.set(key, value as string);
+        }
+      });
+
+      res.send(response.data);
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      this.logger.error('Gateway error', {
+        service: serviceName,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        duration
+      });
+
+      this.metrics.recordHttpRequest({
+        method: req.method,
+        route: req.route?.path || req.path,
+        statusCode: 500,
+        duration,
+        service: serviceName
+      });
+
+      if (error.name === 'CircuitBreakerOpen') {
+        res.status(503).json({
+          error: 'Service Unavailable',
+          message: `Service ${serviceName} is temporarily unavailable`,
+          retryAfter: Math.ceil(serviceConfig.circuitBreaker.resetTimeout / 1000)
+        });
+      } else {
+        res.status(500).json({
+          error: 'Gateway Error',
+          message: 'An error occurred while processing your request',
+          requestId: headers['x-gateway-request-id']
+        });
+      }
+    }
+  }
+
+  createServer() {
+    return FoxFactory.createServer({
+      port: process.env.GATEWAY_PORT || 8080,
+      
+      middleware: [
+        // Request ID generation
+        (req: Request, res: Response, next: any) => {
+          req.id = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          res.set('X-Request-ID', req.id);
+          next();
+        },
+
+        // CORS
+        SecurityMiddlewareCore.cors({
+          origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+          credentials: true,
+          methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+          allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+        }),
+
+        // Security headers
+        SecurityMiddlewareCore.securityHeaders({
+          contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+          hsts: { maxAge: 31536000, includeSubDomains: true }
+        }),
+
+        // Rate limiting global
+        SecurityMiddlewareCore.rateLimit({
+          windowMs: 15 * 60 * 1000, // 15 minutos
+          maxRequests: 1000,
+          message: 'Too many requests from this IP'
+        }),
+
+        // Request logging
+        (req: Request, res: Response, next: any) => {
+          this.logger.info('Incoming request', {
+            requestId: req.id,
+            method: req.method,
+            url: req.url,
+            userAgent: req.get('User-Agent'),
+            ip: req.ip,
+            timestamp: new Date().toISOString()
+          });
+          next();
+        }
+      ],
+      
+      routes: [
+        // Health check del gateway
+        {
+          path: '/health',
+          method: 'get',
+          handler: (req: Request, res: Response) => {
+            const health = {
+              status: 'healthy',
+              timestamp: new Date().toISOString(),
+              uptime: process.uptime(),
+              services: Object.fromEntries(
+                this.services.map(service => [
+                  service.name, 
+                  {
+                    url: service.url,
+                    circuitBreaker: this.circuitBreakers.get(service.name)?.getState() || 'unknown'
+                  }
+                ])
+              ),
+              version: process.env.APP_VERSION || '1.0.0'
+            };
+            res.json(health);
+          }
+        },
+
+        // Métricas para Prometheus
+        {
+          path: '/metrics',
+          method: 'get',
+          handler: async (req: Request, res: Response) => {
+            const metrics = await this.metrics.getPrometheusMetrics();
+            res.set('Content-Type', 'text/plain').send(metrics);
+          }
+        },
+
+        // **Public Routes** (sin autenticación)
+        
+        // Products (solo lectura pública)
+        {
+          path: '/api/products',
+          method: 'get',
+          handler: (req: Request, res: Response) => this.proxyRequest('product-service', req, res),
+          middleware: [
+            CacheMiddleware.cache({
+              ttl: 300, // 5 minutos
+              key: (req) => `products:${JSON.stringify(req.query)}`
+            })
+          ]
+        },
+        {
+          path: '/api/products/:id',
+          method: 'get',
+          handler: (req: Request, res: Response) => this.proxyRequest('product-service', req, res),
+          middleware: [
+            CacheMiddleware.cache({
+              ttl: 600, // 10 minutos
+              key: (req) => `product:${req.params.id}`
+            })
+          ]
+        },
+
+        // User registration and authentication
+        {
+          path: '/api/auth/register',
+          method: 'post',
+          handler: (req: Request, res: Response) => this.proxyRequest('user-service', req, res),
+          middleware: [
+            SecurityMiddlewareCore.rateLimit({
+              windowMs: 15 * 60 * 1000,
+              maxRequests: 5,
+              message: 'Too many registration attempts'
+            })
+          ]
+        },
+        {
+          path: '/api/auth/login',
+          method: 'post',
+          handler: (req: Request, res: Response) => this.proxyRequest('user-service', req, res),
+          middleware: [
+            SecurityMiddlewareCore.rateLimit({
+              windowMs: 15 * 60 * 1000,
+              maxRequests: 5,
+              message: 'Too many login attempts'
+            })
+          ]
+        },
+        {
+          path: '/api/auth/refresh',
+          method: 'post',
+          handler: (req: Request, res: Response) => this.proxyRequest('user-service', req, res)
+        },
+
+        // **Protected Routes** (requieren autenticación)
+
+        // User management
+        {
+          path: '/api/users/*',
+          method: 'get',
+          handler: (req: Request, res: Response) => this.proxyRequest('user-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+        {
+          path: '/api/users/*',
+          method: 'put',
+          handler: (req: Request, res: Response) => this.proxyRequest('user-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+
+        // Order management
+        {
+          path: '/api/orders/*',
+          method: 'get',
+          handler: (req: Request, res: Response) => this.proxyRequest('order-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+        {
+          path: '/api/orders',
+          method: 'post',
+          handler: (req: Request, res: Response) => this.proxyRequest('order-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+
+        // Payment processing
+        {
+          path: '/api/payments/*',
+          method: 'post',
+          handler: (req: Request, res: Response) => this.proxyRequest('payment-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+
+        // **Admin Routes** (requieren role de admin)
+        
+        // Product management
+        {
+          path: '/api/admin/products/*',
+          method: 'post',
+          handler: (req: Request, res: Response) => this.proxyRequest('product-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            }),
+            // TODO: Add role-based authorization middleware
+          ]
+        },
+        {
+          path: '/api/admin/products/*',
+          method: 'put',
+          handler: (req: Request, res: Response) => this.proxyRequest('product-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+        {
+          path: '/api/admin/products/*',
+          method: 'delete',
+          handler: (req: Request, res: Response) => this.proxyRequest('product-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+
+        // Analytics and reports
+        {
+          path: '/api/admin/analytics/*',
+          method: 'get',
+          handler: (req: Request, res: Response) => this.proxyRequest('analytics-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            }),
+            CacheMiddleware.cache({
+              ttl: 900, // 15 minutos para analytics
+              key: (req) => `analytics:${req.path}:${JSON.stringify(req.query)}`
+            })
+          ]
+        },
+
+        // Notifications
+        {
+          path: '/api/notifications/*',
+          method: 'get',
+          handler: (req: Request, res: Response) => this.proxyRequest('notification-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        }
+      ]
+    });
+  }
+}
+
+// Inicializar gateway
+const gateway = new EcommerceGateway();
+const app = gateway.createServer();
+
+app.start().then(() => {
+  console.log('🦊 E-commerce Gateway running on http://localhost:8080');
+  console.log('🌐 Available services:');
+  console.log('  👤 User Service     : http://user-service:3001');
+  console.log('  📦 Product Service  : http://product-service:3002');
+  console.log('  📋 Order Service    : http://order-service:3003');
+  console.log('  💳 Payment Service  : http://payment-service:3004');
+  console.log('  📧 Notification Service: http://notification-service:3005');
+  console.log('  📊 Analytics Service: http://analytics-service:3006');
+  console.log('\n📚 Public endpoints:');
+  console.log('  GET  /api/products   - Browse products');
+  console.log('  POST /api/auth/login - User login');
+  console.log('  POST /api/auth/register - User registration');
+  console.log('\n🔒 Protected endpoints:');
+  console.log('  GET  /api/orders     - User orders');
+  console.log('  POST /api/orders     - Create order');
+  console.log('  POST /api/payments   - Process payment');
+  console.log('\n🛡️  Admin endpoints:');
+  console.log('  POST /api/admin/products - Create product');
+  console.log('  GET  /api/admin/analytics - View analytics');
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🔄 Gateway shutting down gracefully...');
+  process.exit(0);
+});
+```
+
+## Order Service con Event Sourcing
+
+```typescript
+// services/order-service/src/server.ts
+import { FoxFactory, Request, Response } from '@foxframework/core';
+import { DatabaseProvider, DatabaseFactory } from '@foxframework/core/database';
+import { EventStore, DistributedEventBus } from '@foxframework/core/events';
+import { EmailService } from '../../../shared/services/email.service';
+import { PaymentService } from '../../../shared/services/payment.service';
+
+interface OrderItem {
+  productId: number;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+interface Order {
+  id: string;
+  orderNumber: string;
+  userId: number;
+  customerEmail: string;
+  items: OrderItem[];
+  subtotal: number;
+  tax: number;
+  shipping: number;
+  total: number;
+  status: 'pending' | 'confirmed' | 'paid' | 'shipped' | 'delivered' | 'cancelled';
+  shippingAddress: any;
+  billingAddress: any;
+  paymentMethod?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export class OrderService {
+  private db: DatabaseProvider;
+  private eventStore: EventStore;
+  private eventBus: DistributedEventBus;
+  private emailService: EmailService;
+  private paymentService: PaymentService;
+  private orders: Map<string, Order> = new Map();
+
+  constructor() {
+    this.initializeServices();
+  }
+
+  private async initializeServices(): Promise<void> {
+    // Database connection
+    this.db = await DatabaseFactory.create({
+      provider: 'postgresql',
+      connection: {
+        host: process.env.DB_HOST || 'postgres',
+        port: parseInt(process.env.DB_PORT || '5432'),
+        database: process.env.DB_NAME || 'ecommerce_orders',
+        username: process.env.DB_USER || 'fox_user',
+        password: process.env.DB_PASS || 'fox_password'
+      }
+    });
+
+    // Event store and bus
+    this.eventStore = new EventStore({
+      provider: 'postgresql',
+      connection: this.db
+    });
+
+    this.eventBus = new DistributedEventBus({
+      provider: 'redis',
+      connection: {
+        host: process.env.REDIS_HOST || 'redis',
+        port: parseInt(process.env.REDIS_PORT || '6379')
+      }
+    });
+
+    // Services
+    this.emailService = new EmailService();
+    this.paymentService = new PaymentService();
+
+    // Setup event subscriptions
+    await this.setupEventSubscriptions();
+  }
+
+  private async setupEventSubscriptions(): Promise<void> {
+    // Listen for payment events
+    await this.eventBus.subscribe('PaymentProcessed', this.handlePaymentProcessed.bind(this));
+    await this.eventBus.subscribe('PaymentFailed', this.handlePaymentFailed.bind(this));
+    
+    // Listen for inventory events
+    await this.eventBus.subscribe('InventoryReserved', this.handleInventoryReserved.bind(this));
+    await this.eventBus.subscribe('InventoryReservationFailed', this.handleInventoryReservationFailed.bind(this));
+  }
+
+  // POST /orders
+  createOrder = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { items, shippingAddress, billingAddress, paymentMethod } = req.body;
+      const userId = req.user?.id;
+      const userEmail = req.user?.email;
+
+      if (!userId || !userEmail) {
+        return res.status(401).json({
+          error: 'Authentication required',
+          message: 'User must be authenticated to create orders'
+        });
+      }
+
+      // Validate items
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          message: 'Order must contain at least one item'
+        });
+      }
+
+      // Generate order ID and number
+      const orderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const orderNumber = `ORD-${Date.now().toString().slice(-8)}`;
+
+      // Fetch product details and calculate totals
+      let subtotal = 0;
+      const enrichedItems: OrderItem[] = [];
+
+      for (const item of items) {
+        // In a real application, fetch product details from product service
+        const productDetails = await this.fetchProductDetails(item.productId);
+        
+        if (!productDetails) {
+          return res.status(400).json({
+            error: 'Invalid product',
+            message: `Product ${item.productId} not found`
+          });
+        }
+
+        if (productDetails.stock < item.quantity) {
+          return res.status(400).json({
+            error: 'Insufficient stock',
+            message: `Product ${productDetails.name} has insufficient stock`
+          });
+        }
+
+        const itemTotal = productDetails.price * item.quantity;
+        subtotal += itemTotal;
+
+        enrichedItems.push({
+          productId: item.productId,
+          productName: productDetails.name,
+          quantity: item.quantity,
+          unitPrice: productDetails.price,
+          total: itemTotal
+        });
+      }
+
+      // Calculate tax and shipping
+      const tax = subtotal * 0.08; // 8% tax
+      const shipping = subtotal > 100 ? 0 : 15; // Free shipping over $100
+      const total = subtotal + tax + shipping;
+
+      // Create order
+      const order: Order = {
+        id: orderId,
+        orderNumber,
+        userId,
+        customerEmail: userEmail,
+        items: enrichedItems,
+        subtotal,
+        tax,
+        shipping,
+        total,
+        status: 'pending',
+        shippingAddress,
+        billingAddress: billingAddress || shippingAddress,
+        paymentMethod,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      // Store order
+      this.orders.set(orderId, order);
+
+      // Emit order created event
+      await this.eventBus.publish({
+        eventId: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        eventType: 'OrderCreated',
+        aggregateId: orderId,
+        aggregateType: 'Order',
+        payload: {
+          orderId,
+          orderNumber,
+          userId,
+          customerEmail: userEmail,
+          items: enrichedItems,
+          total,
+          status: 'pending'
+        },
+        metadata: {
+          version: 1,
+          timestamp: new Date(),
+          source: 'order-service'
+        }
+      });
+
+      // Start order processing workflow
+      await this.processOrderWorkflow(orderId);
+
+      res.status(201).json({
+        data: order,
+        message: 'Order created successfully'
+      });
+
+    } catch (error) {
+      console.error('Create order error:', error);
+      res.status(500).json({
+        error: 'Order creation failed',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  // GET /orders/user/:userId
+  getUserOrders = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const authenticatedUserId = req.user?.id;
+
+      // Users can only see their own orders (unless admin)
+      if (userId !== authenticatedUserId && req.user?.role !== 'admin') {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'You can only view your own orders'
+        });
+      }
+
+      const userOrders = Array.from(this.orders.values())
+        .filter(order => order.userId === userId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      res.json({
+        data: userOrders,
+        total: userOrders.length
+      });
+
+    } catch (error) {
+      console.error('Get user orders error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch orders',
+        message: 'An error occurred while fetching orders'
+      });
+    }
+  };
+
+  // GET /orders/:id
+  getOrder = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const orderId = req.params.id;
+      const order = this.orders.get(orderId);
+
+      if (!order) {
+        return res.status(404).json({
+          error: 'Order not found',
+          message: `Order ${orderId} not found`
+        });
+      }
+
+      // Check access permissions
+      if (order.userId !== req.user?.id && req.user?.role !== 'admin') {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'You can only view your own orders'
+        });
+      }
+
+      res.json({ data: order });
+
+    } catch (error) {
+      console.error('Get order error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch order',
+        message: 'An error occurred while fetching the order'
+      });
+    }
+  };
+
+  // PUT /orders/:id/cancel
+  cancelOrder = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const orderId = req.params.id;
+      const order = this.orders.get(orderId);
+
+      if (!order) {
+        return res.status(404).json({
+          error: 'Order not found',
+          message: `Order ${orderId} not found`
+        });
+      }
+
+      // Check permissions
+      if (order.userId !== req.user?.id && req.user?.role !== 'admin') {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'You can only cancel your own orders'
+        });
+      }
+
+      // Check if order can be cancelled
+      if (['shipped', 'delivered', 'cancelled'].includes(order.status)) {
+        return res.status(400).json({
+          error: 'Cannot cancel order',
+          message: `Order cannot be cancelled in ${order.status} status`
+        });
+      }
+
+      // Update order status
+      order.status = 'cancelled';
+      order.updatedAt = new Date();
+
+      // Emit order cancelled event
+      await this.eventBus.publish({
+        eventId: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        eventType: 'OrderCancelled',
+        aggregateId: orderId,
+        aggregateType: 'Order',
+        payload: {
+          orderId,
+          orderNumber: order.orderNumber,
+          userId: order.userId,
+          customerEmail: order.customerEmail,
+          reason: req.body.reason || 'Customer request',
+          refundAmount: order.total
+        },
+        metadata: {
+          version: 2,
+          timestamp: new Date(),
+          source: 'order-service',
+          userId: req.user?.id
+        }
+      });
+
+      res.json({
+        data: order,
+        message: 'Order cancelled successfully'
+      });
+
+    } catch (error) {
+      console.error('Cancel order error:', error);
+      res.status(500).json({
+        error: 'Order cancellation failed',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  private async processOrderWorkflow(orderId: string): Promise<void> {
+    const order = this.orders.get(orderId);
+    if (!order) return;
+
+    try {
+      // Step 1: Reserve inventory
+      await this.eventBus.publish({
+        eventId: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        eventType: 'InventoryReservationRequested',
+        aggregateId: orderId,
+        aggregateType: 'Order',
+        payload: {
+          orderId,
+          items: order.items.map(item => ({
+            productId: item.productId,
+            quantity: item.quantity
+          }))
+        },
+        metadata: {
+          version: 1,
+          timestamp: new Date(),
+          source: 'order-service'
+        }
+      });
+
+    } catch (error) {
+      console.error('Order workflow error:', error);
+      await this.handleOrderError(orderId, 'Workflow processing failed');
+    }
+  }
+
+  private async handleInventoryReserved(event: any): Promise<void> {
+    const orderId = event.aggregateId;
+    const order = this.orders.get(orderId);
+    
+    if (order && order.status === 'pending') {
+      // Inventory reserved, now process payment
+      await this.processPayment(orderId);
+    }
+  }
+
+  private async handleInventoryReservationFailed(event: any): Promise<void> {
+    const orderId = event.aggregateId;
+    await this.handleOrderError(orderId, 'Inventory reservation failed');
+  }
+
+  private async processPayment(orderId: string): Promise<void> {
+    const order = this.orders.get(orderId);
+    if (!order) return;
+
+    try {
+      // Process payment through payment service
+      await this.eventBus.publish({
+        eventId: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        eventType: 'PaymentRequested',
+        aggregateId: orderId,
+        aggregateType: 'Order',
+        payload: {
+          orderId,
+          amount: order.total,
+          currency: 'USD',
+          paymentMethod: order.paymentMethod,
+          customerEmail: order.customerEmail,
+          billingAddress: order.billingAddress
+        },
+        metadata: {
+          version: 1,
+          timestamp: new Date(),
+          source: 'order-service'
+        }
+      });
+
+    } catch (error) {
+      console.error('Payment processing error:', error);
+      await this.handleOrderError(orderId, 'Payment processing failed');
+    }
+  }
+
+  private async handlePaymentProcessed(event: any): Promise<void> {
+    const orderId = event.payload.orderId;
+    const order = this.orders.get(orderId);
+    
+    if (order) {
+      order.status = 'paid';
+      order.updatedAt = new Date();
+
+      // Send order confirmation email
+      await this.emailService.sendOrderConfirmation(
+        order.customerEmail,
+        order.orderNumber,
+        order
+      );
+
+      // Emit order confirmed event
+      await this.eventBus.publish({
+        eventId: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        eventType: 'OrderConfirmed',
+        aggregateId: orderId,
+        aggregateType: 'Order',
+        payload: {
+          orderId,
+          orderNumber: order.orderNumber,
+          userId: order.userId,
+          customerEmail: order.customerEmail,
+          total: order.total,
+          items: order.items
+        },
+        metadata: {
+          version: 3,
+          timestamp: new Date(),
+          source: 'order-service'
+        }
+      });
+    }
+  }
+
+  private async handlePaymentFailed(event: any): Promise<void> {
+    const orderId = event.payload.orderId;
+    await this.handleOrderError(orderId, `Payment failed: ${event.payload.reason}`);
+  }
+
+  private async handleOrderError(orderId: string, reason: string): Promise<void> {
+    const order = this.orders.get(orderId);
+    if (order) {
+      order.status = 'cancelled';
+      order.updatedAt = new Date();
+
+      // Send error notification
+      await this.emailService.sendOrderError(
+        order.customerEmail,
+        order.orderNumber,
+        reason
+      );
+
+      // Emit order failed event
+      await this.eventBus.publish({
+        eventId: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        eventType: 'OrderFailed',
+        aggregateId: orderId,
+        aggregateType: 'Order',
+        payload: {
+          orderId,
+          orderNumber: order.orderNumber,
+          userId: order.userId,
+          customerEmail: order.customerEmail,
+          reason
+        },
+        metadata: {
+          version: 2,
+          timestamp: new Date(),
+          source: 'order-service'
+        }
+      });
+    }
+  }
+
+  private async fetchProductDetails(productId: number): Promise<any> {
+    // In a real application, this would call the product service
+    // For demo purposes, return mock data
+    const mockProducts = {
+      1: { id: 1, name: 'Laptop Pro', price: 1299.99, stock: 10 },
+      2: { id: 2, name: 'Wireless Mouse', price: 29.99, stock: 50 },
+      3: { id: 3, name: 'USB-C Cable', price: 19.99, stock: 100 }
+    };
+
+    return mockProducts[productId as keyof typeof mockProducts] || null;
+  }
+
+  createServer() {
+    return FoxFactory.createServer({
+      port: process.env.ORDER_SERVICE_PORT || 3003,
+      
+      routes: [
+        // Health check
+        {
+          path: '/health',
+          method: 'get',
+          handler: (req: Request, res: Response) => {
+            res.json({
+              status: 'healthy',
+              service: 'order-service',
+              timestamp: new Date().toISOString(),
+              ordersCount: this.orders.size
+            });
+          }
+        },
+
+        // Order endpoints
+        { path: '/orders', method: 'post', handler: this.createOrder },
+        { path: '/orders/user/:userId', method: 'get', handler: this.getUserOrders },
+        { path: '/orders/:id', method: 'get', handler: this.getOrder },
+        { path: '/orders/:id/cancel', method: 'put', handler: this.cancelOrder }
+      ]
+    });
+  }
+}
+
+// Initialize service
+const orderService = new OrderService();
+const app = orderService.createServer();
+
+app.start().then(() => {
+  console.log('📋 Order Service running on http://localhost:3003');
+  console.log('📚 Available endpoints:');
+  console.log('  POST /orders            - Create new order');
+  console.log('  GET  /orders/user/:id   - Get user orders');
+  console.log('  GET  /orders/:id        - Get order details');
+  console.log('  PUT  /orders/:id/cancel - Cancel order');
+});
+```
+
+## Docker Compose Completo
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # API Gateway
+  gateway:
+    build: ./gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - GATEWAY_PORT=8080
+      - JWT_SECRET=${JWT_SECRET}
+      - USER_SERVICE_URL=http://user-service:3001
+      - PRODUCT_SERVICE_URL=http://product-service:3002
+      - ORDER_SERVICE_URL=http://order-service:3003
+      - PAYMENT_SERVICE_URL=http://payment-service:3004
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3005
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3006
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+      - user-service
+      - product-service
+      - order-service
+    networks:
+      - ecommerce
+
+  # User Service
+  user-service:
+    build: ./services/user-service
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_NAME=ecommerce_users
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - REDIS_HOST=redis
+      - JWT_SECRET=${JWT_SECRET}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - ecommerce
+
+  # Product Service
+  product-service:
+    build: ./services/product-service
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_NAME=ecommerce_products
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - REDIS_HOST=redis
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - ecommerce
+
+  # Order Service
+  order-service:
+    build: ./services/order-service
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_NAME=ecommerce_orders
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - REDIS_HOST=redis
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - ecommerce
+
+  # Payment Service
+  payment-service:
+    build: ./services/payment-service
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_NAME=ecommerce_payments
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - REDIS_HOST=redis
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - PAYPAL_CLIENT_ID=${PAYPAL_CLIENT_ID}
+      - PAYPAL_SECRET=${PAYPAL_SECRET}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - ecommerce
+
+  # Notification Service
+  notification-service:
+    build: ./services/notification-service
+    environment:
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - TWILIO_SID=${TWILIO_SID}
+      - TWILIO_TOKEN=${TWILIO_TOKEN}
+      - FIREBASE_KEY=${FIREBASE_KEY}
+    depends_on:
+      - redis
+    networks:
+      - ecommerce
+
+  # Analytics Service
+  analytics-service:
+    build: ./services/analytics-service
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_NAME=ecommerce_analytics
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - REDIS_HOST=redis
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - ecommerce
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_MULTIPLE_DATABASES=ecommerce_users,ecommerce_products,ecommerce_orders,ecommerce_payments,ecommerce_analytics
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
+    networks:
+      - ecommerce
+
+  # Redis Cache & Message Broker
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - ecommerce
+
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./infrastructure/nginx/ssl:/etc/ssl/certs
+    depends_on:
+      - gateway
+    networks:
+      - ecommerce
+
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - ecommerce
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - ecommerce
+
+  # Elasticsearch for logging
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - ecommerce
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.9.0
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - ecommerce
+
+networks:
+  ecommerce:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
+```
+
+## Frontend Customer App (React)
+
+```typescript
+// frontend/customer-app/src/services/api.service.ts
+export class EcommerceApiService {
+  private baseUrl: string;
+  private token?: string;
+
+  constructor(baseUrl: string = 'http://localhost:8080/api') {
+    this.baseUrl = baseUrl;
+    this.loadTokenFromStorage();
+  }
+
+  private loadTokenFromStorage(): void {
+    this.token = localStorage.getItem('accessToken') || undefined;
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'API request failed');
+    }
+
+    return response.json();
+  }
+
+  // Authentication
+  async login(email: string, password: string): Promise<any> {
+    const result = await this.request<any>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (result.data?.accessToken) {
+      this.token = result.data.accessToken;
+      localStorage.setItem('accessToken', this.token);
+    }
+
+    return result;
+  }
+
+  async register(userData: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+  }): Promise<any> {
+    return this.request<any>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  // Products
+  async getProducts(filters?: any): Promise<any> {
+    const params = new URLSearchParams(filters);
+    return this.request<any>(`/products?${params}`);
+  }
+
+  async getProduct(id: number): Promise<any> {
+    return this.request<any>(`/products/${id}`);
+  }
+
+  // Orders
+  async createOrder(orderData: any): Promise<any> {
+    return this.request<any>('/orders', {
+      method: 'POST',
+      body: JSON.stringify(orderData),
+    });
+  }
+
+  async getMyOrders(): Promise<any> {
+    return this.request<any>('/orders/user/me');
+  }
+
+  async getOrder(orderId: string): Promise<any> {
+    return this.request<any>(`/orders/${orderId}`);
+  }
+
+  async cancelOrder(orderId: string, reason?: string): Promise<any> {
+    return this.request<any>(`/orders/${orderId}/cancel`, {
+      method: 'PUT',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  // Payments
+  async processPayment(paymentData: any): Promise<any> {
+    return this.request<any>('/payments', {
+      method: 'POST',
+      body: JSON.stringify(paymentData),
+    });
+  }
+}
+
+// Usage in React component
+import React, { useState, useEffect } from 'react';
+import { EcommerceApiService } from '../services/api.service';
+
+const ProductList: React.FC = () => {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const apiService = new EcommerceApiService();
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      const response = await apiService.getProducts();
+      setProducts(response.data);
+    } catch (error) {
+      console.error('Failed to load products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddToCart = async (productId: number) => {
+    try {
+      // Add to cart logic here
+      console.log(`Added product ${productId} to cart`);
+    } catch (error) {
+      console.error('Failed to add to cart:', error);
+    }
+  };
+
+  if (loading) return <div>Loading products...</div>;
+
+  return (
+    <div className="product-grid">
+      {products.map((product: any) => (
+        <div key={product.id} className="product-card">
+          <img src={product.imageUrl} alt={product.name} />
+          <h3>{product.name}</h3>
+          <p>{product.description}</p>
+          <div className="price">${product.price}</div>
+          <button onClick={() => handleAddToCart(product.id)}>
+            Add to Cart
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
+```
+
+## Scripts de Deployment
+
+```bash
+#!/bin/bash
+# scripts/deploy-full-stack.sh
+
+set -euo pipefail
+
+echo "🚀 Deploying Fox E-commerce Platform"
+
+# Variables
+ENVIRONMENT=${1:-development}
+VERSION=${2:-latest}
+
+echo "📋 Environment: $ENVIRONMENT"
+echo "📋 Version: $VERSION"
+
+# Build all services
+echo "🔨 Building all services..."
+docker-compose build
+
+# Start infrastructure first
+echo "🏗️  Starting infrastructure..."
+docker-compose up -d postgres redis elasticsearch
+
+# Wait for databases to be ready
+echo "⏳ Waiting for databases..."
+sleep 30
+
+# Start services
+echo "🚀 Starting microservices..."
+docker-compose up -d user-service product-service order-service payment-service notification-service analytics-service
+
+# Start gateway
+echo "🌐 Starting API Gateway..."
+docker-compose up -d gateway
+
+# Start frontend services
+echo "🎨 Starting frontend..."
+docker-compose up -d nginx
+
+# Start monitoring
+echo "📊 Starting monitoring stack..."
+docker-compose up -d prometheus grafana kibana
+
+# Health check
+echo "🏥 Performing health checks..."
+sleep 60
+
+services=("gateway:8080" "user-service:3001" "product-service:3002" "order-service:3003")
+for service in "${services[@]}"; do
+  IFS=':' read -r name port <<< "$service"
+  if curl -f "http://localhost:$port/health" > /dev/null 2>&1; then
+    echo "✅ $name is healthy"
+  else
+    echo "❌ $name health check failed"
+  fi
+done
+
+echo "🎉 Deployment completed!"
+echo ""
+echo "📋 Available services:"
+echo "  🌐 API Gateway: http://localhost:8080"
+echo "  🎨 Frontend: http://localhost:80"
+echo "  📊 Grafana: http://localhost:3000"
+echo "  🔍 Kibana: http://localhost:5601"
+echo "  📈 Prometheus: http://localhost:9090"
+echo ""
+echo "📚 API Documentation: http://localhost:8080/docs"
+echo "🏥 Health Status: http://localhost:8080/health"
+```
+
+## Variables de Entorno
+
+```bash
+# .env
+# Database
+DB_USER=fox_user
+DB_PASS=super_secure_password
+
+# JWT
+JWT_SECRET=super-secure-jwt-secret-key-at-least-32-characters
+JWT_REFRESH_SECRET=another-super-secure-refresh-key
+
+# SMTP (SendGrid example)
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_USER=apikey
+SMTP_PASS=your-sendgrid-api-key
+
+# Payment Providers
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+PAYPAL_CLIENT_ID=your_paypal_client_id
+PAYPAL_SECRET=your_paypal_secret
+
+# SMS (Twilio)
+TWILIO_SID=your_twilio_account_sid
+TWILIO_TOKEN=your_twilio_auth_token
+
+# Push Notifications (Firebase)
+FIREBASE_KEY=your_firebase_server_key
+
+# Monitoring
+GRAFANA_PASSWORD=admin123
+SENTRY_DSN=https://your-sentry-dsn
+
+# Frontend
+FRONTEND_URL=http://localhost:3000
+ADMIN_URL=http://localhost:3001
+
+# API Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+```
+
+## Características Destacadas de la Aplicación Completa
+
+- **🏗️ Arquitectura de Microservicios**: Servicios independientes y escalables
+- **🔐 Autenticación JWT Completa**: Login, registro, refresh tokens
+- **📊 Event Sourcing & CQRS**: Historial completo de eventos y separación de lecturas/escrituras
+- **💳 Procesamiento de Pagos**: Integración con Stripe y PayPal
+- **📧 Sistema de Notificaciones**: Emails transaccionales, SMS y push notifications
+- **🛒 Flujo de E-commerce Completo**: Productos, carrito, checkout, pagos
+- **📈 Analytics & Monitoring**: Métricas en tiempo real con Prometheus y Grafana
+- **🔍 Logging Centralizado**: ELK Stack para análisis de logs
+- **🐳 Containerización Completa**: Docker Compose para todo el stack
+- **🚀 Auto-scaling**: Configuración lista para Kubernetes
+- **🛡️ Seguridad Integral**: Rate limiting, CORS, security headers
+- **💾 Persistencia Multi-Provider**: PostgreSQL, Redis, Elasticsearch
+- **🔄 Circuit Breakers**: Resistencia a fallos entre servicios
+- **📱 Frontend Moderno**: React con TypeScript y API client
+- **👨‍💼 Admin Dashboard**: Panel de administración completo
+
+Esta aplicación completa demuestra cómo Fox Framework puede manejar aplicaciones empresariales complejas con todas las características modernas esperadas en un sistema de production-ready.

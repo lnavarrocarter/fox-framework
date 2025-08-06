@@ -1,0 +1,996 @@
+# Microservicios
+
+Este ejemplo muestra cómo crear una arquitectura de microservicios completa usando Fox Framework con service registry, API gateway, circuit breakers y comunicación entre servicios.
+
+## Service Registry
+
+```typescript
+// src/services/registry.service.ts
+import { ServiceRegistry, LoadBalancer, HealthChecker } from '@foxframework/core/microservices';
+
+export interface ServiceInstance {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  version: string;
+  health: 'healthy' | 'unhealthy' | 'unknown';
+  metadata: Record<string, any>;
+  registeredAt: Date;
+  lastHeartbeat: Date;
+}
+
+export class MicroserviceRegistry {
+  private registry: ServiceRegistry;
+  private loadBalancer: LoadBalancer;
+  private healthChecker: HealthChecker;
+
+  constructor() {
+    this.registry = new ServiceRegistry({
+      provider: 'memory', // En producción usar 'consul' o 'etcd'
+      ttl: 30000, // 30 segundos
+      heartbeatInterval: 10000 // 10 segundos
+    });
+
+    this.loadBalancer = new LoadBalancer({
+      algorithm: 'round-robin' // También: 'weighted', 'health-aware'
+    });
+
+    this.healthChecker = new HealthChecker({
+      interval: 15000, // Check cada 15 segundos
+      timeout: 5000,   // Timeout de 5 segundos
+      retries: 3
+    });
+
+    this.startHealthChecking();
+  }
+
+  async registerService(service: Omit<ServiceInstance, 'id' | 'registeredAt' | 'lastHeartbeat' | 'health'>): Promise<string> {
+    const serviceInstance: ServiceInstance = {
+      ...service,
+      id: `${service.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      health: 'unknown',
+      registeredAt: new Date(),
+      lastHeartbeat: new Date()
+    };
+
+    await this.registry.register(serviceInstance);
+    console.log(`🚀 Service registered: ${serviceInstance.name} (${serviceInstance.id})`);
+    
+    return serviceInstance.id;
+  }
+
+  async unregisterService(serviceId: string): Promise<void> {
+    await this.registry.unregister(serviceId);
+    console.log(`🔴 Service unregistered: ${serviceId}`);
+  }
+
+  async discoverService(serviceName: string): Promise<ServiceInstance[]> {
+    const services = await this.registry.discover(serviceName);
+    const healthyServices = services.filter(s => s.health === 'healthy');
+    
+    if (healthyServices.length === 0) {
+      throw new Error(`No healthy instances found for service: ${serviceName}`);
+    }
+
+    return healthyServices;
+  }
+
+  async getServiceInstance(serviceName: string): Promise<ServiceInstance> {
+    const services = await this.discoverService(serviceName);
+    return this.loadBalancer.select(services);
+  }
+
+  async heartbeat(serviceId: string): Promise<void> {
+    await this.registry.heartbeat(serviceId);
+  }
+
+  private async startHealthChecking(): Promise<void> {
+    setInterval(async () => {
+      const allServices = await this.registry.getAllServices();
+      
+      for (const service of allServices) {
+        try {
+          const isHealthy = await this.healthChecker.check(`http://${service.host}:${service.port}/health`);
+          await this.registry.updateHealth(service.id, isHealthy ? 'healthy' : 'unhealthy');
+        } catch (error) {
+          await this.registry.updateHealth(service.id, 'unhealthy');
+        }
+      }
+    }, this.healthChecker.interval);
+  }
+
+  async getServiceStats(): Promise<any> {
+    const services = await this.registry.getAllServices();
+    const stats = {
+      total: services.length,
+      healthy: services.filter(s => s.health === 'healthy').length,
+      unhealthy: services.filter(s => s.health === 'unhealthy').length,
+      unknown: services.filter(s => s.health === 'unknown').length,
+      byService: {} as Record<string, number>
+    };
+
+    services.forEach(service => {
+      stats.byService[service.name] = (stats.byService[service.name] || 0) + 1;
+    });
+
+    return stats;
+  }
+}
+```
+
+## API Gateway
+
+```typescript
+// src/gateway/api-gateway.ts
+import { FoxFactory, Request, Response } from '@foxframework/core';
+import { CircuitBreaker } from '@foxframework/core/microservices';
+import { SecurityMiddlewareCore, AuthMiddleware } from '@foxframework/core/security';
+import { MicroserviceRegistry } from '../services/registry.service';
+import axios from 'axios';
+
+export class ApiGateway {
+  private registry: MicroserviceRegistry;
+  private circuitBreakers: Map<string, CircuitBreaker>;
+
+  constructor() {
+    this.registry = new MicroserviceRegistry();
+    this.circuitBreakers = new Map();
+  }
+
+  private getCircuitBreaker(serviceName: string): CircuitBreaker {
+    if (!this.circuitBreakers.has(serviceName)) {
+      const breaker = new CircuitBreaker({
+        timeout: 5000,
+        errorThreshold: 5,
+        resetTimeout: 30000,
+        monitoringPeriod: 60000
+      });
+
+      this.circuitBreakers.set(serviceName, breaker);
+    }
+
+    return this.circuitBreakers.get(serviceName)!;
+  }
+
+  async proxyRequest(serviceName: string, req: Request, res: Response): Promise<void> {
+    try {
+      // Obtener instancia del servicio
+      const serviceInstance = await this.registry.getServiceInstance(serviceName);
+      const breaker = this.getCircuitBreaker(serviceName);
+
+      // Construir URL del servicio
+      const serviceUrl = `http://${serviceInstance.host}:${serviceInstance.port}${req.originalUrl}`;
+
+      // Preparar headers (sin headers internos del gateway)
+      const headers = { ...req.headers };
+      delete headers.host;
+      delete headers['x-forwarded-for'];
+      
+      // Agregar headers de tracing
+      headers['x-gateway-request-id'] = req.id || Math.random().toString(36);
+      headers['x-gateway-service'] = serviceName;
+      headers['x-forwarded-for'] = req.ip;
+
+      // Hacer petición a través del circuit breaker
+      const response = await breaker.execute(async () => {
+        return await axios({
+          method: req.method.toLowerCase() as any,
+          url: serviceUrl,
+          headers,
+          data: req.body,
+          params: req.query,
+          timeout: 5000,
+          validateStatus: () => true // No lanzar error por códigos HTTP
+        });
+      });
+
+      // Enviar respuesta
+      res.status(response.status);
+      
+      // Copiar headers de respuesta (excepto internos)
+      Object.entries(response.headers).forEach(([key, value]) => {
+        if (!key.startsWith('x-') && key !== 'content-encoding') {
+          res.set(key, value as string);
+        }
+      });
+
+      res.send(response.data);
+
+    } catch (error) {
+      console.error(`Gateway error for ${serviceName}:`, error);
+
+      if (error.name === 'CircuitBreakerOpen') {
+        res.status(503).json({
+          error: 'Service Unavailable',
+          message: `Service ${serviceName} is temporarily unavailable`,
+          details: 'Circuit breaker is open'
+        });
+      } else if (error.code === 'ECONNREFUSED') {
+        res.status(503).json({
+          error: 'Service Unavailable',
+          message: `Cannot connect to ${serviceName} service`
+        });
+      } else {
+        res.status(500).json({
+          error: 'Gateway Error',
+          message: 'An error occurred while proxying the request'
+        });
+      }
+    }
+  }
+
+  createServer(): any {
+    return FoxFactory.createServer({
+      port: 8080,
+      
+      middleware: [
+        // Rate limiting global
+        SecurityMiddlewareCore.rateLimit({
+          windowMs: 15 * 60 * 1000,
+          maxRequests: 1000,
+          message: 'Too many requests from gateway'
+        }),
+        
+        // CORS
+        SecurityMiddlewareCore.cors({
+          origin: process.env.ALLOWED_ORIGINS?.split(',') || ['*'],
+          credentials: true
+        }),
+        
+        // Security headers
+        SecurityMiddlewareCore.securityHeaders(),
+        
+        // Request logging
+        (req: Request, res: Response, next: any) => {
+          console.log(`🌐 Gateway: ${req.method} ${req.path} from ${req.ip}`);
+          next();
+        }
+      ],
+      
+      routes: [
+        // Health check del gateway
+        {
+          path: '/health',
+          method: 'get',
+          handler: (req: Request, res: Response) => {
+            res.json({
+              status: 'healthy',
+              timestamp: new Date().toISOString(),
+              uptime: process.uptime(),
+              gateway: 'fox-api-gateway'
+            });
+          }
+        },
+
+        // Service registry endpoints
+        {
+          path: '/registry/services',
+          method: 'get',
+          handler: async (req: Request, res: Response) => {
+            const stats = await this.registry.getServiceStats();
+            res.json(stats);
+          }
+        },
+
+        // User Service Routes (con autenticación)
+        {
+          path: '/api/users/*',
+          method: 'get',
+          handler: (req: Request, res: Response) => this.proxyRequest('user-service', req, res),
+          middleware: [
+            AuthMiddleware.optionalJwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+        {
+          path: '/api/users/*',
+          method: 'post',
+          handler: (req: Request, res: Response) => this.proxyRequest('user-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+        {
+          path: '/api/users/*',
+          method: 'put',
+          handler: (req: Request, res: Response) => this.proxyRequest('user-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+        {
+          path: '/api/users/*',
+          method: 'delete',
+          handler: (req: Request, res: Response) => this.proxyRequest('user-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+
+        // Product Service Routes
+        {
+          path: '/api/products/*',
+          method: 'get',
+          handler: (req: Request, res: Response) => this.proxyRequest('product-service', req, res)
+        },
+        {
+          path: '/api/products/*',
+          method: 'post',
+          handler: (req: Request, res: Response) => this.proxyRequest('product-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+
+        // Order Service Routes
+        {
+          path: '/api/orders/*',
+          method: 'get',
+          handler: (req: Request, res: Response) => this.proxyRequest('order-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+        {
+          path: '/api/orders/*',
+          method: 'post',
+          handler: (req: Request, res: Response) => this.proxyRequest('order-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+
+        // Notification Service Routes
+        {
+          path: '/api/notifications/*',
+          method: 'get',
+          handler: (req: Request, res: Response) => this.proxyRequest('notification-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        },
+        {
+          path: '/api/notifications/*',
+          method: 'post',
+          handler: (req: Request, res: Response) => this.proxyRequest('notification-service', req, res),
+          middleware: [
+            AuthMiddleware.jwt({
+              secret: process.env.JWT_SECRET || 'your-secret-key',
+              algorithms: ['HS256']
+            })
+          ]
+        }
+      ]
+    });
+  }
+}
+```
+
+## User Service
+
+```typescript
+// services/user-service/src/server.ts
+import { FoxFactory, Request, Response } from '@foxframework/core';
+import { EventEmitter } from '@foxframework/core/events';
+import { MicroserviceRegistry } from '../../shared/registry.service';
+
+interface User {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+class UserService {
+  private users: User[] = [
+    {
+      id: 1,
+      email: 'admin@example.com',
+      firstName: 'Admin',
+      lastName: 'User',
+      createdAt: new Date('2024-01-01'),
+      updatedAt: new Date('2024-01-01')
+    }
+  ];
+
+  private eventEmitter: EventEmitter;
+  private registry: MicroserviceRegistry;
+  private serviceId?: string;
+
+  constructor() {
+    this.eventEmitter = new EventEmitter();
+    this.registry = new MicroserviceRegistry();
+  }
+
+  async startService(): Promise<void> {
+    // Registrar el servicio
+    this.serviceId = await this.registry.registerService({
+      name: 'user-service',
+      host: 'localhost',
+      port: 3001,
+      version: '1.0.0',
+      metadata: {
+        description: 'User management service',
+        endpoints: ['/users', '/users/:id']
+      }
+    });
+
+    // Configurar heartbeat
+    setInterval(() => {
+      if (this.serviceId) {
+        this.registry.heartbeat(this.serviceId);
+      }
+    }, 10000);
+
+    // Configurar graceful shutdown
+    process.on('SIGTERM', () => this.shutdown());
+    process.on('SIGINT', () => this.shutdown());
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.serviceId) {
+      await this.registry.unregisterService(this.serviceId);
+    }
+    process.exit(0);
+  }
+
+  // GET /users
+  getAllUsers = (req: Request, res: Response): void => {
+    const { page = 1, limit = 10 } = req.query;
+    
+    const startIndex = (Number(page) - 1) * Number(limit);
+    const endIndex = startIndex + Number(limit);
+    const paginatedUsers = this.users.slice(startIndex, endIndex);
+    
+    res.json({
+      data: paginatedUsers,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total: this.users.length,
+        totalPages: Math.ceil(this.users.length / Number(limit))
+      }
+    });
+  };
+
+  // GET /users/:id
+  getUserById = (req: Request, res: Response): void => {
+    const id = parseInt(req.params.id);
+    const user = this.users.find(u => u.id === id);
+    
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: `User with id ${id} does not exist`
+      });
+    }
+    
+    res.json({ data: user });
+  };
+
+  // POST /users
+  createUser = async (req: Request, res: Response): Promise<void> => {
+    const { email, firstName, lastName } = req.body;
+    
+    // Validación
+    if (!email || !firstName || !lastName) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'Email, firstName, and lastName are required'
+      });
+    }
+
+    // Verificar email único
+    const existingUser = this.users.find(u => u.email === email);
+    if (existingUser) {
+      return res.status(409).json({
+        error: 'Email already exists',
+        message: 'A user with this email already exists'
+      });
+    }
+    
+    const newUser: User = {
+      id: this.users.length + 1,
+      email,
+      firstName,
+      lastName,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    this.users.push(newUser);
+
+    // Emitir evento para otros servicios
+    this.eventEmitter.emit('user.created', {
+      userId: newUser.id,
+      email: newUser.email,
+      firstName: newUser.firstName,
+      timestamp: new Date()
+    });
+
+    res.status(201).json({
+      data: newUser,
+      message: 'User created successfully'
+    });
+  };
+
+  createServer() {
+    return FoxFactory.createServer({
+      port: 3001,
+      
+      middleware: [
+        (req: Request, res: Response, next: any) => {
+          console.log(`👤 User Service: ${req.method} ${req.path}`);
+          next();
+        }
+      ],
+      
+      routes: [
+        // Health check
+        {
+          path: '/health',
+          method: 'get',
+          handler: (req: Request, res: Response) => {
+            res.json({
+              status: 'healthy',
+              service: 'user-service',
+              timestamp: new Date().toISOString(),
+              uptime: process.uptime()
+            });
+          }
+        },
+
+        // User routes
+        { path: '/users', method: 'get', handler: this.getAllUsers },
+        { path: '/users/:id', method: 'get', handler: this.getUserById },
+        { path: '/users', method: 'post', handler: this.createUser }
+      ]
+    });
+  }
+}
+
+// Iniciar el servicio
+const userService = new UserService();
+userService.startService();
+
+const app = userService.createServer();
+app.start().then(() => {
+  console.log('👤 User Service running on http://localhost:3001');
+});
+```
+
+## Notification Service con SMTP
+
+```typescript
+// services/notification-service/src/server.ts
+import { FoxFactory, Request, Response } from '@foxframework/core';
+import { EventEmitter } from '@foxframework/core/events';
+import { MicroserviceRegistry } from '../../shared/registry.service';
+import nodemailer from 'nodemailer';
+
+interface Notification {
+  id: string;
+  userId: number;
+  type: 'email' | 'sms' | 'push';
+  subject?: string;
+  message: string;
+  status: 'pending' | 'sent' | 'failed';
+  createdAt: Date;
+  sentAt?: Date;
+  error?: string;
+}
+
+class NotificationService {
+  private notifications: Notification[] = [];
+  private emailTransporter: nodemailer.Transporter;
+  private eventEmitter: EventEmitter;
+  private registry: MicroserviceRegistry;
+  private serviceId?: string;
+
+  constructor() {
+    this.eventEmitter = new EventEmitter();
+    this.registry = new MicroserviceRegistry();
+    
+    // Configurar transporter SMTP
+    this.emailTransporter = nodemailer.createTransporter({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    // Suscribirse a eventos de otros servicios
+    this.setupEventListeners();
+  }
+
+  private setupEventListeners(): void {
+    // Escuchar eventos de creación de usuarios
+    this.eventEmitter.on('user.created', async (data: any) => {
+      await this.sendWelcomeEmail(data.userId, data.email, data.firstName);
+    });
+
+    // Escuchar eventos de pedidos
+    this.eventEmitter.on('order.created', async (data: any) => {
+      await this.sendOrderConfirmationEmail(data.userId, data.orderId, data.email);
+    });
+  }
+
+  async startService(): Promise<void> {
+    this.serviceId = await this.registry.registerService({
+      name: 'notification-service',
+      host: 'localhost',
+      port: 3003,
+      version: '1.0.0',
+      metadata: {
+        description: 'Notification service with email, SMS and push support',
+        capabilities: ['email', 'sms', 'push']
+      }
+    });
+
+    setInterval(() => {
+      if (this.serviceId) {
+        this.registry.heartbeat(this.serviceId);
+      }
+    }, 10000);
+
+    process.on('SIGTERM', () => this.shutdown());
+    process.on('SIGINT', () => this.shutdown());
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.serviceId) {
+      await this.registry.unregisterService(this.serviceId);
+    }
+    process.exit(0);
+  }
+
+  async sendEmail(to: string, subject: string, html: string): Promise<void> {
+    try {
+      await this.emailTransporter.sendMail({
+        from: `"${process.env.APP_NAME}" <${process.env.SMTP_FROM}>`,
+        to,
+        subject,
+        html,
+      });
+    } catch (error) {
+      console.error('Email sending failed:', error);
+      throw error;
+    }
+  }
+
+  async sendWelcomeEmail(userId: number, email: string, firstName: string): Promise<void> {
+    const notification: Notification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      userId,
+      type: 'email',
+      subject: 'Welcome to our platform!',
+      message: `Welcome ${firstName}! Your account has been created successfully.`,
+      status: 'pending',
+      createdAt: new Date()
+    };
+
+    this.notifications.push(notification);
+
+    try {
+      await this.sendEmail(
+        email,
+        'Welcome to our platform!',
+        `
+        <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
+          <h2>Welcome ${firstName}!</h2>
+          <p>Your account has been created successfully.</p>
+          <p>You can now start using our platform and explore all the features we have to offer.</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.FRONTEND_URL}/dashboard" 
+               style="background-color: #007bff; color: white; padding: 12px 24px; 
+                      text-decoration: none; border-radius: 4px; display: inline-block;">
+              Get Started
+            </a>
+          </div>
+          
+          <p>If you have any questions, feel free to contact our support team.</p>
+          
+          <p>Best regards,<br>The Team</p>
+        </div>
+        `
+      );
+
+      notification.status = 'sent';
+      notification.sentAt = new Date();
+
+    } catch (error) {
+      notification.status = 'failed';
+      notification.error = error instanceof Error ? error.message : 'Unknown error';
+    }
+  }
+
+  async sendOrderConfirmationEmail(userId: number, orderId: string, email: string): Promise<void> {
+    const notification: Notification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      userId,
+      type: 'email',
+      subject: 'Order Confirmation',
+      message: `Your order ${orderId} has been confirmed.`,
+      status: 'pending',
+      createdAt: new Date()
+    };
+
+    this.notifications.push(notification);
+
+    try {
+      await this.sendEmail(
+        email,
+        'Order Confirmation',
+        `
+        <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
+          <h2>Order Confirmed!</h2>
+          <p>Thank you for your order. Your order #${orderId} has been confirmed and is being processed.</p>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 4px; margin: 20px 0;">
+            <h3>Order Details</h3>
+            <p><strong>Order ID:</strong> ${orderId}</p>
+            <p><strong>Status:</strong> Confirmed</p>
+            <p><strong>Estimated Delivery:</strong> 3-5 business days</p>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.FRONTEND_URL}/orders/${orderId}" 
+               style="background-color: #28a745; color: white; padding: 12px 24px; 
+                      text-decoration: none; border-radius: 4px; display: inline-block;">
+              Track Your Order
+            </a>
+          </div>
+          
+          <p>We'll send you another email when your order ships.</p>
+        </div>
+        `
+      );
+
+      notification.status = 'sent';
+      notification.sentAt = new Date();
+
+    } catch (error) {
+      notification.status = 'failed';
+      notification.error = error instanceof Error ? error.message : 'Unknown error';
+    }
+  }
+
+  // POST /notifications
+  sendNotification = async (req: Request, res: Response): Promise<void> => {
+    const { userId, type, subject, message, email } = req.body;
+
+    if (!userId || !type || !message) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'userId, type, and message are required'
+      });
+    }
+
+    const notification: Notification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      userId,
+      type,
+      subject,
+      message,
+      status: 'pending',
+      createdAt: new Date()
+    };
+
+    this.notifications.push(notification);
+
+    try {
+      if (type === 'email' && email) {
+        await this.sendEmail(email, subject || 'Notification', message);
+        notification.status = 'sent';
+        notification.sentAt = new Date();
+      } else {
+        throw new Error(`Unsupported notification type: ${type}`);
+      }
+
+      res.status(201).json({
+        data: notification,
+        message: 'Notification sent successfully'
+      });
+
+    } catch (error) {
+      notification.status = 'failed';
+      notification.error = error instanceof Error ? error.message : 'Unknown error';
+
+      res.status(500).json({
+        error: 'Notification failed',
+        message: 'Failed to send notification',
+        details: notification.error
+      });
+    }
+  };
+
+  // GET /notifications
+  getNotifications = (req: Request, res: Response): void => {
+    const { userId, status } = req.query;
+    
+    let filteredNotifications = this.notifications;
+    
+    if (userId) {
+      filteredNotifications = filteredNotifications.filter(n => n.userId === parseInt(userId as string));
+    }
+    
+    if (status) {
+      filteredNotifications = filteredNotifications.filter(n => n.status === status);
+    }
+
+    res.json({
+      data: filteredNotifications,
+      total: filteredNotifications.length
+    });
+  };
+
+  createServer() {
+    return FoxFactory.createServer({
+      port: 3003,
+      
+      middleware: [
+        (req: Request, res: Response, next: any) => {
+          console.log(`📧 Notification Service: ${req.method} ${req.path}`);
+          next();
+        }
+      ],
+      
+      routes: [
+        // Health check
+        {
+          path: '/health',
+          method: 'get',
+          handler: (req: Request, res: Response) => {
+            res.json({
+              status: 'healthy',
+              service: 'notification-service',
+              timestamp: new Date().toISOString(),
+              uptime: process.uptime(),
+              emailConfig: {
+                host: process.env.SMTP_HOST,
+                port: process.env.SMTP_PORT,
+                user: process.env.SMTP_USER ? '***' : 'not configured'
+              }
+            });
+          }
+        },
+
+        // Notification routes
+        { path: '/notifications', method: 'get', handler: this.getNotifications },
+        { path: '/notifications', method: 'post', handler: this.sendNotification }
+      ]
+    });
+  }
+}
+
+// Iniciar el servicio
+const notificationService = new NotificationService();
+notificationService.startService();
+
+const app = notificationService.createServer();
+app.start().then(() => {
+  console.log('📧 Notification Service running on http://localhost:3003');
+});
+```
+
+## Inicialización Completa
+
+```typescript
+// start-microservices.ts
+import { ApiGateway } from './src/gateway/api-gateway';
+
+async function startMicroservices() {
+  console.log('🚀 Starting Fox Framework Microservices...');
+
+  // Iniciar API Gateway
+  const gateway = new ApiGateway();
+  const gatewayApp = gateway.createServer();
+  
+  await gatewayApp.start();
+  console.log('🌐 API Gateway running on http://localhost:8080');
+
+  console.log('\n📊 Service Architecture:');
+  console.log('  API Gateway     : http://localhost:8080');
+  console.log('  User Service    : http://localhost:3001');
+  console.log('  Product Service : http://localhost:3002');
+  console.log('  Notification Service: http://localhost:3003');
+  console.log('\n🔍 Available Endpoints:');
+  console.log('  GET  /registry/services     - Service registry stats');
+  console.log('  GET  /api/users            - User management');
+  console.log('  GET  /api/products         - Product catalog');
+  console.log('  GET  /api/notifications    - Notification history');
+}
+
+startMicroservices().catch(console.error);
+```
+
+## Docker Compose
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  api-gateway:
+    build: ./
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - user-service
+      - notification-service
+
+  user-service:
+    build: ./services/user-service
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+
+  notification-service:
+    build: ./services/notification-service
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=production
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+
+  consul:
+    image: consul:latest
+    ports:
+      - "8500:8500"
+    command: agent -server -bootstrap -ui -client=0.0.0.0
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+```
+
+## Características Destacadas
+
+- **Service Registry**: Descubrimiento automático de servicios con health checks
+- **API Gateway**: Routing inteligente con circuit breakers y rate limiting
+- **Load Balancing**: Algoritmos múltiples para distribución de carga
+- **Circuit Breakers**: Protección contra fallos en cascada
+- **Event-Driven Communication**: Comunicación asíncrona entre servicios
+- **SMTP Integration**: Servicio de notificaciones con emails transaccionales
+- **Health Monitoring**: Endpoints de salud en todos los servicios
+- **Graceful Shutdown**: Desregistro automático de servicios al cerrar
+- **Distributed Tracing**: Headers de trazabilidad entre servicios
