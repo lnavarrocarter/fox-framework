@@ -146,8 +146,8 @@ Parametros (si implementado): `batchSize`, `batchTimeout`. Minimiza overhead de 
 
 ## Métricas y Observabilidad
 Agregar transport que empuje contadores (futuro):
-- logs_total{level}
-- log_errors_total (fallos de transport)
+- `logs_total{level="info"}`
+- `log_errors_total`
 
 Pattern manual:
 ```ts

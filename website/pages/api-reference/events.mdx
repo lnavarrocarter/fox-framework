@@ -184,7 +184,7 @@ Nunca sobrescribir eventos históricos.
 
 ## Seguridad (Validación / Hardening)
 - Validar schema de `data` antes de append
-- Limitar tamaño (ej: <16KB por evento)
+- Limitar tamaño (ej: `<16KB` por evento)
 - Sanitizar PII (o tokenizar)
 - Controlar multi‑tenant via `metadata.tenantId`
 - Firmar eventos críticos (futuro) / checksum
