@@ -1,0 +1,99 @@
+# Plugins API
+
+Sistema extensible para añadir capacidades al framework.
+
+## Objetivos
+- Aislar funcionalidades
+- Compartir lógica reusable
+- Extender core sin forks
+
+## Interfaz Principal
+Basado en `tsfox/core/plugins/interfaces.ts`.
+
+```ts
+interface IPlugin {
+  name: string;
+  version: string;
+  description?: string;
+  dependencies?: PluginDependency[];
+  permissions?: PluginPermission[];
+  metadata?: PluginMetadata;
+  initialize?(ctx: PluginContext): Promise<void>|void;
+  configure?(config: PluginConfig): Promise<void>|void;
+  destroy?(): Promise<void>|void;
+  onHook?(hook: string, ...args:any[]): any;
+  onEvent?(event: PluginEvent): void;
+  healthCheck?(): PluginHealthStatus | Promise<PluginHealthStatus>;
+}
+```
+
+## Registro
+```ts
+import { PluginFactory } from 'fox-framework';
+
+PluginFactory.register(new MyPlugin());
+```
+
+## Hooks
+```ts
+ctx.hooks.register('user.created', async user => {/* ... */});
+await ctx.hooks.execute('user.created', newUser);
+```
+
+## Eventos
+```ts
+ctx.events.emit('order.paid', { id:'evt1', data:{ orderId:123 } });
+```
+
+## Service Container
+```ts
+ctx.services.register('mailer', () => new MailerService(), { lifetime:'singleton' });
+const mailer = ctx.services.get('mailer');
+```
+
+## Permisos
+Tipos: `filesystem`, `network`, `database`, `environment`, `process`, `hooks`, `events`, `config`, `logging`, `cache`, `security`, `admin`.
+
+Validar permisos antes de permitir acciones sensibles.
+
+## Dependencias
+Declarar en manifest para resolución ordenada.
+
+## Health Check
+```ts
+healthCheck() { return { status:'healthy', timestamp:Date.now() }; }
+```
+
+## Ciclo de Vida
+1. register
+2. initialize
+3. configure
+4. running
+5. destroy (shutdown / reload)
+
+## Buenas Prácticas
+| Área | Recomendación |
+|------|---------------|
+| Naming | Prefijo único (org-nombre) |
+| Versionado | SemVer disciplinado |
+| Permisos | Pedir solo los necesarios |
+| Logs | Usar logger contextual `ctx.logger` |
+| Config | Validar contra schema | 
+| Errores | Fails controlados + health degrade |
+
+## Ejemplo Mínimo
+```ts
+class AuditPlugin implements IPlugin {
+  name='audit-plugin'; version='1.0.0';
+  async initialize(ctx){
+    ctx.hooks.register('order.confirmed', async order => {
+      await ctx.services.get('auditStore').save(order);
+    });
+  }
+}
+```
+
+## Roadmap Futuro
+- Hot reload de plugins
+- Marketplace / discovery
+- Sandboxing de ejecución

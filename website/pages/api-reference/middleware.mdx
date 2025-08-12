@@ -1,0 +1,99 @@
+# Middleware API
+
+Documentación de los middlewares incluidos y cómo crear otros personalizados.
+
+## Conceptos
+
+Un middleware en Fox Framework es una función `(req, res, next)` que puede:
+- Inspeccionar / mutar la request
+- Cortar el flujo respondiendo
+- Invocar `next()` para continuar
+
+```ts
+import { FoxFactory } from 'fox-framework';
+
+const timingMiddleware = (req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    console.log(`[TIMER] ${req.method} ${req.url} -> ${Date.now()-start}ms`);
+  });
+  next();
+};
+
+const app = FoxFactory.createInstance({
+  port: 3000,
+  middlewares: [ timingMiddleware ]
+});
+```
+
+## Middleware Incluidos
+
+### Request Logging
+Archivo: `tsfox/core/middleware/request-logging.middleware.ts`
+
+```ts
+import { RequestLoggingMiddleware } from 'fox-framework';
+
+// Uso global
+const app = FoxFactory.createInstance({
+  middlewares: [
+    RequestLoggingMiddleware({
+      correlation: true,
+      headers: ['user-agent'],
+      level: 'info'
+    })
+  ]
+});
+```
+
+#### Opciones Principales
+| Opción | Tipo | Descripción |
+|--------|------|-------------|
+| `correlation` | boolean | Genera `X-Request-ID` / `X-Correlation-ID` |
+| `headers` | string[] | Lista de headers a loggear |
+| `level` | 'info'\|'debug' | Nivel base de logging |
+| `mask` | string[] | Campos del body a anonimizar |
+
+### Middlewares de Seguridad
+Ver sección `Security API` para detalles (CORS, RateLimit, CSRF, Auth, Authorization, Headers, Validation).
+
+### Cache Middleware
+Ver sección `Cache API` (responseCache, apiCache, templateCache).
+
+## Creación de un Middleware Reutilizable
+
+```ts
+export interface ExampleOptions { enabled?: boolean }
+
+export const exampleMiddleware = (opts: ExampleOptions = {}) => (req, res, next) => {
+  if (!opts.enabled) return next();
+  // lógica...
+  next();
+};
+
+// Uso
+app.use(exampleMiddleware({ enabled: true }));
+```
+
+## Orden de Ejecución
+1. Middlewares globales (`config.middlewares`)
+2. Middlewares de ruta (al registrar rutas)
+3. Handler final
+
+Mantén side-effects fuera de orden crítico (ej: logging antes de parsing pesado, security headers temprano).
+
+## Buenas Prácticas
+- Pequeños y de una sola responsabilidad
+- Idempotentes donde sea posible
+- No atrapar errores silenciosamente (loggear y pasar a siguiente con `next(err)`)
+- Evitar bloquear el event loop (usar async/await)
+
+## Errores
+Para propagar errores:
+```ts
+const mw = async (req, res, next) => {
+  try { /* ... */ } catch (e) { next(e); }
+};
+```
+
+Asegúrate de tener un manejador global (próxima versión incluirá `error.middleware`).

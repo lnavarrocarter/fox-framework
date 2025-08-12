@@ -1,0 +1,328 @@
+# Cache API
+
+Sistema de caché unificado con soporte multi-provider y middlewares.
+
+## Interfaces Clave
+Basado en `tsfox/core/cache/interfaces.ts`.
+
+```ts
+interface ICache {
+  get<T>(key: string): Promise<T|null>;
+  set<T>(key: string, value: T, ttl?: number): Promise<void>;
+  delete(key: string): Promise<boolean>;
+  clear(): Promise<void>;
+  exists(key: string): Promise<boolean>;
+  getMetrics(): CacheMetrics;
+  invalidatePattern(pattern: string): Promise<number>;
+}
+```
+
+### Métricas
+```ts
+interface CacheMetrics {
+  hits: number;
+  misses: number;
+  hitRatio: number;
+  totalRequests: number;
+  averageResponseTime: number;
+  totalKeys: number;
+  memoryUsage?: number;
+  evictions: number;
+}
+```
+
+## Proveedores Disponibles
+- Memory (default, LRU + métricas)
+- Redis (distribuido)
+- File (persistencia simple)
+
+```ts
+import { CacheFactory } from 'fox-framework';
+
+const cache = CacheFactory.create({
+  provider: 'redis',
+  ttl: 300,
+  redis: { host: 'localhost', port: 6379 }
+});
+
+await cache.set('user:1', { id: 1, name: 'Ada' }, 60);
+const user = await cache.get('user:1');
+```
+
+### Configuración Detallada de Proveedores
+```ts
+// Memory
+CacheFactory.create({
+  provider: 'memory',
+  ttl: 60,
+  evictionPolicy: 'lru',
+  maxKeys: 5000,
+  memory: { checkPeriod: 30 }
+});
+
+// Redis
+CacheFactory.create({
+  provider: 'redis',
+  ttl: 120,
+  redis: {
+    host: 'redis.internal',
+    port: 6379,
+    keyPrefix: 'app:v1:',
+    database: 2
+  }
+});
+
+// File
+CacheFactory.create({
+  provider: 'file',
+  ttl: 300,
+  file: { directory: './.cache', compression: true, cleanupInterval: 600 }
+});
+```
+
+### Instancias Nombradas vs Config Hash
+```ts
+// Reutiliza instancia si la config es igual (hash)
+const defaultCache = CacheFactory.create({ provider:'memory', ttl:30 });
+
+// Instancia SIEMPRE aislada por nombre
+const sessionCache = CacheFactory.createNamed('sessions', { provider:'redis', ttl: 900, redis:{ host:'redis', port:6379 }});
+
+// Recuperar existente
+const sameSession = CacheFactory.get('sessions');
+```
+
+### Políticas de Expulsión (`EvictionPolicy`)
+| Política | Uso | Ventaja | Riesgo |
+|----------|-----|---------|--------|
+| lru | General | Optimiza por recencia | Puede expulsar claves calientes bajo spikes |
+| lfu | Accesos desbalanceados | Retiene más usadas | Costo de contadores |
+| fifo | Casos simples | Implementación simple | No considera uso |
+| ttl | Datos caducos claros | Predecible | Picos de expiración simultánea |
+
+## Middleware de Respuesta
+Archivo: `tsfox/core/cache/middleware/response.middleware.ts`
+
+```ts
+import { responseCache } from 'fox-framework';
+
+app.use(responseCache({ ttl: 120 }));
+```
+
+### Flujo Interno Simplificado
+1. Genera key (método + path + query por defecto)
+2. Verifica skip (método, headers no-cache)
+3. Intenta `get(key)`
+4. HIT -> responde con `X-Cache: HIT`
+5. MISS -> envuelve `res.json/res.send` para almacenar al finalizar (si status permitido)
+6. Guarda y añade `X-Cache: MISS`
+
+### Opciones Comunes
+| Opción | Descripción |
+|--------|-------------|
+| `ttl` | Tiempo de vida en segundos |
+| `key` | String o función `(req) => string` |
+| `condition` | Función para decidir si cachear |
+| `vary` | Lista de headers que afectan el key |
+| `skipMethods` | Métodos HTTP que se ignoran |
+| `statusCodes` | Status permitidos a cachear |
+
+## Cache para APIs
+```ts
+import { apiCache } from 'fox-framework';
+
+router.get('/products', apiCache({ ttl: 60 }), handler);
+```
+
+## Cache de Templates
+```ts
+import { templateCache } from 'fox-framework';
+
+router.get('/home', templateCache({ ttl: 300 }), renderHome);
+```
+
+## Invalidación
+```ts
+import { invalidateCache } from 'fox-framework';
+
+await invalidateCache('products:*');
+```
+
+Retorna cantidad de claves eliminadas.
+
+### Patrones de Invalidación
+| Escenario | Estrategia |
+|----------|-----------|
+| CRUD producto | `invalidateCache(['product:'+id, 'products:list*'])` |
+| Cambios masivos (import) | Prefijo versionado `v2:` y rotar versión |
+| Config runtime | Invalidar key específica al actualizar |
+| Feature flags | TTL muy corto + invalidación puntual |
+
+## Métricas Runtime
+```ts
+import { cacheMetrics } from 'fox-framework';
+const metrics = cacheMetrics();
+console.log(metrics.hitRatio);
+```
+
+### Exponer a Prometheus (Ejemplo)
+```ts
+router.get('/metrics/cache', (req,res) => {
+  const c = CacheFactory.get('default');
+  const m = c.getMetrics();
+  res.type('text/plain').send([
+    `cache_hits ${m.hits}`,
+    `cache_misses ${m.misses}`,
+    `cache_hit_ratio ${m.hitRatio}`,
+    `cache_evictions ${m.evictions}`
+  ].join('\n'));
+});
+```
+
+## Estrategias de Keys
+- Prefijo por dominio: `user:123`, `product:987`
+- Versionado: `v2:config:ui`
+- Compuesto: `search:${hash(query)}`
+- Sensible a locale: `product:${id}:locale:${locale}`
+- Multi-tenancy: `tenant:${tenantId}:resource:${id}`
+
+### Generador Personalizado
+```ts
+apiCache({
+  key: req => `products:${req.query.category || 'all'}:page:${req.query.page||1}`,
+  ttl: 45
+});
+```
+
+## Multi‑Layer Caching (L1 / L2)
+```ts
+// L1 - memoria proceso
+const l1 = CacheFactory.create({ provider:'memory', ttl:5 });
+// L2 - redis distribuido
+const l2 = CacheFactory.create({ provider:'redis', ttl:60, redis:{ host:'redis', port:6379 }});
+
+async function layeredGet(key, producer){
+  const k = key;
+  const fast = await l1.get(k);
+  if (fast) return fast;
+  const slow = await l2.get(k);
+  if (slow){ await l1.set(k, slow, 5); return slow; }
+  const fresh = await producer();
+  await l2.set(k, fresh, 60); await l1.set(k, fresh, 5);
+  return fresh;
+}
+```
+
+## Prevención de Cache Stampede
+```ts
+// Patrón lock key básico
+async function getWithLock(key, producer){
+  const val = await cache.get(key);
+  if (val) return val;
+  const lockKey = `lock:${key}`;
+  if (await cache.exists(lockKey)) {
+    // Espera exponencial simple
+    await new Promise(r => setTimeout(r, 50));
+    return getWithLock(key, producer);
+  }
+  await cache.set(lockKey, 1, 5); // lock TTL corto
+  try {
+    const fresh = await producer();
+    await cache.set(key, fresh, 60);
+    return fresh;
+  } finally {
+    await cache.delete(lockKey);
+  }
+}
+```
+
+## Negative Caching (Con Cautela)
+Evita repetir lookups costosos para claves inexistentes:
+```ts
+const MISS = Symbol('MISS');
+async function getUser(id){
+  const k = `user:${id}`;
+  const cached = await cache.get(k);
+  if (cached === MISS) return null;
+  if (cached) return cached;
+  const dbUser = await db.users.findById(id);
+  await cache.set(k, dbUser ?? (MISS as any), 30);
+  return dbUser;
+}
+```
+Nunca usar si la existencia puede cambiar rápidamente (alta tasa de creación).
+
+## Ejemplo Integral (Productos con Invalidación)
+```ts
+// GET listado cacheado
+router.get('/products', apiCache({
+  ttl: 30,
+  key: req => `products:list:cat:${req.query.cat||'all'}:page:${req.query.page||1}`
+}), listProductsHandler);
+
+// POST crea producto -> invalidar patrones relevantes
+router.post('/products', async (req,res,next) => {
+  try {
+    const created = await service.create(req.body);
+    await cache.invalidatePattern('products:list:*');
+    await cache.delete(`product:${created.id}`);
+    res.status(201).json({ data: created });
+  } catch(e){ next(e); }
+});
+
+// GET detalle (fallback a DB)
+router.get('/products/:id', apiCache({
+  ttl: 120,
+  key: req => `product:${req.params.id}`
+}), getProductHandler);
+```
+
+## Buenas Prácticas
+- TTLs cortos para datos volátiles
+- Invalidation pattern tras mutaciones
+- Evitar cachear errores / 4xx / 5xx
+- Medir hitRatio > 0.7 ideal
+- Versionar claves para releases grandes
+- Ser explícito en keys (evitar colisiones)
+- Evitar almacenar datos sensibles (tokens, PII sin cifrar)
+- Monitorear evictions (picos = ajustar límites)
+
+## Anti‑Patrones
+| Situación | Riesgo |
+|-----------|--------|
+| Cache global gigante | Contención, GC costoso |
+| TTL muy largo sin invalidar | Datos obsoletos silenciosos |
+| Cache de respuestas mutables | Inconsistencias visibles |
+| Claves basadas en JSON sin orden | Misses por orden diferente |
+| Cachear 500 / errores externos | Propaga fallas y enmascara recuperación |
+
+## Troubleshooting
+| Problema | Causa | Solución |
+|----------|-------|----------|
+| Misses altos | TTL bajo o keys inestables | Ajustar TTL y key builder |
+| Memoria alta | Eviction policy ineficiente | Revisar maxKeys / maxSize |
+| Invalidation lenta | Muchos patrones | Agrupar por namespaces |
+| HitRatio fluctúa | Spikes de warm | Pre-warm claves críticas |
+| Evictions repentinos | Barrido masivo TTL | Distribuir expiraciones con jitter |
+
+### Añadir Jitter a TTL
+```ts
+function withJitter(base, spread=0.2){
+  const delta = base * spread;
+  return Math.floor(base + (Math.random()*delta - delta/2));
+}
+await cache.set(key, data, withJitter(300));
+```
+
+## Checklist Rápido
+- [ ] Keys tienen prefijo de dominio
+- [ ] TTL definido conscientemente
+- [ ] Invalidación implementada para mutaciones
+- [ ] No se cachean errores
+- [ ] Métricas monitoreadas (hits, misses, evictions)
+- [ ] Eviction policy adecuada al patrón de acceso
+- [ ] No se almacena información sensible
+- [ ] Estrategia de warming (opcional)
+
+---
+Mantén la caché como acelerador, no como fuente de verdad. Diseña siempre la lógica para funcionar ante MISS continuos.

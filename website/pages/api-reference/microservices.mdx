@@ -1,0 +1,86 @@
+# Microservices API
+
+Soporte para arquitectura de microservicios: registry, resilience y comunicación.
+
+## Componentes
+- Service Registry
+- Circuit Breakers
+- Load Balancer (round-robin / weighted)
+- Health Checks
+- Distributed Event Bus
+
+## Service Registry (Concepto)
+```ts
+const registry = new ServiceRegistry();
+registry.register({ name:'user-service', url:'http://user:3001', health:'/health' });
+const service = registry.get('user-service');
+```
+
+## Circuit Breaker (Pseudo API)
+```ts
+const breaker = new CircuitBreaker({
+  timeout: 5000,
+  errorThreshold: 5,
+  resetTimeout: 30000
+});
+
+await breaker.execute(async () => {
+  return await http.get(service.url + '/users');
+});
+```
+
+Estados: `closed` -> `open` -> `half-open` -> `closed`.
+
+## Health Checks
+- Activo (`/health` endpoints)
+- Pasivo (errores en tiempo de ejecución)
+- Métricas agregadas
+
+## API Gateway (Ejemplo Extracto)
+Ver ejemplo completo en `examples/full-app.mdx`.
+
+```ts
+const response = await circuitBreaker.execute(() => axios({...}));
+```
+
+## Comunicación
+- Sincronía: HTTP + circuit breakers
+- Asincronía: Event Bus / cola
+
+## Observabilidad
+- Logging contextual por servicio
+- Correlation IDs propagados (`x-correlation-id`)
+- Métricas expuestas `/metrics` (Prometheus)
+
+## Resiliencia
+| Técnica | Descripción |
+|---------|-------------|
+| Circuit Breaker | Aísla fallos repetidos |
+| Retry + Backoff | Reintentos controlados |
+| Timeout | No esperar indefinidamente |
+| Bulkhead | Aislar pools de recursos |
+| Rate Limit | Proteger contra sobrecarga |
+
+## Versionado de Servicios
+- Prefijar rutas: `/v1/users`
+- Mantener compatibilidad temporal
+- Deprecación comunicada vía headers (`Sunset`)
+
+## Seguridad Entre Servicios
+- mTLS (futuro)
+- Tokens firmados internos
+- Whitelists de red
+
+## Estrategia de Despliegue
+| Estrategia | Uso |
+|------------|-----|
+| Rolling | Actualizaciones estándar |
+| Blue/Green | Cambios críticos |
+| Canary | Características experimentales |
+
+## Buenas Prácticas
+- Tamaño mínimo de servicio (bounded context)
+- Fail fast y reportar claramente
+- Evitar chatty APIs (agrupar llamadas)
+- Limitar coupling a través de contratos de eventos
+- Documentar SLA / SLO por servicio

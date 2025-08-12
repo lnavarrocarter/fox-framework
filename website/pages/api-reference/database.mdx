@@ -1,0 +1,91 @@
+# Database API
+
+Abstracción de base de datos multi-proveedor.
+
+## Objetivos
+- Uniformar operaciones CRUD
+- Soportar múltiples proveedores (PostgreSQL, MongoDB, Redis, etc.)
+- Simplificar transacciones
+- Extensible por repositorios
+
+## Patrón Repositorio (Ejemplo Simplificado)
+```ts
+interface Repository<T> {
+  findById(id: string|number): Promise<T|null>;
+  find(filter?: any): Promise<T[]>;
+  create(data: Partial<T>): Promise<T>;
+  update(id: string|number, data: Partial<T>): Promise<T>;
+  delete(id: string|number): Promise<boolean>;
+}
+```
+
+## Configuración
+```ts
+const db = await DatabaseFactory.create({
+  provider: 'postgresql',
+  connection: {
+    host: 'localhost', port: 5432,
+    database: 'app', username: 'user', password: 'pass'
+  }
+});
+```
+
+## Transacciones
+```ts
+await db.transaction(async trx => {
+  const user = await trx.users.create(data);
+  await trx.audit.log({...});
+});
+```
+
+## Ejemplo de Repositorio
+```ts
+class UserRepository {
+  constructor(private db){ }
+  async findActive(limit=50){
+    return this.db.query('SELECT * FROM users WHERE active = true LIMIT $1', [limit]);
+  }
+}
+```
+
+## Migraciones (Concepto)
+- Archivos numerados / timestamp
+- Up / Down
+- Registro en tabla `migrations`
+
+## Indexación
+Asegura índices para campos consultados frecuentemente.
+
+## Capa de Cache
+Combinar con Cache API para query caching:
+```ts
+const key = `user:${id}`;
+const cached = await cache.get(key);
+if (cached) return cached;
+const user = await repo.findById(id);
+await cache.set(key, user, 300);
+```
+
+## Auditoría mediante Eventos
+Publicar eventos en cambios críticos:
+```ts
+await eventBus.publish({
+  type: 'user.updated', aggregateId: user.id, data: { changes }
+});
+```
+
+## Buenas Prácticas
+| Tema | Recomendación |
+|------|---------------|
+| Conexiones | Pool configurado (min/max) |
+| Transacciones | Cortas, evitar lógica externa prolongada |
+| Validación | Pre-validar datos antes de persistir |
+| Seguridad | SQL parametrizado / ORM seguro |
+| Observabilidad | Log de queries lentas (>200ms) |
+
+## Errores Comunes
+| Problema | Causa | Mitigación |
+|----------|-------|------------|
+| Bloqueos | Transacciones largas | Reducir alcance |
+| Hotspot row | Alta concurrencia | Sharding / colas |
+| Pool agotado | Fugas de conexiones | Liberar recursos finalmente |

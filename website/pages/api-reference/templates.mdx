@@ -1,0 +1,77 @@
+# Templates API
+
+Sistema de plantillas para renderizar vistas HTML.
+
+## Objetivos
+- Separar lógica de presentación
+- Reutilizar layouts y componentes
+- Integrarse con cache y seguridad
+
+## Registro de Engine
+```ts
+const app = FoxFactory.createInstance({
+  templates: {
+    engine: 'nunjucks',
+    paths: ['./views'],
+    options: { autoescape: true }
+  }
+});
+```
+
+## Render en Handler
+```ts
+router.get('/home', (req, res) => {
+  res.render('home', { user: req.user, stats });
+});
+```
+
+## Datos Globales
+```ts
+app.setTemplateGlobals({ appName: 'Fox', year: () => new Date().getFullYear() });
+```
+
+## Partials / Includes
+Depende del engine (por ejemplo Nunjucks / EJS):
+```
+{% include "partials/header.njk" %}
+```
+
+## Caching de Templates
+Combinar con `templateCache({ ttl: 300 })`.
+
+```ts
+router.get('/dashboard', templateCache({ ttl: 120 }), (req, res) => {
+  res.render('dashboard', { metrics });
+});
+```
+
+## Helpers / Filtros
+```ts
+app.registerTemplateFilter('capitalize', str => str.charAt(0).toUpperCase()+str.slice(1));
+```
+
+## Layouts
+```
+{% extends "layouts/base.njk" %}
+{% block content %}Hola {{ user.name }}{% endblock %}
+```
+
+## Seguridad
+| Riesgo | Mitigación |
+|--------|------------|
+| XSS | autoescape, sanitizar input |
+| SSRF | No renderizar URLs externas sin validación |
+| Info Leak | No pasar objetos completos sensibles |
+
+## Buenas Prácticas
+- Mantener lógica compleja fuera de templates
+- Versionar assets (cache busting)
+- Reutilizar partials y layouts
+- Medir TTFB y optimizar render costoso
+
+## Errores Comunes
+| Problema | Causa | Solución |
+|----------|-------|---------|
+| Variables undefined | Faltan en el contexto | Proveer defaults / chequear existencia |
+| Render lento | Cálculo costoso inline | Precomputar datos antes de `res.render` |
+| XSS | Inserción directa sin escape | Usar autoescape y filtros sanitizadores |

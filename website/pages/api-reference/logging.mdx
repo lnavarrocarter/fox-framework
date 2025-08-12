@@ -1,0 +1,233 @@
+# Logging API
+
+Sistema de logging extensible con múltiples transports y formatters.
+
+## Índice
+- Niveles
+- Arquitectura Interna
+- Interfaz Principal
+- Creación y Configuración
+- Transports (Console, File, HTTP, Custom)
+- Formatters (Default, JSON)
+- Child Loggers y Contexto
+- Middleware de Request Logging
+- Correlación (Request / Correlation IDs)
+- Redacción / Masking de Datos Sensibles
+- Rotación y Retención
+- Transmisión HTTP (Batching)
+- Métricas y Observabilidad
+- Performance Tuning
+- Patrones Avanzados
+- Buenas Prácticas
+- Troubleshooting
+
+## Niveles
+Enum `LogLevel`:
+```
+FATAL (0) | ERROR (1) | WARN (2) | INFO (3) | DEBUG (4) | TRACE (5)
+```
+
+## Arquitectura Interna
+```
+Logger -> [Transports[]]
+           | format(entry)
+           | write/emit
+
+child() => hereda contexto + transports
+```
+
+## Interfaz Principal
+Ubicación: `tsfox/core/logging/interfaces.ts`
+
+```ts
+interface ILogger {
+  fatal(msg: string, meta?: any, err?: Error): void;
+  error(msg: string, meta?: any, err?: Error): void;
+  warn(msg: string, meta?: any): void;
+  info(msg: string, meta?: any): void;
+  debug(msg: string, meta?: any): void;
+  trace(msg: string, meta?: any): void;
+  child(context: Partial<LogContext>): ILogger;
+  setLevel(level: LogLevel): void;
+  addTransport(t: ITransport): void;
+  removeTransport(name: string): void;
+}
+```
+
+## Creación y Configuración
+```ts
+import { LoggerFactory, LogLevel } from 'fox-framework';
+
+const logger = LoggerFactory.create({
+  level: LogLevel.INFO,
+  console: { enabled: true, format: 'json' },
+  file: { enabled: true, filename: 'logs/app.log', rotateDaily: true, maxSize: 5_000_000, maxFiles: 7 },
+  http: { enabled: true, url: 'https://logs.internal/bulk', batchSize: 50, batchTimeout: 2000 }
+});
+```
+
+### Configuración desde Entorno
+```ts
+process.env.LOG_LEVEL='INFO';
+process.env.LOG_FILE='true';
+process.env.LOG_FILE_PATH='logs/app.log';
+const logger = LoggerFactory.createFromEnv();
+```
+
+## Transports Soportados
+- ConsoleTransport
+- FileTransport
+- HttpTransport (si existe)
+- Custom
+
+```ts
+class CustomTransport implements ITransport {
+  name = 'http';
+  level = LogLevel.INFO;
+  async log(entry: LogEntry) {
+    // envío asincrónico
+    queue.push(entry);
+  }
+}
+logger.addTransport(new CustomTransport());
+```
+
+## Formatters
+- DefaultFormatter (texto legible)
+- JsonFormatter (estructurado machine-friendly)
+
+```ts
+const jsonConsole = LoggerFactory.create({
+  console: { enabled:true, format:'json' }
+});
+```
+
+## Child Loggers & Contexto
+```ts
+const reqLogger = logger.child({ requestId });
+reqLogger.info('Inicio request', { path:req.path });
+```
+
+## Middleware de Request Logging
+Archivo: `tsfox/core/logging/request-logging.middleware.ts`
+```ts
+app.use(RequestLoggingMiddleware({
+  correlation: true,
+  headers: ['user-agent','x-forwarded-for'],
+  mask: ['password','token']
+}));
+```
+Genera IDs, registra latencia y status.
+
+## Correlación (IDs)
+- `requestId`: único por request
+- `correlationId`: persiste a través de servicios
+Propagar en headers `X-Request-ID`, `X-Correlation-ID`.
+
+## Redacción / Masking
+En middleware:
+```ts
+mask: ['password','creditCard']
+```
+Para campos anidados: normalizar body antes de loggear.
+
+## Rotación y Retención (FileTransport)
+Opciones:
+| Opción | Descripción |
+|--------|-------------|
+| `maxSize` | Bytes antes de rotar |
+| `maxFiles` | Nº archivos históricos |
+| `rotateDaily` | Segmenta por fecha |
+
+Estrategia: rotar + enviar a almacenamiento frío (S3) externamente.
+
+## Transmisión HTTP (Batch)
+Parametros (si implementado): `batchSize`, `batchTimeout`. Minimiza overhead de red.
+
+## Métricas y Observabilidad
+Agregar transport que empuje contadores (futuro):
+- logs_total{level}
+- log_errors_total (fallos de transport)
+
+Pattern manual:
+```ts
+const metrics = { errors:0 };
+try { logger.info('X'); } catch(e){ metrics.errors++; }
+```
+
+## Performance Tuning
+| Aspecto | Recomendación |
+|---------|---------------|
+| Niveles | Usar INFO en prod; DEBUG bajo feature-flags |
+| Sincronía | Transports no deben bloquear event loop |
+| Batching | HTTP/file buffer antes de flush |
+| GC Pressure | Evitar crear objetos gigantes en meta |
+| Masking | Precompilar lista de campos a filtrar |
+
+## Patrones Avanzados
+### Logger por Módulo
+```ts
+const moduleLogger = root.child({ component:'payment' });
+moduleLogger.debug('Auth start');
+```
+
+### Enriquecimiento Dinámico
+```ts
+function withUser(logger, user){
+  return logger.child({ userId:user.id });
+}
+```
+
+### Fallback de Transport
+Implementar try/catch interno (ya aplicado) + cola in-memory para reintentos HTTP.
+
+### Sampling (Alto Volumen)
+```ts
+function sampled(logger, rate=0.1){
+  return {
+    info:(m,d)=> Math.random()<rate && logger.info(m,d),
+    error: logger.error.bind(logger)
+  };
+}
+```
+
+## Buenas Prácticas
+- Structured logging (JSON) para producción centralizada
+- Evitar datos sensibles (hash/anonymize)
+- Child loggers para evitar repetir metadata
+- Usar niveles coherentes (no todo INFO)
+- Documentar convención de campos (requestId, component, operation)
+- Validar tamaño de línea (evitar >10KB)
+
+## Troubleshooting
+| Problema | Causa | Solución |
+|----------|-------|---------|
+| Falta de logs | Nivel demasiado alto | Ajustar LOG_LEVEL |
+| Archivo no rota | maxSize no configurado | Definir maxSize / rotateDaily |
+| Pérdida de eventos | Caída transport HTTP | Implementar cola / reintento |
+| Alto CPU | Demasiado DEBUG/TRACE | Reducir nivel en runtime |
+| Datos sensibles en logs | Falta de masking | Agregar mask list en middleware |
+
+## Ejemplo Integral
+```ts
+const root = LoggerFactory.create({ level: LogLevel.INFO, console:{enabled:true, format:'json'}, file:{ enabled:true, filename:'logs/app.log', rotateDaily:true }});
+const apiLogger = root.child({ component:'api' });
+
+app.use(RequestLoggingMiddleware({ correlation:true, headers:['user-agent'], mask:['password','token'] }));
+
+router.post('/pay', async (req,res) => {
+  const log = apiLogger.child({ operation:'payment', requestId:req.id });
+  log.info('Start payment');
+  try {
+    await payService.charge(req.body);
+    log.info('Payment success', { amount:req.body.amount });
+    res.status(201).json({ ok:true });
+  } catch (e) {
+    log.error('Payment failed', { amount:req.body.amount }, e as Error);
+    res.status(502).json({ error:'payment_failed' });
+  }
+});
+```
+
+---
+Loguear con intención: cada entrada debe aportar valor observable y accionable.

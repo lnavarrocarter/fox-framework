@@ -1,0 +1,83 @@
+# CLI API
+
+Interfaz de línea de comandos para acelerar tareas comunes.
+
+## Objetivos
+- Scaffold de proyectos
+- Generación de módulos / rutas / servicios
+- Utilidades de mantenimiento (lint, test, build)
+
+## Comandos Fundamentales (Diseño Propuesto)
+```
+fox create app <name>     # Crea nueva app base
+fox generate route <name> # Genera archivo de ruta
+fox generate service <name>
+fox generate plugin <name>
+fox test                  # Ejecuta suite de tests
+fox build                 # Compila TypeScript
+fox cache clear           # Limpia caché
+fox db migrate            # Ejecuta migraciones
+```
+
+## Estructura Interna
+```ts
+interface Command {
+  name: string;
+  description: string;
+  options?: CommandOption[];
+  action: (args, flags, context) => Promise<void>|void;
+}
+```
+
+## Registro de Comandos
+```ts
+import { Cli } from 'fox-framework';
+
+Cli.register({
+  name: 'hello',
+  description: 'Demo',
+  action: () => console.log('Hello Fox 🦊')
+});
+
+Cli.run(process.argv);
+```
+
+## Flags / Opciones
+```ts
+Cli.register({
+  name: 'create:service',
+  description: 'Genera service',
+  options: [ { flag: '--name <name>', desc: 'Nombre del service', required:true } ],
+  action: ({ name }) => {
+    // generar archivo basado en template
+  }
+});
+```
+
+## Configuración Global
+Archivo `.foxrc` (JSON / YAML) para:
+- Paths personalizados
+- Alias de comandos
+- Variables por entorno
+
+## Extensión via Plugins
+Los plugins pueden registrar nuevos comandos:
+```ts
+plugin.initialize(ctx) {
+  ctx.services.cli.register({...});
+}
+```
+
+## Buenas Prácticas
+| Tema | Recomendación |
+|------|---------------|
+| UX | Mensajes claros y colorizados |
+| Errores | Salir con código != 0 |
+| Logging | Verbose flag para debug |
+| Scripts | Integrar con npm scripts |
+| Plantillas | Reutilizar templates parametrizados |
+
+## Roadmap
+- Autocompletado shell
+- Telemetría de uso opcional
+- Config interactiva inicial

@@ -1,0 +1,247 @@
+# Security API
+
+Middlewares y utilidades de seguridad: CORS, RateLimit, JWT, Headers, CSRF, Authorization.
+
+## Índice
+- Conceptos
+- Autenticación (JWT / Basic / API Key / Session / Optional)
+- Autorización (Roles, Permisos, Ownership, RBAC extendido)
+- CORS
+- Rate Limiting
+- Security Headers
+- CSRF
+- Validación de Requests
+- Ejemplos Integrales
+- Buenas Prácticas & Checklist
+- Troubleshooting
+
+## Interfaces Clave
+Basadas en `tsfox/core/security/interfaces.ts`.
+
+## Autenticación
+### JWT Básico
+```ts
+app.use(Security.jwt({
+  secret: process.env.JWT_SECRET!,
+  expiresIn: '15m',
+  issuer: 'fox-app'
+}));
+```
+
+### Token Opcional (Endpoints mixtos)
+```ts
+app.use(Security.optionalJwt({ secret: JWT_SECRET, expiresIn:'15m' }));
+// req.user solo si token válido presente
+```
+
+### Generar Token
+```ts
+const accessToken = AuthMiddleware.generateToken({ id:user.id, roles:user.roles }, {
+  secret: JWT_SECRET,
+  expiresIn: '15m',
+  issuer: 'fox-app'
+});
+```
+
+### Refresh Tokens (Patrón)
+```ts
+// 1. Guardar refresh en store seguro (hashed, con TTL)
+// 2. Endpoint /auth/refresh valida refresh y emite nuevo access token
+router.post('/auth/refresh', async (req,res) => {
+  const { refresh } = req.body;
+  const stored = await refreshStore.find(refreshHash(refresh));
+  if(!stored) return res.status(401).json({ error:'invalid_refresh' });
+  const newAccess = AuthMiddleware.generateToken({ id: stored.userId }, { secret: JWT_SECRET, expiresIn:'15m' });
+  res.json({ accessToken: newAccess });
+});
+```
+
+### Basic Auth
+```ts
+router.get('/admin', Security.basic({ validate: (u,p)=> u==='admin' && p===ADMIN_PASS }));
+```
+
+### API Key
+```ts
+app.use(Security.apiKey({ header: 'x-api-key', validate: key => key === process.env.INTERNAL_KEY }));
+```
+
+### Session (Simple)
+```ts
+app.use(Security.session({ secret: SESSION_SECRET, name:'sid', cookie:{ httpOnly:true, secure:true } }));
+```
+
+## Autorización
+### Roles & Permisos
+```ts
+router.post('/admin/task', Security.authorize({ roles:['admin'], permissions:['task:write'] }), handler);
+```
+
+### Ownership
+```ts
+router.get('/users/:id', AuthorizationMiddleware.requireOwnership(req => req.params.id), handler);
+```
+
+### RBAC Combinado
+```ts
+router.delete('/projects/:id', AuthorizationMiddleware.rbac({
+  roles: ['admin','manager'],
+  permissions: ['project:delete'],
+  authorize: (user, req) => user.orgId === req.headers['x-org-id']
+}), handler);
+```
+
+### Middleware Compuesto (AND)
+```ts
+const adminAndActive = AuthorizationMiddleware.combineAnd(
+  AuthorizationMiddleware.requireRoles(['admin']),
+  AuthorizationMiddleware.conditional(u => u.status === 'active')
+);
+router.post('/secure', adminAndActive, handler);
+```
+
+## CORS
+```ts
+app.use(Security.cors({
+  origin: ['https://app.com', 'https://admin.app.com'],
+  methods: ['GET','POST','PUT','DELETE'],
+  credentials: true,
+  allowedHeaders: ['Content-Type','Authorization','X-Request-ID'],
+  exposedHeaders: ['X-Request-ID'],
+  maxAge: 600
+}));
+```
+
+## Rate Limiting
+### Global
+```ts
+app.use(Security.rateLimit({ windowMs: 15*60*1000, max: 100 }));
+```
+
+### Por Ruta Crítica
+```ts
+router.post('/auth/login', Security.rateLimit({ windowMs: 15*60*1000, max: 5 }), loginHandler);
+```
+
+### Clave Personalizada (Por Usuario si Autenticado)
+```ts
+app.use(Security.rateLimit({
+  windowMs: 60000,
+  max: 60,
+  keyGenerator: req => req.user?.id || req.ip
+}));
+```
+
+## Security Headers
+```ts
+app.use(Security.headers({
+  contentSecurityPolicy: "default-src 'self'; img-src 'self' data:;",
+  frameOptions: 'deny',
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  referrerPolicy: 'no-referrer'
+}));
+```
+
+### Headers Adicionales
+| Header | Motivo |
+|--------|-------|
+| X-Frame-Options | Clickjacking |
+| X-Content-Type-Options | MIME sniffing |
+| X-XSS-Protection | XSS legacy (parcial) |
+| Strict-Transport-Security | Forzar HTTPS |
+| Referrer-Policy | Minimizar fuga de origen |
+| X-DNS-Prefetch-Control | Control prefetch |
+
+## CSRF
+```ts
+app.use(Security.csrf({
+  cookie: { name:'_csrf', httpOnly:true, secure:true, sameSite:'strict' },
+  headerName: 'x-csrf-token'
+}));
+```
+
+### Patrón SPA (Double Submit Cookie)
+1. Servidor emite cookie `_csrf` + token en body
+2. Cliente reenvía token en header `x-csrf-token`
+3. Middleware compara
+
+## Validación de Requests
+```ts
+app.use(Security.validateRequest({
+  maxBodySize: '1mb',
+  allowedContentTypes: ['application/json'],
+  maxUrlLength: 2000,
+  maxHeaderSize: 8192
+}));
+```
+
+## Ejemplo Integral (Pipeline)
+```ts
+app.use(Security.headers());
+app.use(Security.cors());
+app.use(Security.hidePoweredBy());
+app.use(Security.rateLimit({ windowMs: 60000, max: 60 }));
+app.use(Security.validateRequest());
+app.use(Security.jwt({ secret: JWT_SECRET, expiresIn:'15m' }));
+app.use(requestLogging()); // logging contextual
+```
+
+## Modelo de Capas
+1. Borde (CORS, Headers, RateLimit)
+2. Integridad (Validation, CSRF)
+3. Autenticación (JWT / API Key / Session)
+4. Autorización (Roles, Permisos, Ownership)
+5. Observabilidad (Logging, Correlation IDs)
+
+## Buenas Prácticas
+| Área | Recomendación |
+|------|---------------|
+| JWT | Expiración corta + refresh secure store |
+| Secrets | Rotación programada + variables de entorno |
+| Rate Limit | Diferenciar login vs lectura pública |
+| CORS | Permitir solo dominios necesarios (no `*` con credenciales) |
+| Logs | Anonimizar PII (email parcial) |
+| CSRF | SameSite=strict + token único |
+| Headers | CSP explícita, evitar `unsafe-inline` si posible |
+| Sessions | HTTPOnly + Secure + rotar ID tras login |
+
+## Checklist Producción
+- [ ] Secrets gestionados (vault / env) y rotación documentada
+- [ ] JWT expiración <= 15m y refresh <= 30d
+- [ ] Rate limits configurados por endpoint crítico
+- [ ] CORS restringido a dominios válidos
+- [ ] CSP definida sin comodines peligrosos
+- [ ] CSRF activo en endpoints mutables stateful
+- [ ] Logs sin datos sensibles en claro
+- [ ] Autorización granular (roles + permisos) implementada
+- [ ] Tests de rutas protegidas (401/403 casos)
+- [ ] Monitoreo de intentos fallidos login
+
+## Troubleshooting
+| Problema | Causa | Mitigación |
+|----------|-------|-----------|
+| 401 inesperado | Token expirado | Implementar refresh flow correcto |
+| 403 tras deploy | Roles faltantes | Script migración roles/perm |
+| CORS error en navegador | Origin no permitido | Añadir a lista confiable |
+| Rate limit constante | Bot / abuso | Bloqueo IP + WAF adicional |
+| CSP bloquea assets | Política restrictiva | Ajustar directivas gradualmente |
+
+## Ejemplo Avanzado (Scope + Ownership)
+```ts
+router.put('/projects/:id',
+  Security.jwt({ secret: JWT_SECRET }),
+  AuthorizationMiddleware.rbac({
+    roles:['manager','admin'],
+    permissions:['project:update'],
+    authorize: (user, req) => user.orgId === req.headers['x-org-id']
+  }),
+  AuthorizationMiddleware.requireOwnership(async req => {
+    const project = await projectRepo.findById(req.params.id);
+    return project.ownerId;
+  }),
+  updateProjectHandler
+);
+```
+
+---
+Prioriza defensa en profundidad: cada capa reduce impacto ante fallos de otra.
