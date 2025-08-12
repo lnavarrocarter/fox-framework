@@ -1,0 +1,126 @@
+# Guía de Aplicación Full-Stack
+
+Cómo combinar backend Fox Framework + renderizado de vistas o frontend separado.
+
+## Contenido
+- [Escenarios](#escenarios)
+- [Backend Base](#backend-base)
+- [Renderizado de Templates](#renderizado-de-templates)
+- [API para Frontend SPA](#api-para-frontend-spa)
+- [Autenticación Compartida](#autenticación-compartida)
+- [Optimización de Assets](#optimización-de-assets)
+- [Despliegue Integrado](#despliegue-integrado)
+
+## Escenarios
+| Tipo | Uso | Notas |
+|------|-----|-------|
+| SSR + Templates | Admin, sites marketing | Baja complejidad |
+| API + SPA (Next.js) | Apps ricas | Separar dominios |
+| Híbrido | Mezcla progresiva | Migraciones graduales |
+
+## Backend Base
+
+```typescript
+// src/server/index.ts
+import { FoxFactory } from 'fox-framework';
+import apiRouter from '../routes/api';
+import viewRouter from '../routes/views';
+
+export const app = FoxFactory.createInstance({ port:3000, templates:{ engine:'handlebars', viewsPath:'src/views' } });
+app.use('/api', apiRouter);
+app.use('/', viewRouter);
+app.start();
+```
+
+## Renderizado de Templates
+
+```typescript
+// src/routes/views.ts
+import { Router } from 'fox-framework';
+const router = Router.create();
+router.get('/', (req,res)=> res.render('home', { title:'Inicio', user:req.user }));
+router.get('/dashboard', authMiddleware, (req,res)=> res.render('dashboard',{ stats:{} }));
+export default router;
+```
+
+Vista ejemplo:
+```handlebars
+<!-- src/views/home.hbs -->
+<h1>{{title}}</h1>
+{{#if user}}<p>Hola {{user.name}}</p>{{/if}}
+```
+
+## API para Frontend SPA
+
+```typescript
+// src/routes/api.ts
+const router = Router.create();
+router.get('/me', authApi, (req,res)=> res.json({ id:req.user.id, email:req.user.email }));
+router.post('/logout', invalidateToken, (req,res)=> res.status(204).end());
+export default router;
+```
+
+CORS seguro:
+```typescript
+app.configure({ security:{ cors:{ origin:['https://app.frontend.com'], credentials:true } } });
+```
+
+## Autenticación Compartida
+
+Opciones:
+1. JWT en Authorization header (recomendado)
+2. Cookies httpOnly + CSRF token
+
+Renovación de token:
+```typescript
+router.post('/auth/refresh', (req,res)=> {
+  const refresh = req.cookies.refresh; // validar
+  const access = security.jwt.sign({ sub:req.userId }, { expiresIn:'15m' });
+  res.json({ token: access });
+});
+```
+
+## Optimización de Assets
+
+- Cache-Control fuerte para assets versionados (`/assets/app.abc123.js`)
+- Gzip/Brotli en Nginx/reverse proxy
+- Split de bundles (frontend build) + lazy loading
+
+Static:
+```typescript
+app.static('/assets', 'public/assets', { maxAge: '7d' });
+```
+
+## Despliegue Integrado
+
+Monorepo ejemplo:
+```
+root/
+  backend/
+  frontend/ (Next.js)
+```
+
+CI pipeline (simplificado):
+1. Instalar dependencias en ambos
+2. Ejecutar tests
+3. Build backend y frontend
+4. Empaquetar imagen con ambos artefactos (o deploy separados)
+
+Reverse proxy (Nginx):
+```nginx
+location /api/ { proxy_pass http://backend:3000/api/; }
+location / { proxy_pass http://frontend:3001/; }
+```
+
+## Monitoreo Full-Stack
+- Métricas backend (latencia endpoints)
+- Web vitals (LCP, FID) enviadas al backend para agregación
+- Logs correlacionados vía header `x-correlation-id`
+
+## Mejores Prácticas
+- Evita lógica de negocio en templates
+- DTOs claros entre API y frontend
+- Minimiza over-fetching (endpoints específicos)
+- Implementa fallbacks offline si aplica
+
+[Volver al índice de guías](/guides)

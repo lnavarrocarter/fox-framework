@@ -1,0 +1,117 @@
+# Guía de Arquitectura de Microservicios
+
+Implementación progresiva de microservicios con Fox Framework sobre las primitivas descritas en `docs/microservices.mdx`.
+
+## Contenido
+- [Principios](#principios)
+- [Estrategia de Desglose](#estrategia-de-desglose)
+- [Service Registry](#service-registry)
+- [API Gateway](#api-gateway)
+- [Load Balancing + Circuit Breaker](#load-balancing--circuit-breaker)
+- [Comunicación Asíncrona (Event Bus)](#comunicación-asíncrona-event-bus)
+- [Observabilidad](#observabilidad)
+- [Deployment y Versionado](#deployment-y-versionado)
+
+## Principios
+- Límite claro por contexto de dominio
+- Deploy independiente, datos propios (Database per Service)
+- Comunicación resiliente (retries + timeouts + breaker)
+- Observabilidad unificada (logs, métricas, tracing)
+
+## Estrategia de Desglose
+1. Monolito modular (extrae módulos internos)
+2. Extrae primer servicio de baja criticidad (ej. reporting)
+3. Implementa gateway + registry
+4. Mide latencia, errores, throughput
+5. Itera extracción de dominios core
+
+## Service Registry
+
+```typescript
+import { ServiceRegistryFactory } from 'fox-framework';
+export const registry = ServiceRegistryFactory.create({ provider: 'consul', connection:{ host:'consul', port:8500 } });
+await registry.register({ id:'user-svc-1', name:'user-service', version:'1.0.0', address:'user-svc', port:3001, healthCheck:{ endpoint:'/health', interval:'10s' } });
+```
+
+Descubrimiento:
+```typescript
+const instances = await registry.discover('user-service');
+```
+
+## API Gateway
+
+```typescript
+import { ApiGatewayFactory } from 'fox-framework';
+const gateway = ApiGatewayFactory.create({ port:8000, cors:true, registry });
+
+gateway.route({ path:'/users', service:'user-service', methods:['GET','POST'], rewrite:'/api/users' });
+
+gateway.start();
+```
+
+Beneficios: centraliza auth, rate limiting, agregación.
+
+## Load Balancing + Circuit Breaker
+
+```typescript
+const lb = LoadBalancerFactory.create({ algorithm:'round-robin', registry, serviceName:'payment-service' });
+const breaker = CircuitBreakerFactory.create({ name:'payment-breaker', failureThreshold:5, resetTimeout:30000, timeout:3000 });
+
+async function callPayment(path:string){
+  const inst = await lb.next();
+  return breaker.execute(async ()=> {
+    const res = await fetch(`http://${inst.address}:${inst.port}${path}`); if(!res.ok) throw new Error('bad'); return res.json();
+  });
+}
+```
+
+## Comunicación Asíncrona (Event Bus)
+
+Patrón: servicios publican eventos de dominio; consumidores reaccionan.
+
+```typescript
+const eventBus = microservices.getEventBus();
+await eventBus.publish('user.created', { id:user.id, email:user.email });
+
+eventBus.subscribe('payment.completed', async (evt)=> { await orderService.markPaid(evt.payload.orderId); });
+```
+
+Ventajas: desacoplamiento temporal, escalado independiente.
+
+## Observabilidad
+
+Mínimo por servicio:
+- Logger estructurado con `service`, `version`, `correlationId`
+- Endpoint `/health` (readiness + liveness)
+- Métricas Prometheus (`http_requests_total`, latencias p95/p99)
+- Tracing (Jaeger / OTEL) propagando headers (`traceparent`)
+
+Middleware de correlación:
+```typescript
+app.use((req,res,next)=>{ req.correlationId = req.headers['x-correlation-id']||crypto.randomUUID(); res.setHeader('x-correlation-id', req.correlationId); next(); });
+```
+
+## Deployment y Versionado
+
+Versiona cada servicio (semver) y publica imagen Docker: `org/user-service:1.2.0`.
+
+Estrategias de actualización:
+- Patch silencioso (bugfix: 1.2.1)
+- Minor con backwards compat (1.3.0)
+- Major requiere coordinación de contratos
+
+Contratos (API) versionados vía path: `/v1/users`, `/v2/users`.
+
+## Anti-Patrones a Evitar
+- Base de datos compartida directa
+- Chattiness excesiva (desnormaliza datos necesarios)
+- Falta de timeouts (peticiones colgadas)
+- Dependencias cíclicas entre servicios
+
+## Roadmap Evolutivo
+1. Observabilidad base
+2. Circuit breakers / retries
+3. Event sourcing (si aplica)
+4. Multi-región / failover
+
+[Volver al índice de guías](/guides)

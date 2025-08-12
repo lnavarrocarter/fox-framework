@@ -1,0 +1,201 @@
+# Guía de Despliegue en Producción
+
+Esta guía describe un flujo práctico y opinionado para preparar y desplegar una aplicación Fox Framework en producción usando las capacidades descritas en `docs/production.mdx`.
+
+## Contenido
+- [Checklist Pre-Deploy](#checklist-pre-deploy)
+- [Configuración de Entorno](#configuración-de-entorno)
+- [Build y Empaquetado](#build-y-empaquetado)
+- [Docker / Containerización](#docker--containerización)
+- [Estrategias de Despliegue](#estrategias-de-despliegue)
+- [Observabilidad y Salud](#observabilidad-y-salud)
+- [Seguridad y Secretos](#seguridad-y-secretos)
+- [Escalado y Resiliencia](#escalado-y-resiliencia)
+- [Proceso de Release](#proceso-de-release)
+
+## Checklist Pre-Deploy
+
+Asegura que todos los ítems están marcados antes de promover a producción:
+
+```text
+Seguridad:   JWT, TLS, CORS, Rate Limiting, Headers, Sanitización de logs ✔
+Rendimiento: Caché, Pool DB, Compresión, CDN, Índices BD ✔
+Observación: Logs estructurados, Métricas, Traces, Health checks ✔
+Resiliencia: Circuit breakers, Retries, Graceful shutdown, Backups ✔
+Automación: CI/CD, Tests (unit, integration, e2e), Coverage ✔
+```
+
+## Configuración de Entorno
+
+Crea un archivo `.env.production` (o mejor, usa un secret store) con variables mínimas:
+
+```env
+NODE_ENV=production
+PORT=3000
+DATABASE_URL=postgresql://user:pass@db:5432/app
+JWT_SECRET=coloca-una-clave-segura-de-32+caracteres
+REDIS_URL=redis://cache:6379
+LOG_LEVEL=info
+CORS_ORIGIN=https://app.tudominio.com
+```
+
+Carga la configuración en tu inicialización:
+
+```typescript
+// src/config/production.ts
+import { FoxConfig } from 'fox-framework';
+
+export const productionConfig: FoxConfig = {
+  server: { port: parseInt(process.env.PORT||'3000'), host: '0.0.0.0', trustProxy: true },
+  database: { url: process.env.DATABASE_URL!, retryAttempts: 3, retryDelay: 3000 },
+  cache: { type: 'redis', url: process.env.REDIS_URL!, ttl: 3600 },
+  security: { jwt: { secret: process.env.JWT_SECRET!, expiresIn: '7d', algorithm: 'HS256' } },
+  logging: { level: process.env.LOG_LEVEL||'info', format: 'json' }
+};
+```
+
+## Build y Empaquetado
+
+Compila TypeScript y genera artefacto listo para ejecutar:
+
+```bash
+npm ci
+npm run build
+# Resultado en /dist
+```
+
+Estructura recomendada del artefacto:
+```
+/dist
+  server.js
+  health-check.js
+  **/*.js (código app)
+/config
+package.json
+```
+
+## Docker / Containerización
+
+Usa multi-stage build para imagen mínima:
+
+```dockerfile
+FROM node:18-alpine AS base
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN npm run build
+
+FROM node:18-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=base /app/package*.json ./
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/dist ./dist
+COPY --from=base /app/config ./config
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s CMD node dist/health-check.js || exit 1
+CMD ["node","dist/server.js"]
+```
+
+Ejemplo docker-compose mínimo:
+
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+    depends_on:
+      - db
+      - cache
+    ports: ["3000:3000"]
+  db:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+  cache:
+    image: redis:7-alpine
+```
+
+## Estrategias de Despliegue
+
+| Estrategia | Uso | Pros | Contras |
+|------------|-----|------|---------|
+| Rolling | General | Cero downtime | Más tiempo total |
+| Blue/Green | Releases críticas | Rollback instantáneo | Coste duplicado |
+| Canary | Validación gradual | Detección temprana | Coordinación compleja |
+
+Ejemplo de variable de control Canary:
+```env
+CANARY_PERCENT=10
+```
+
+## Observabilidad y Salud
+
+Implementa endpoints de health y métricas:
+
+```typescript
+// src/server/health.ts
+import { FoxFactory } from 'fox-framework';
+const app = FoxFactory.createInstance({ port: 3000 });
+app.get('/health', (req,res)=> res.json({ status:'UP', ts: Date.now() }));
+// Exporta métricas Prometheus si está activado
+```
+
+Log estructurado con correlación:
+```typescript
+app.use((req,res,next)=>{ req.correlationId = crypto.randomUUID(); res.setHeader('x-correlation-id', req.correlationId); next(); });
+```
+
+## Seguridad y Secretos
+
+- Usa Vault / AWS Secrets Manager / GCP Secret Manager
+- No almacenes secretos en la imagen
+- Rota claves periódicamente
+- Aplica headers (CSP, HSTS, X-Frame-Options)
+
+Ejemplo de wrapper simple de secretos:
+```typescript
+export async function getJwtSecret(): Promise<string> {
+  // fallback a env si secret store no disponible
+  return process.env.JWT_SECRET!;
+}
+```
+
+## Escalado y Resiliencia
+
+Circuit breaker básico:
+```typescript
+import { CircuitBreakerFactory } from 'fox-framework';
+const breaker = CircuitBreakerFactory.create({ failureThreshold:5, resetTimeout:30000, timeout:3000 });
+async function callPayment(){ return breaker.execute(()=> fetch('https://payment/api')); }
+```
+
+Graceful shutdown:
+```typescript
+process.on('SIGTERM', async ()=> { await app.stop(); await closeDb(); process.exit(0); });
+```
+
+## Proceso de Release
+
+1. Merge en `main` (CI ejecuta tests y build)
+2. Generar tag semántico (`v1.2.3`)
+3. Publicar imagen Docker y paquete NPM (si aplica)
+4. Desplegar a staging (smoke + e2e básicos)
+5. Canary 5-10% tráfico (monitorizar errores/p95)
+6. Promover al 100%
+7. Post-release: validar métricas, crear nota de release
+
+## Próximos Pasos
+- Configurar pipelines (GitHub Actions / GitLab CI)
+- Añadir tracing distribuido (Jaeger / OpenTelemetry)
+- Implementar chaos testing para resiliencia
+
+[Volver al índice de guías](/guides)

@@ -1,0 +1,150 @@
+# Guía de Testing
+
+Cómo estructurar una estrategia de pruebas completa en Fox Framework aprovechando las utilidades descritas en `docs/testing.mdx`.
+
+## Contenido
+- [Estrategia General](#estrategia-general)
+- [Configuración Base](#configuración-base)
+- [Tests Unitarios](#tests-unitarios)
+- [Tests de Integración](#tests-de-integración)
+- [End-to-End (E2E)](#end-to-end-e2e)
+- [Mocks y Fixtures](#mocks-y-fixtures)
+- [Cobertura y Calidad](#cobertura-y-calidad)
+- [Performance Testing](#performance-testing)
+
+## Estrategia General
+
+Pilares:
+- Pirámide balanceada: 70% unit, 20% integración, 10% e2e
+- Tests deterministas y paralelizables
+- Datos de prueba aislados en cada suite
+
+## Configuración Base
+
+Instala dependencias (si no están):
+```bash
+npm i -D jest ts-jest @types/jest supertest
+```
+
+`jest.config.js` básico:
+```javascript
+module.exports = { preset: 'ts-jest', testEnvironment: 'node', roots: ['<rootDir>/src','<rootDir>/tests'] };
+```
+
+Setup global:
+```typescript
+// tests/setup.ts
+beforeAll(async ()=>{/* init db/cache mock */});
+afterAll(async ()=>{/* close resources */});
+```
+
+## Tests Unitarios
+
+Características:
+- Sin IO real (DB, red) -> usar mocks
+- Ejecutan en &lt;100ms
+
+Ejemplo controlador:
+```typescript
+describe('UserController', ()=> {
+  it('devuelve 404 si no existe', async ()=> {
+    const repo = { findById: jest.fn().mockResolvedValue(null) };
+    const controller = new UserController(repo as any);
+    const req: any = { params:{ id:'x' } }; const res: any = mockRes();
+    await controller.get(req,res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+});
+```
+
+Mock response helper:
+```typescript
+function mockRes(){
+  const res: any = {};
+  res.status = jest.fn().mockReturnValue(res);
+  res.json = jest.fn().mockReturnValue(res);
+  return res;
+}
+```
+
+## Tests de Integración
+
+Objetivo: múltiples capas reales (routing + middleware + parte de servicio) con DB ligera (SQLite in-memory) o contenedores temporales.
+
+```typescript
+import request from 'supertest';
+let app;
+beforeAll(async ()=> { app = await createAppTestInstance(); });
+
+test('GET /api/users/:id', async ()=> {
+  const user = await seedUser();
+  const r = await request(app).get(`/api/users/${user.id}`).expect(200);
+  expect(r.body.data.id).toBe(user.id);
+});
+```
+
+## End-to-End (E2E)
+
+Cubre flujos completos (registro -> login -> recurso protegido):
+```typescript
+it('flujo auth', async ()=> {
+  await request(app).post('/auth/register').send({ email:'a@b.c', password:'x' }).expect(201);
+  const login = await request(app).post('/auth/login').send({ email:'a@b.c', password:'x' }).expect(200);
+  const token = login.body.token;
+  await request(app).get('/profile').set('Authorization',`Bearer ${token}`).expect(200);
+});
+```
+
+Minimiza e2e (solo caminos críticos) y ejecuta en paralelo si es posible.
+
+## Mocks y Fixtures
+
+Factory pattern:
+```typescript
+export function userFactory(overrides: Partial<User> = {}): User {
+  return { id: crypto.randomUUID(), email: `u${Date.now()}@t.dev`, name: 'Test', ...overrides };
+}
+```
+
+Fixtures estáticos para roles/permisos predecibles.
+
+## Cobertura y Calidad
+
+Scripts:
+```json
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  }
+}
+```
+
+Reglas recomendadas:
+- Cobertura global >= 80%
+- Sin `any` no justificado en código probado
+- Fallar build si coverage desciende (>2% respecto a main)
+
+## Performance Testing
+
+Ejemplo carga simple:
+```typescript
+import autocannon from 'autocannon';
+
+test('lista usuarios bajo carga', (done)=> {
+  const instance = autocannon({ url: 'http://localhost:3000/api/users', connections: 50, duration: 10 });
+  instance.on('done', r => { expect(r.errors).toBe(0); done(); });
+});
+```
+
+Métricas a observar: p95, throughput, error rate.
+
+## Mejores Prácticas
+- Nombrar tests descriptivamente
+- AAA (Arrange, Act, Assert)
+- Un assert conceptual principal por test (múltiples secundarios permitidos)
+- Evitar mocks profundos: refactoriza para aislar
+- Reutiliza helpers y factories
+
+[Volver al índice de guías](/guides)

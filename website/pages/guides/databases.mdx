@@ -1,0 +1,191 @@
+# Guía de Acceso a Bases de Datos
+
+Esta guía muestra cómo integrar y estructurar el acceso a datos en Fox Framework siguiendo prácticas de desacoplamiento, repositorios y migraciones.
+
+## Contenido
+- [Configuración](#configuración)
+- [Conexión y Pooling](#conexión-y-pooling)
+- [Modelos / Entidades](#modelos--entidades)
+- [Repositorios](#repositorios)
+- [Transacciones y Unidad de Trabajo](#transacciones-y-unidad-de-trabajo)
+- [Migrations](#migrations)
+- [Testing de Data Layer](#testing-de-data-layer)
+- [Optimización y Performance](#optimización-y-performance)
+
+## Configuración
+
+```typescript
+// src/database/index.ts
+import { DatabaseFactory, DatabaseConnection } from 'fox-framework';
+
+export const db: DatabaseConnection = DatabaseFactory.create({
+  provider: 'postgresql',
+  connection: {
+    url: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production'
+  },
+  pool: { min: 2, max: 10 }
+});
+```
+
+Uso diferido (lazy) en el arranque:
+```typescript
+await db.connect();
+```
+
+## Conexión y Pooling
+
+Ajusta pool mediante env:
+```env
+DATABASE_POOL_MIN=2
+DATABASE_POOL_MAX=20
+```
+
+```typescript
+pool: {
+  min: parseInt(process.env.DATABASE_POOL_MIN||'2'),
+  max: parseInt(process.env.DATABASE_POOL_MAX||'20'),
+  idleTimeoutMillis: 10000
+}
+```
+
+## Modelos / Entidades
+
+Define entidades tipadas sin lógica de negocios pesada:
+```typescript
+// src/database/entities/user.entity.ts
+export interface UserEntity {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+## Repositorios
+
+Aísla queries y mapping:
+```typescript
+// src/database/repositories/user.repository.ts
+import { db } from '../index';
+import { UserEntity } from '../entities/user.entity';
+
+export class UserRepository {
+  async findById(id: string): Promise<UserEntity | null> {
+    const row = await db.query('SELECT * FROM users WHERE id=$1', [id]);
+    return row[0] || null;
+  }
+  async create(data: Omit<UserEntity,'id'|'createdAt'|'updatedAt'>): Promise<UserEntity> {
+    const row = await db.query(
+      'INSERT INTO users(name,email,password_hash) VALUES($1,$2,$3) RETURNING *',
+      [data.name, data.email, data.passwordHash]
+    );
+    return row[0];
+  }
+}
+```
+
+Inyección en servicios:
+```typescript
+// src/services/user.service.ts
+export class UserService {
+  constructor(private users: UserRepository) {}
+  async register(input:{name:string; email:string; password:string}) {
+    // hash password, validar, etc.
+    return this.users.create({ ...input, passwordHash: 'hashed' });
+  }
+}
+```
+
+## Transacciones y Unidad de Trabajo
+
+```typescript
+// src/database/unit-of-work.ts
+import { db } from './index';
+export async function withTransaction<T>(fn:(trx:any)=>Promise<T>): Promise<T> {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+```
+
+Uso:
+```typescript
+await withTransaction(async trx => {
+  await trx.query('UPDATE accounts SET balance = balance - 100 WHERE id=$1',[a]);
+  await trx.query('UPDATE accounts SET balance = balance + 100 WHERE id=$1',[b]);
+});
+```
+
+## Migrations
+
+Estructura sugerida:
+```
+src/database/migrations/
+  20250812-001-create-users.sql
+  20250812-002-add-indexes.sql
+```
+
+Ejemplo SQL:
+```sql
+CREATE TABLE users (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  email text NOT NULL UNIQUE,
+  password_hash text NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+```
+
+Script runner básico:
+```typescript
+// scripts/run-migrations.ts
+import { runMigrations } from 'fox-framework/database';
+runMigrations({ dir: 'src/database/migrations', databaseUrl: process.env.DATABASE_URL });
+```
+
+## Testing de Data Layer
+
+Usa SQLite in-memory o contenedor aislado:
+```typescript
+beforeAll(async ()=> { await db.connect({ override:{ url: 'sqlite::memory:' }}); });
+```
+
+Factory para tests:
+```typescript
+export function userFactory(partial: Partial<UserEntity> = {}): UserEntity {
+  return { id: crypto.randomUUID(), name: 'Test', email: `u${Date.now()}@t.dev`, passwordHash: 'x', createdAt: new Date(), updatedAt: new Date(), ...partial };
+}
+```
+
+## Optimización y Performance
+
+- Índices: crea índices compuestos para filtros frecuentes
+- Query plan: monitoriza slow queries (>1s)
+- Paginación keyset para grandes volúmenes
+- Cache selectiva de lecturas calientes (Redis + TTL corto)
+- Usa batching o `IN` para reducir round-trips
+
+Ejemplo keyset pagination:
+```sql
+SELECT * FROM events WHERE created_at < $1 ORDER BY created_at DESC LIMIT 50;
+```
+
+## Próximos Pasos
+- Añadir auditoría (tabla de eventos)
+- Implementar soft deletes (`deleted_at`)
+- Añadir migraciones automáticas en CI
+
+[Volver al índice de guías](/guides)

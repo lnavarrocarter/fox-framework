@@ -1,0 +1,139 @@
+# Guía de Docker y Containerización
+
+Pasos prácticos para contenerizar, optimizar y operar aplicaciones Fox Framework.
+
+## Contenido
+- [Objetivos](#objetivos)
+- [Estructura Base](#estructura-base)
+- [Dockerfile Multi-Stage](#dockerfile-multi-stage)
+- [Entorno de Desarrollo](#entorno-de-desarrollo)
+- [Producción Optimizada](#producción-optimizada)
+- [Compose y Servicios Auxiliares](#compose-y-servicios-auxiliares)
+- [Good Practices](#good-practices)
+
+## Objetivos
+- Imágenes reproducibles y pequeñas
+- Hot reload en desarrollo
+- Seguridad (no root, dependencias mínimas)
+- Observabilidad (health, logs)
+
+## Estructura Base
+```
+Dockerfile
+Dockerfile.dev
+.dockerignore
+docker/
+  nginx/nginx.conf
+  scripts/
+```
+
+## Dockerfile Multi-Stage
+
+```dockerfile
+FROM node:18-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN npm run build
+
+FROM node:18-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=deps /app/package*.json ./
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/dist ./dist
+COPY --from=deps /app/config ./config
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s CMD node dist/health-check.js || exit 1
+CMD ["node","dist/server.js"]
+```
+
+## Entorno de Desarrollo
+
+`Dockerfile.dev`:
+```dockerfile
+FROM node:18
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+ENV NODE_ENV=development
+EXPOSE 3000 9229
+CMD ["npm","run","dev"]
+```
+
+docker-compose (dev):
+```yaml
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports: ["3000:3000","9229:9229"]
+    volumes: [".:/app","/app/node_modules"]
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://user:pass@db:5432/dev
+    depends_on: [db]
+  db:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: dev
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+```
+
+## Producción Optimizada
+
+- Solo dependencias runtime
+- Usuario sin privilegios
+- Healthcheck integrado
+- Config externa via env/secret manager
+
+Ejecución:
+```bash
+docker build -t org/fox-app:1.0.0 .
+docker run -d -p 3000:3000 --env-file .env.production org/fox-app:1.0.0
+```
+
+## Compose y Servicios Auxiliares
+
+Ejemplo con Redis + Nginx:
+```yaml
+version: '3.8'
+services:
+  app:
+    image: org/fox-app:1.0.0
+    environment:
+      - REDIS_URL=redis://cache:6379
+    depends_on: [cache]
+  cache:
+    image: redis:7-alpine
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+    ports: ["80:80","443:443"]
+    depends_on: [app]
+```
+
+## Good Practices
+
+- Minimiza capas: ordena COPY y RUN
+- Usa `.dockerignore` (node_modules, tests, docs)
+- Etiqueta imágenes con versión + commit SHA
+- Escanea vulnerabilidades (Trivy, Snyk) antes de publicar
+- Limita memoria/CPU via orquestador
+- Log a stdout/err (stack recoge)
+
+## Solución de Problemas
+
+| Problema | Causa | Solución |
+|----------|-------|----------|
+| Builds lentos | Caché inválida frecuente | Reordena COPY (package*.json primero) |
+| Imagen grande | Dependencias dev incluidas | Usa `npm ci --only=production` |
+| Permisos denegados | Usuario root removido | Ajusta permisos previos a cambiar USER |
+
+[Volver al índice de guías](/guides)

@@ -1,0 +1,81 @@
+# Mejores Prácticas Fox Framework
+
+Colección de recomendaciones pragmáticas para mantener calidad, performance y seguridad.
+
+## Estructura y Código
+- Módulos pequeños, cohesivos, con interfaces explícitas
+- Separar capas (controller -> service -> repository)
+- No acceder a DB directamente desde controladores
+- Reusar factories para instanciación consistente
+- Mantener tipos estrictos (evitar `any` salvo adaptación extern)
+
+## Configuración y Entornos
+- Solo variables de entorno en el borde (convertir a config tipada)
+- Prefijos por dominio: `DB_`, `CACHE_`, `SECURITY_`
+- Validar config al arranque (fail fast)
+
+## Seguridad
+- JWT con expiración corta + refresh token seguro
+- Sanear input (validación + escaping en vistas)
+- Headers: CSP, HSTS, X-Content-Type-Options, X-Frame-Options
+- Rotar secretos críticos regularmente
+
+## Logging y Observabilidad
+- Log estructurado (JSON) con campos: timestamp, level, service, correlationId
+- No loggear PII sin anonimizar
+- Métricas clave: latencia p95, error_rate, throughput, cache_hit_ratio
+- Health endpoint separado de business endpoints
+
+## API Design
+- Respuestas consistentes `{ success, data|message, meta? }`
+- Paginación estable (cursor o keyset)
+- Versionado predictivo (`/api/v1`)
+- Idempotencia en endpoints sensibles (empotencia-key header)
+
+## Performance
+- Cache selectiva (solo lecturas calientes y purgable)
+- Evitar N+1 (usar joins, batch queries)
+- Circuit breaker + timeouts para dependencias
+- Streaming para respuestas grandes
+
+## Testing
+- Contract tests para integraciones externas
+- Cobertura mínima 80%, critical path 100%
+- Factories > fixtures rígidas
+- Tests paralelizables (no puertos fijos, no estado global mutable)
+
+## Resiliencia
+- Retries exponenciales con jitter
+- Graceful shutdown (30s máx)
+- Backpressure (limitar concurrency interna)
+
+## Deploy
+- CI: lint + typecheck + test + build + security scan
+- Tag semver + commit SHA
+- Canary + monitoreo de error rate p95 antes de 100%
+
+## Documentación
+- Cada nueva feature: sección docs + ejemplos mínimos
+- CHANGELOG / RELEASE_NOTES actualizado automáticamente
+- ADR (lessons learned) para decisiones estructurales
+
+## Anti-Patrones a Evitar
+| Anti-Patrón | Riesgo |
+|------------|--------|
+| Lógica en controladores | Duplicación, difícil testear |
+| Acceso directo a env vars | Config dispersa, errores runtime |
+| Múltiples formatos de respuesta | Cliente complejo |
+| Faltan timeouts externos | Hilos colgados, cascada |
+| Repositorios anémicos + queries en servicios | Mezcla responsabilidades |
+
+## Checklist Rápido Pull Request
+```text
+[ ] Tests pasan y cobertura no baja
+[ ] Sin nuevos any sin justificar
+[ ] Docs actualizados
+[ ] Config validada
+[ ] Logs sin datos sensibles
+[ ] Endpoints responden formato estándar
+```
+
+[Volver al índice de guías](/guides)
