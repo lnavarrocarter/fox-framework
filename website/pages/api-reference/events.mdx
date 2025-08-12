@@ -26,6 +26,8 @@ Sistema de eventos: local, distribuido, Event Sourcing y CQRS (resumen avanzado)
 - Checklist
 - Roadmap Futuro
 
+> Nota: Si esta página supera límites de tamaño en build (warnings Babel >500KB), considerar segmentar en subpáginas (`/event-store`, `/event-bus`, `/cqrs`, `/sagas`) para reducir payload.
+
 ## Conceptos Base
 - Event Store: persiste eventos (append-only)
 - Event Bus: distribución (in-memory / Redis / otros)
@@ -159,12 +161,13 @@ Patrones:
 Política:
 | Intentos | Acción |
 |----------|--------|
-| < maxRetries | Reintentar exponencial |
-| == maxRetries | Mover a DLQ |
+| `< maxRetries` | Reintentar exponencial |
+| `== maxRetries` | Mover a DLQ |
 | DLQ procesado | Analizar, fix, re‑enqueue |
 
 ## Versionado de Eventos y Migraciones
 Estrategias:
+ 
 1. Evolución compatible (añadir campos opcionales)
 2. Evento nuevo (`user.name_corrected`) en vez de mutar antiguo
 3. Proyección migradora que re-emite eventos transformados para rebuild

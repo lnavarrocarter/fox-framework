@@ -50,7 +50,7 @@ const accessToken = AuthMiddleware.generateToken({ id:user.id, roles:user.roles 
 router.post('/auth/refresh', async (req,res) => {
   const { refresh } = req.body;
   const stored = await refreshStore.find(refreshHash(refresh));
-  if(!stored) return res.status(401).json({ error:'invalid_refresh' });
+  if (!stored) return res.status(401).json({ error:'invalid_refresh' });
   const newAccess = AuthMiddleware.generateToken({ id: stored.userId }, { secret: JWT_SECRET, expiresIn:'15m' });
   res.json({ accessToken: newAccess });
 });
