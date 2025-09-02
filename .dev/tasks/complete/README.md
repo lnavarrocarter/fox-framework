@@ -1,21 +1,15 @@
-# 📋 Fox Framew## 🎯 Estado Actual
+# 📋 Fox Framework - Tasks
+
+Este directorio gestiona el ciclo de vida de los tickets de desarrollo del framework. Las tareas finalizadas se mueven a `./complete/` y se marcan como `COMPLETADO Y CERRADO`.
+
+## 🎯 Estado Actual
 
 | Fase | Estado | Progreso | Prioridad |
 |------|--------|----------|-----------|
 | Fase 1: Estabilización | ✅ Completada | 100% | 🔴 Alta |
 | Fase 2: Core Improvements | ✅ Completada | 100% | 🟡 Media |
 | Fase 3: Features Avanzadas | ✅ Completada | 100% | 🟢 Baja |
-| Fase 4: Escalabilidad | 🔄 En Progreso | 94% | 🟡 Media |- [08### Fase 3: Features Avanzadas (3-4 semanas)
-- [09-plugin-system.md](./09-plugin-system.md) - ✅ COMPLETADO Y CERRADO
-- [10-event-system.md](./10-event-system.md) - ✅ COMPLETADO Y CERRADO
-- [11-database-abstraction.md](./11-database-abstraction.md) - ✅ COMPLETADO Y CERRADO
-- [12-cli-improvements.md](./12-cli-improvements.md) - ✅ COMPLETADO Y CERRADO
-
-### Fase 4: Escalabilidad (4-5 semanas)
-- [13-microservices-support.md](./13-microservices-support.md) - ✅ COMPLETADO Y CERRADO
-- [14-docker-integration.md](./14-docker-integration.md) - ✅ COMPLETADO
-- [15-monitoring-metrics.md](./15-monitoring-metrics.md) - ✅ COMPLETADO
-- [16-cloud-deployment.md](./16-cloud-deployment.md) - ⏳ ÚLTIMA TAREA PENDIENTEe-optimization.md](./08-performance-optimization.md) - ✅ COMPLETADO Y CERRADO
+| Fase 4: Escalabilidad | 🔄 En Progreso | 94% | 🟡 Media |
 
 ### Fase 3: Features Avanzadas (3-4 semanas)
 - [09-plugin-system.md](./09-plugin-system.md) - ✅ COMPLETADO Y CERRADOanagement
@@ -29,7 +23,35 @@
 | Fase 3: Features Avanzadas | ✅ Completada | 100% | 🟢 Baja |
 | Fase 4: Escalabilidad | 🔄 En Progreso | 75% | � Media |
 
-## 🚀 Roadmap General
+## 🚀 Roadmap General (Activo)
+
+### Fase 1: Estabilización (1-2 semanas)
+
+- [01-fix-dependencies.md](./01-fix-dependencies.md) - ✅ COMPLETADO (movido a complete)
+- [02-implement-tests.md](./02-implement-tests.md) - ✅ COMPLETADO (movido a complete)
+- [03-error-handling.md](./03-error-handling.md) - ✅ COMPLETADO (pendiente mover)
+- [04-logging-system.md](./04-logging-system.md) - ✅ COMPLETADO (pendiente mover)
+
+### Fase 2: Core Improvements (2-3 semanas)
+
+- [05-cache-system.md](./05-cache-system.md) - ✅ COMPLETADO (pendiente mover)
+- [06-security-middleware.md](./06-security-middleware.md) - ✅ COMPLETADO (pendiente mover)
+- [07-validation-system.md](./07-validation-system.md) - ✅ COMPLETADO (pendiente mover)
+- [08-performance-optimization.md](./08-performance-optimization.md) - ✅ COMPLETADO (pendiente mover)
+
+### Fase 3: Features Avanzadas (3-4 semanas)
+
+- [09-plugin-system.md](./09-plugin-system.md) - ✅ COMPLETADO (pendiente mover)
+- [10-event-system.md](./10-event-system.md) - ✅ COMPLETADO (pendiente mover)
+- [11-database-abstraction.md](./11-database-abstraction.md) - ✅ COMPLETADO (pendiente mover)
+- [12-cli-improvements.md](./12-cli-improvements.md) - ✅ COMPLETADO (pendiente mover)
+
+### Fase 4: Escalabilidad (4-5 semanas)
+
+- [13-microservices-support.md](./13-microservices-support.md) - ✅ COMPLETADO (pendiente mover)
+- [14-docker-integration.md](./14-docker-integration.md) - ✅ COMPLETADO (pendiente mover)
+- [15-monitoring-metrics.md](./15-monitoring-metrics.md) - ✅ COMPLETADO (pendiente mover)
+- [16-cloud-deployment.md](./16-cloud-deployment.md) - ⏳ EN PROGRESO
 
 ### Fase 1: Estabilización (1-2 semanas)
 - [01-fix-dependencies.md](./01-fix-dependencies.md) - ✅ COMPLETADO
@@ -47,13 +69,22 @@
 - [09-plugin-system.md](./09-plugin-system.md) - ✅ COMPLETADO Y CERRADO
 - [10-event-system.md](./10-event-system.md) - ✅ COMPLETADO Y CERRADO
 - [11-database-abstraction.md](./11-database-abstraction.md) - ✅ COMPLETADO Y CERRADO
-- [12-cli-improvements.md](./12-cli-improvements.md) - � ANÁLISIS NECESARIO
+-- [12-cli-improvements.md](./12-cli-improvements.md) - ✅ COMPLETADO (mover a complete)
 
 ### Fase 4: Escalabilidad (4-5 semanas)
-- [13-microservices-support.md](./13-microservices-support.md) - � ANÁLISIS NECESARIO
-- [14-docker-integration.md](./14-docker-integration.md) - ✅ COMPLETADO
-- [15-monitoring-metrics.md](./15-monitoring-metrics.md) - ✅ COMPLETADO
-- [16-cloud-deployment.md](./16-cloud-deployment.md) - ⏳ PRÓXIMA TAREA
+-- [13-microservices-support.md](./13-microservices-support.md) - ✅ COMPLETADO (mover a complete)
+-- [14-docker-integration.md](./14-docker-integration.md) - ✅ COMPLETADO (mover a complete)
+-- [15-monitoring-metrics.md](./15-monitoring-metrics.md) - ✅ COMPLETADO (mover a complete)
+-- [16-cloud-deployment.md](./16-cloud-deployment.md) - ⏳ EN PROGRESO
+
+## 📦 Carpeta `complete/`
+
+Las tareas cerradas se van moviendo progresivamente. Actualmente migradas:
+
+- `complete/01-fix-dependencies.md`
+- `complete/02-implement-tests.md`
+
+Pendientes de migración: 03-15 (se conservarán versiones detalladas con sufijos `-COMPLETED` donde ya existan).
 
 ## 📊 Métricas de Progreso
 

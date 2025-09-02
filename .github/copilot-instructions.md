@@ -40,7 +40,7 @@ Este es **Fox Framework**, un framework web para TypeScript/Node.js que proporci
 - 🟡 Consultar `docs/schemas/` para modelos de datos
 
 ### 2. 🎫 CONSULTAR Ticket
-- 🔴 Leer completamente el ticket en `.github/tasks/XX-nombre.md`
+- 🔴 Leer completamente el ticket en `.dev/tasks/XX-nombre.md`
 - 🔴 Entender todos los criterios de aceptación
 - 🟡 Verificar dependencias con otros tickets
 - 🟡 Revisar ejemplos de código en el ticket
@@ -93,7 +93,7 @@ Patrón actual permite testeo más sencillo y separación de responsabilidades.
 
 ### 7. ✅ MARCAR Como Completado
 - 🔴 Verificar todos los checkboxes del ticket
-- 🔴 Actualizar status en `.github/tasks/README.md` si es necesario
+- 🔴 Actualizar status en `.dev/tasks/README.md` si es necesario
 - 🔴 Confirmar que documentación está actualizada
 
 ---
