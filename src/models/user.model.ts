@@ -6,6 +6,8 @@ export interface IUser {
     id?: string | number;
     createdAt?: Date;
     updatedAt?: Date;
+    name?: string;
+    email?: string;
     
     // TODO: Add specific properties based on your model specification
     // Add your model properties here
@@ -18,6 +20,8 @@ export class User implements IUser {
     public id?: string | number;
     public createdAt?: Date;
     public updatedAt?: Date;
+    public name?: string;
+    public email?: string;
 
     constructor(data: Partial<IUser> = {}) {
         Object.assign(this, data);
@@ -36,6 +40,8 @@ export class User implements IUser {
             id: this.id,
             createdAt: this.createdAt,
             updatedAt: this.updatedAt,
+            name: this.name,
+            email: this.email,
             // TODO: Add other properties
         };
     }
@@ -48,6 +54,8 @@ export class User implements IUser {
             id: data.id,
             createdAt: data.createdAt ? new Date(data.createdAt) : undefined,
             updatedAt: data.updatedAt ? new Date(data.updatedAt) : undefined,
+            name: data.name,
+            email: data.email,
             // TODO: Add other properties
         });
     }

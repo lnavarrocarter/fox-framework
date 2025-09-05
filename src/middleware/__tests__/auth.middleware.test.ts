@@ -1,4 +1,4 @@
-import { AuthMiddlewareMiddleware, createAuthMiddlewareMiddleware } from './authmiddleware.middleware';
+import { AuthMiddlewareMiddleware, createAuthMiddlewareMiddleware } from '../authmiddleware.middleware';
 import { Request, Response, NextFunction } from 'express';
 
 describe('AuthMiddlewareMiddleware', () => {

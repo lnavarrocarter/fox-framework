@@ -1,4 +1,4 @@
-import { User, IUser, UserRepository } from './user.model';
+import { User, IUser, UserRepository } from '../user.model';
 
 describe('UserModel', () => {
     it('should create instance with default values', () => {
