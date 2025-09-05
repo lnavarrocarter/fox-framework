@@ -1,0 +1,28 @@
+{
+  "provider": "openai",
+  "model": "gpt-4",
+  "temperature": 0.2,
+  "maxTokens": 2000,
+  "apiKey": "${OPENAI_API_KEY}",
+  "endpoint": null,
+  
+  "_comments": {
+    "provider": "AI provider to use: 'openai', 'claude', or 'local'",
+    "model": "Model to use (e.g., 'gpt-4', 'gpt-3.5-turbo', 'claude-3-opus')",
+    "temperature": "Controls randomness (0.0 = deterministic, 1.0 = very random)",
+    "maxTokens": "Maximum tokens in the response",
+    "apiKey": "API key for the provider (use environment variable)",
+    "endpoint": "Custom endpoint URL (optional)"
+  },
+  
+  "advanced": {
+    "caching": true,
+    "learningEnabled": true,
+    "feedbackCollection": true,
+    "codeAnalysis": {
+      "enabled": true,
+      "deepAnalysis": false,
+      "performanceMetrics": true
+    }
+  }
+}

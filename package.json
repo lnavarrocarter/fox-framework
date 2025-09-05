@@ -46,6 +46,8 @@
     "lint:fix": "echo 'ESLint not configured yet'",
     "build:clean": "rm -rf dist && npm run build",
     "build:watch": "tsc --watch",
+    "ai:demo": "ts-node ai-demo.ts",
+    "ai:test": "jest tsfox/ai/__tests__/ --detectOpenHandles",
     "docker:build": "docker build -t fox-framework:latest .",
     "docker:run": "docker run -p 3000:3000 fox-framework:latest",
     "docker:compose:up": "docker-compose up -d",
