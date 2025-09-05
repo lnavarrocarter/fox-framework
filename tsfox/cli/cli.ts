@@ -11,7 +11,6 @@ import { GenerateCommands } from './commands/generate';
 import { DockerCommands } from './commands/docker';
 import { DeploymentCLI } from './commands/deploy.command';
 import { ProjectCommands } from './commands/project';
-impolr
 
 export class FoxCLI {
   private program: Command;

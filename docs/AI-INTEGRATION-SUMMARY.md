@@ -35,10 +35,10 @@ tsfox/ai/
 ### ✅ **CLI Integration**
 ```bash
 # Comandos disponibles
-npx tsfox ai:generate controller User --interactive
-npx tsfox ai:generate middleware Auth --interactive  
-npx tsfox ai:generate route User --interactive
-npx tsfox ai:generate model User --interactive
+npx -p @foxframework/core tsfox ai:generate controller User --interactive
+npx -p @foxframework/core tsfox ai:generate middleware Auth --interactive  
+npx -p @foxframework/core tsfox ai:generate route User --interactive
+npx -p @foxframework/core tsfox ai:generate model User --interactive
 ```
 
 ### ✅ **Mock Implementation**
@@ -116,7 +116,7 @@ El sistema incluye capacidades de análisis automático:
 
 ### **Modo Rápido**
 ```bash
-npx tsfox ai:generate controller User
+npx -p @foxframework/core tsfox ai:generate controller User
 # Genera con valores sensatos por defecto
 ```
 

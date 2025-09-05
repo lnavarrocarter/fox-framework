@@ -133,11 +133,11 @@ interface PredictiveSystemInterface {
 ### Fase 1: AI CLI Extension
 ```bash
 # Nuevos comandos CLI con IA
-npx tsfox ai:generate controller --from-model User
-npx tsfox ai:analyze performance --optimize
-npx tsfox ai:refactor --target="microservices"
-npx tsfox ai:security-audit --auto-fix
-npx tsfox ai:optimize --based-on-usage
+npx -p @foxframework/core tsfox ai:generate controller --from-model User
+npx -p @foxframework/core tsfox ai:analyze performance --optimize
+npx -p @foxframework/core tsfox ai:refactor --target="microservices"
+npx -p @foxframework/core tsfox ai:security-audit --auto-fix
+npx -p @foxframework/core tsfox ai:optimize --based-on-usage
 ```
 
 ### Fase 2: Smart Factory System

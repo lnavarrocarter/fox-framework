@@ -30,31 +30,50 @@
 
 ### Instalación
 ```bash
-npm install @foxframework/core
+npm install -g @foxframework/core
 ```
 
 ### Crear nuevo proyecto
 ```bash
-npx @foxframework/core new my-awesome-app
+# Crear proyecto (sin instalar nada localmente)
+npx -p @foxframework/core tsfox new my-awesome-app
 cd my-awesome-app
 npm install
 npm run dev
 ```
 
-### CLI Disponible
+### CLI Disponible (Actualizado)
+
 ```bash
 # Crear nuevo proyecto
-npx @foxframework/core new <project-name> [--template basic|api|full]
+npx -p @foxframework/core tsfox new <project-name> --template basic|api|full
+# (alias equivalente)
+npx -p @foxframework/core tsfox project new <project-name>
 
-# Generar componentes
-npx @foxframework/core generate:controller UserController
-npx @foxframework/core generate:model User
-npx @foxframework/core generate:view profile
+# Generar código (estado)
+# controller ✅ implementado
+npx -p @foxframework/core tsfox generate controller Users --crud --service --test
+# service 🚧 placeholder
+npx -p @foxframework/core tsfox generate service Billing
+# model 🚧 placeholder
+npx -p @foxframework/core tsfox generate model User
+# middleware 🚧 placeholder
+npx -p @foxframework/core tsfox generate middleware Auth
 
-# Docker integration
-npx @foxframework/core docker init
-npx @foxframework/core docker build
-npx @foxframework/core docker compose up
+# Generación asistida por IA (legacy entrypoint; experimental)
+npx -p @foxframework/core tsfox ai:generate controller User --interactive
+npx -p @foxframework/core tsfox ai:generate middleware Auth --interactive
+
+# Docker
+npx -p @foxframework/core tsfox docker init
+npx -p @foxframework/core tsfox docker build --platform linux/amd64
+npx -p @foxframework/core tsfox docker run --port 3000:3000
+npx -p @foxframework/core tsfox docker compose up -d
+npx -p @foxframework/core tsfox docker logs -f
+
+# Despliegue en la nube (experimental)
+npx -p @foxframework/core tsfox deploy --interactive
+npx -p @foxframework/core tsfox deploy status
 ```
 
 ---
@@ -92,14 +111,14 @@ npx @foxframework/core docker compose up
 
 ### 1. Developers que quieren usar Fox Framework:
 ```bash
-# Instalación rápida
-npm install @foxframework/core
+# Instalación global (opcional si quieres usar 'tsfox' sin npx)
+npm install -g @foxframework/core
 
-# Crear proyecto
-npx @foxframework/core new my-project
-
-# Iniciar desarrollo
-cd my-project && npm run dev
+# Crear proyecto (recomendado)
+npx -p @foxframework/core tsfox new my-project
+cd my-project
+npm install
+npm run dev
 ```
 
 ### 2. Contribuidores al framework:
@@ -123,8 +142,8 @@ npm test
 ### 3. Deployments en producción:
 ```bash
 # Docker
-npx @foxframework/core docker init
-npx @foxframework/core docker build
+npx -p @foxframework/core tsfox docker init
+npx -p @foxframework/core tsfox docker build
 docker run -p 3000:3000 my-app
 
 # CI/CD automático via GitHub Actions
@@ -159,11 +178,11 @@ docker run -p 3000:3000 my-app
 npm view @foxframework/core
 
 # Crear proyecto de prueba
-npx @foxframework/core new test-app
+npx -p @foxframework/core tsfox new test-app
 cd test-app && npm install && npm run dev
 
 # Verificar CLI
-npx @foxframework/core --help
+npx -p @foxframework/core tsfox --help
 
 # Verificar repositorio GitHub
 curl -s https://api.github.com/repos/lnavarrocarter/fox-framework
@@ -177,7 +196,7 @@ curl -s https://api.github.com/repos/lnavarrocarter/fox-framework
 
 - ✅ NPM: https://npmjs.com/package/@foxframework/core
 - ✅ GitHub: https://github.com/lnavarrocarter/fox-framework  
-- ✅ CLI: `npx @foxframework/core new my-app`
+- ✅ CLI: `npx -p @foxframework/core tsfox new my-app` (o tras instalación global: `tsfox new my-app`)
 - ✅ Production Ready: CI/CD + Docker + Tests
 
 **¡La iteración ha sido un éxito completo! 🚀**

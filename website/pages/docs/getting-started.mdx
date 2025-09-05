@@ -12,36 +12,34 @@ Antes de comenzar, asegúrate de tener instalado:
 
 ## Instalación
 
-Puedes instalar Fox Framework de dos maneras:
+Existen dos formas de empezar según tu caso:
 
-### Opción 1: Usar el CLI para crear un nuevo proyecto
+> ⚠️ Si obtienes un error `E404` al intentar `npx tsfox new`, consulta la sección de Troubleshooting en la [FAQ sobre CLI](/docs/faq#error-404-al-ejecutar-npx-tsfox) para la explicación y solución.
 
-La forma más rápida de comenzar es usando nuestro CLI para generar un nuevo proyecto:
+### 1. Crear un nuevo proyecto (recomendado)
 
 ```bash
-# Instalar el CLI de Fox Framework globalmente
-npm install -g create-fox-app
+# (Opcional) Instalar global para usar 'tsfox' sin npx
+npm install -g @foxframework/core
 
-# Crear un nuevo proyecto
-npx create-fox-app mi-proyecto
-
-# Navegar al directorio del proyecto
+# Crear proyecto (no requiere instalación global)
+npx -p @foxframework/core tsfox new mi-proyecto
 cd mi-proyecto
-
-# Instalar dependencias
 npm install
+npm run dev
 ```
 
-### Opción 2: Agregar a un proyecto existente
-
-Para agregar Fox Framework a un proyecto existente:
+### 2. Integrar en un proyecto existente
 
 ```bash
-# Instalar Fox Framework
-npm install fox-framework
+# Instalar paquete core (como dependencia de app existente)
+npm install @foxframework/core
 
-# Instalar peer dependencies
-npm install typescript @types/node
+# Asegura TypeScript y tipos base
+npm install -D typescript @types/node
+
+# (Opcional) Inicializa estructura mínima
+mkdir -p src/{controllers,routes,services,server,views}
 ```
 
 ## Creando tu Primera Aplicación
@@ -70,7 +68,7 @@ mi-proyecto/
 Crea un archivo `src/server/index.ts`:
 
 ```typescript
-import { FoxFactory, ServerConfig } from 'fox-framework';
+import { FoxFactory } from '@foxframework/core';
 
 const config: ServerConfig = {
   port: 3000,
@@ -95,7 +93,7 @@ console.log('🦊 Fox server running on port 3000');
 Crea un archivo `src/routes/index.ts`:
 
 ```typescript
-import { Router } from 'fox-framework';
+import { Router } from '@foxframework/core';
 
 const router = Router.create();
 

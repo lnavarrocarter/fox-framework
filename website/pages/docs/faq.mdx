@@ -1,4 +1,4 @@
-# Preguntas Frecuentes (FAQ)
+# ❓ Preguntas Frecuentes (FAQ)
 
 Esta sección contiene respuestas a las preguntas más comunes sobre Fox Framework. Si no encuentras la respuesta que buscas, no dudes en consultar nuestra documentación completa o contactar con la comunidad.
 
@@ -30,37 +30,35 @@ Fox Framework requiere Node.js 16.0 o superior. Recomendamos usar la versión LT
 ### ¿Cómo instalo Fox Framework?
 
 ```bash
-# Instalación global del CLI
-npm install -g @fox-framework/cli
-
-# Crear nuevo proyecto
-fox new mi-proyecto
+# Opción 1: Uso directo sin instalación global (recomendado)
+npx -p @foxframework/core tsfox new mi-proyecto
 cd mi-proyecto
 npm install
-
-# Iniciar servidor de desarrollo
 npm run dev
+
+# Opción 2: Instalación global (para usar 'tsfox' directamente)
+npm install -g @foxframework/core
+tsfox new mi-proyecto
+npm install && npm run dev
 ```
 
 ### ¿Puedo usar Fox Framework en un proyecto existente?
 
-Sí, puedes agregar Fox Framework a un proyecto existente:
+Sí, instala el paquete core y crea tu instancia:
 
 ```bash
-npm install fox-framework
+npm install @foxframework/core
 ```
 
-Luego configura tu servidor:
-
 ```typescript
-import { FoxFactory } from 'fox-framework';
+import { FoxFactory } from '@foxframework/core';
 
-const app = FoxFactory.createServer({
+const app = FoxFactory.createInstance({
   port: 3000,
-  // tu configuración
+  routes: './src/routes'
 });
 
-app.listen();
+app.start();
 ```
 
 ### ¿Cómo configuro la base de datos?
@@ -200,26 +198,30 @@ emailQueue.process('send-welcome-email', async (job) => {
 });
 ```
 
-## 🚀 Despliegue y Producción
+## � Despliegue y Producción
 
 ### ¿Cómo despliego mi aplicación?
 
-Fox Framework soporta múltiples plataformas:
+Actualmente el CLI expone un set inicial centrado en Docker y (experimental) deploy:
 
 ```bash
-# Docker
-fox build:docker
-docker run -p 3000:3000 mi-app
+# Generar configuración docker
+npx -p @foxframework/core tsfox docker init
 
-# Vercel
-fox deploy:vercel
+# Construir imagen
+npx -p @foxframework/core tsfox docker build
 
-# AWS
-fox deploy:aws
+# Ejecutar contenedor
+npx -p @foxframework/core tsfox docker run --port 3000:3000
 
-# Heroku
-fox deploy:heroku
+# Orquestar con docker-compose
+npx -p @foxframework/core tsfox docker compose up -d
+
+# (Experimental) Deploy
+npx -p @foxframework/core tsfox deploy --interactive
 ```
+
+Roadmap (no implementado aún en CLI actual): vercel/heroku/aws helpers dedicados.
 
 ### ¿Qué configuraciones necesito para producción?
 
@@ -250,6 +252,88 @@ Fox Framework incluye métricas automáticas:
 ## 🐛 Debugging y Troubleshooting
 
 ### Mi aplicación es lenta, ¿cómo optimizo?
+### 🔗 Error: 404 al ejecutar `npx tsfox ...`
+
+Si ves un error E404 del registro npm al intentar `npx tsfox new`:
+
+**Causa:** El binario `tsfox` vive dentro del paquete con scope `@foxframework/core`. Al no existir un paquete sin scope llamado `tsfox`, `npx` busca `tsfox` y obtiene 404.
+
+**Soluciones:**
+```bash
+# Forma recomendada sin instalación global
+npx -p @foxframework/core tsfox new mi-app
+
+# O instala globalmente
+npm install -g @foxframework/core
+tsfox new mi-app
+```
+
+Verifica con:
+```bash
+npx -p @foxframework/core tsfox --version
+```
+
+### ❌ Comando `tsfox` no encontrado tras instalación global
+
+1. Asegura instalación global:
+```bash
+npm ls -g --depth=0 | grep foxframework
+```
+2. Revisa que tu `$PATH` incluye el global npm bin:
+```bash
+echo "$PATH" | tr ':' '\n' | grep npm
+```
+3. Ubica la ruta de binarios:
+```bash
+npm bin -g
+```
+4. Si no aparece, reinstala:
+```bash
+npm uninstall -g @foxframework/core
+npm install -g @foxframework/core
+```
+
+### 🔐 El generador AI muestra error de API Key
+
+Crear archivo `fox-ai.config.json` y exportar variable de entorno:
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4",
+  "temperature": 0.2,
+  "maxTokens": 2000,
+  "apiKey": "${OPENAI_API_KEY}"
+}
+```
+```bash
+export OPENAI_API_KEY="tu-key"
+```
+
+### 🐳 El comando `docker build` falla por plataforma
+
+Si necesitas multi-arquitectura:
+```bash
+npx -p @foxframework/core tsfox docker build --platform linux/amd64
+```
+
+Si usas Apple Silicon y apuntas a amd64, considera activar buildx y QEMU.
+
+### 🐞 ¿Dónde reporto bugs?
+
+1. Revisa Issues existentes.
+2. Crea un nuevo Issue con:
+   - Pasos para reproducir
+   - Versión (`npx -p @foxframework/core tsfox --version`)
+   - Logs relevantes
+   - Sistema operativo
+
+### 🧾 ¿Puedo seguir usando los comandos legacy `generate:*`?
+
+Los comandos legacy (`generate:controller`, etc.) están obsoletos. Usa:
+```bash
+npx -p @foxframework/core tsfox generate controller Users --crud --service --test
+```
+
 
 1. **Habilita el profiler**:
 ```typescript

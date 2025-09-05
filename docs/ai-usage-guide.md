@@ -29,52 +29,52 @@ export OPENAI_API_KEY="tu-api-key-aqui"
 #### Controlador
 ```bash
 # Modo interactivo (recomendado)
-npx tsfox ai:generate controller User --interactive
+npx -p @foxframework/core tsfox ai:generate controller User --interactive
 
 # Modo rápido con valores por defecto
-npx tsfox ai:generate controller User
+npx -p @foxframework/core tsfox ai:generate controller User
 
 # Especificar archivo de salida
-npx tsfox ai:generate controller User --output src/controllers/custom-user.controller.ts
+npx -p @foxframework/core tsfox ai:generate controller User --output src/controllers/custom-user.controller.ts
 ```
 
 #### Middleware
 ```bash
 # Generar middleware de autenticación
-npx tsfox ai:generate middleware Auth --interactive
+npx -p @foxframework/core tsfox ai:generate middleware Auth --interactive
 
 # Middleware simple
-npx tsfox ai:generate middleware Logging
+npx -p @foxframework/core tsfox ai:generate middleware Logging
 ```
 
 #### Rutas
 ```bash
 # Ruta específica
-npx tsfox ai:generate route User --interactive
+npx -p @foxframework/core tsfox ai:generate route User --interactive
 
 # Ruta simple
-npx tsfox ai:generate route User
+npx -p @foxframework/core tsfox ai:generate route User
 ```
 
 #### Modelos
 ```bash
 # Modelo completo con propiedades
-npx tsfox ai:generate model User --interactive
+npx -p @foxframework/core tsfox ai:generate model User --interactive
 
 # Modelo básico
-npx tsfox ai:generate model User
+npx -p @foxframework/core tsfox ai:generate model User
 ```
 
 ### Análisis de Código (Próximamente)
 ```bash
 # Analizar proyecto completo
-npx tsfox ai:analyze project
+npx -p @foxframework/core tsfox ai:analyze project
 
 # Optimizaciones sugeridas
-npx tsfox ai:optimize --suggestions
+npx -p @foxframework/core tsfox ai:optimize --suggestions
 
 # Detección de bugs
-npx tsfox ai:bugs --auto-fix
+npx -p @foxframework/core tsfox ai:bugs --auto-fix
 ```
 
 ## 📝 Ejemplos Prácticos
@@ -83,19 +83,19 @@ npx tsfox ai:bugs --auto-fix
 
 ```bash
 # 1. Generar modelo
-npx tsfox ai:generate model User --interactive
+npx -p @foxframework/core tsfox ai:generate model User --interactive
 # Propiedades: name:string,email:string,password:string,role:string
 
 # 2. Generar controlador
-npx tsfox ai:generate controller User --interactive
+npx -p @foxframework/core tsfox ai:generate controller User --interactive
 # Seleccionar: index, show, store, update, destroy
 
 # 3. Generar rutas
-npx tsfox ai:generate route User --interactive
+npx -p @foxframework/core tsfox ai:generate route User --interactive
 # Method: GET, Path: /users, Controller: UserController, Action: index
 
 # 4. Generar middleware de auth
-npx tsfox ai:generate middleware Auth --interactive
+npx -p @foxframework/core tsfox ai:generate middleware Auth --interactive
 # Purpose: JWT authentication middleware
 ```
 
@@ -103,12 +103,12 @@ npx tsfox ai:generate middleware Auth --interactive
 
 ```bash
 # Generar todos los componentes de un blog
-npx tsfox ai:generate model Post --interactive
+npx -p @foxframework/core tsfox ai:generate model Post --interactive
 # Propiedades: title:string,content:string,authorId:string,publishedAt:Date
 
-npx tsfox ai:generate controller Post --interactive
-npx tsfox ai:generate middleware RateLimit --interactive
-npx tsfox ai:generate route Post --interactive
+npx -p @foxframework/core tsfox ai:generate controller Post --interactive
+npx -p @foxframework/core tsfox ai:generate middleware RateLimit --interactive
+npx -p @foxframework/core tsfox ai:generate route Post --interactive
 ```
 
 ## 🎨 Modo Interactivo
