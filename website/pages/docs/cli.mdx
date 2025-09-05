@@ -15,27 +15,14 @@ Fox Framework incluye un potente sistema de línea de comandos (CLI) que facilit
 
 ## Instalación
 
-La CLI de Fox Framework se puede instalar globalmente para usarla en cualquier proyecto:
+La CLI se distribuye dentro del paquete principal.
 
 ```bash
-# Instalación global
-npm install -g fox-framework-cli
+# (Opcional) Instalación global
+npm install -g @foxframework/core
 
-# O ejecutarla directamente con npx
-npx fox-framework-cli [comando]
-```
-
-También puedes instalarla como dependencia de desarrollo en tu proyecto:
-
-```bash
-# Instalación local como dependencia de desarrollo
-npm install --save-dev fox-framework-cli
-```
-
-Después de la instalación, la CLI estará disponible a través del comando `fox`:
-
-```bash
-fox --help
+# Uso sin instalación global
+npx -p @foxframework/core tsfox --help
 ```
 
 ## Comandos Básicos
@@ -43,87 +30,48 @@ fox --help
 ### Crear un Nuevo Proyecto
 
 ```bash
-# Crear un nuevo proyecto usando el asistente interactivo
-fox new my-project
+# Proyecto básico
+npx -p @foxframework/core tsfox new my-project
 
-# Crear con opciones específicas
-fox new my-project --template api --typescript --docker
+# Selección de plantilla (basic|api|full)
+npx -p @foxframework/core tsfox new my-project --template api
 ```
 
-Opciones disponibles:
-
-- `--template`: Tipo de proyecto (`api`, `web`, `monorepo`, `microservices`)
-- `--typescript`: Configurar proyecto con TypeScript
-- `--docker`: Incluir configuración Docker
-- `--git`: Inicializar repositorio Git
-- `--install`: Instalar dependencias automáticamente
-- `--skip-prompts`: Usar configuración por defecto sin preguntar
+Opciones actuales:
+- `--template` (basic | api | full)
 
 ### Generar Componentes
 
 ```bash
-# Generar un nuevo controlador
-fox generate controller UserController
+# Controlador (implementado)
+npx -p @foxframework/core tsfox generate controller Users --crud --service --test
 
-# Forma abreviada
-fox g controller UserController
-
-# Con opciones adicionales
-fox g controller UserController --resource --model=User
+# Service / Model / Middleware (placeholders iniciales)
+npx -p @foxframework/core tsfox generate service Billing
+npx -p @foxframework/core tsfox generate model User
+npx -p @foxframework/core tsfox generate middleware Auth
 ```
 
-Tipos de componentes que se pueden generar:
+Estado actual:
+- controller ✅ generado con archivos y opciones (--crud, --service, --test, --validation, --auth, --model, --update-routes)
+- service 🚧 placeholder
+- model 🚧 placeholder
+- middleware 🚧 placeholder
 
-- `controller`: Controladores para gestionar peticiones HTTP
-- `service`: Servicios para lógica de negocio
-- `middleware`: Middleware para procesamiento de peticiones
-- `model`: Modelos de datos
-- `repository`: Repositorios para acceso a datos
-- `validator`: Validadores de datos
-- `interface`: Interfaces TypeScript
-- `test`: Tests unitarios o de integración
-- `view`: Plantillas de vistas
-
-Opciones comunes:
-
-- `--dry-run`: Mostrar qué archivos se crearían sin generarlos realmente
-- `--force`: Sobrescribir archivos existentes
-- `--path`: Ubicación específica donde generar los archivos
-- `--spec`: Generar también archivos de test
+Roadmap (no disponibles aún): repository, validator, interface, test, view.
 
 ### Ejecutar la Aplicación
 
+Actualmente la CLI no expone `start` propio; usa scripts de npm:
+
 ```bash
-# Iniciar la aplicación en modo desarrollo
-fox start
-
-# Iniciar con opciones específicas
-fox start --port=3000 --env=dev --watch
+npm run dev   # desarrollo
+npm start     # producción (si está configurado)
 ```
-
-Opciones:
-
-- `--port`: Puerto en el que iniciar la aplicación
-- `--env`: Entorno (`dev`, `test`, `prod`)
-- `--watch`: Reiniciar automáticamente al detectar cambios
-- `--debug`: Activar modo debug
-- `--inspect`: Activar inspector de Node.js
 
 ### Administrar el Proyecto
 
-```bash
-# Ver información sobre el proyecto
-fox info
-
-# Verificar consistencia y buenas prácticas
-fox lint
-
-# Actualizar framework y dependencias
-fox update
-
-# Limpiar archivos temporales y cachés
-fox clean
-```
+Por ahora administración manual / scripts npm. Comandos planeados: info, update, clean (roadmap).
 
 ## Generación de Código
 
@@ -131,7 +79,7 @@ fox clean
 
 ```bash
 # Generar controlador básico
-fox g controller UserController
+// NO disponible: ejemplo histórico (reemplazado por tsfox generate controller)
 
 # Controlador CRUD completo
 fox g controller UserController --resource --model=User
@@ -199,7 +147,7 @@ export class UserController {
 
 ```bash
 # Generar servicio básico
-fox g service UserService
+// Placeholder – usar: npx -p @foxframework/core tsfox generate service UserService
 
 # Servicio con modelo e inyección
 fox g service PaymentService --model=Payment --inject=PaymentGateway,NotificationService
@@ -243,7 +191,7 @@ export class UserService {
 
 ```bash
 # Generar middleware básico
-fox g middleware AuthMiddleware
+// Placeholder – usar: npx -p @foxframework/core tsfox generate middleware AuthMiddleware
 
 # Middleware con opciones
 fox g middleware RateLimiterMiddleware --config=rate-limiter

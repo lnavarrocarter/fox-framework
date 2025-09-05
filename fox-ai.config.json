@@ -5,6 +5,8 @@
   "maxTokens": 2000,
   "apiKey": "${OPENAI_API_KEY}",
   "endpoint": null,
+  "_comments": {
+    "apiKey": "Use environment variable OPENAI_API_KEY"
   
   "_comments": {
     "provider": "AI provider to use: 'openai', 'claude', or 'local'",

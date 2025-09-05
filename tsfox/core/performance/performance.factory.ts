@@ -564,17 +564,8 @@ class SystemMetricsTracker {
   }
 
   private measureEventLoopLag(): number {
-    const start = process.hrtime.bigint();
-    
-    return new Promise<number>((resolve) => {
-      setImmediate(() => {
-        const lag = Number(process.hrtime.bigint() - start) / 1e6;
-        resolve(lag);
-      });
-    }) as any; // Simplified for synchronous return
-    
-    // Return a simple approximation for now
-    return 0;
+  // Simplificación: devolver 0 para evitar Promise en métrica (evita [object Promise])
+  return 0;
   }
 }
 

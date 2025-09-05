@@ -8,12 +8,21 @@ const templatesDir = path.resolve(__dirname, 'templates');
 export const formatClassName = (name: string): string => {
     // Handle camelCase, PascalCase, kebab-case, snake_case, and combinations
     return name
-        // First, handle camelCase and PascalCase by inserting separators before uppercase letters
         .replace(/([a-z])([A-Z])/g, '$1-$2')
-        // Then split by common separators
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
         .split(/[-_\s]+/)
-        .filter(word => word.length > 0)
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .filter(Boolean)
+        .map((word, index, arr) => {
+            if (word.length > 1 && word === word.toUpperCase()) {
+                // Si el siguiente segmento es 'Controller', preservamos el acrónimo completo (API -> API)
+                if (arr[index + 1] && arr[index + 1].toLowerCase() === 'controller') {
+                    return word; // mantener mayúsculas
+                }
+                // En otros casos normalizamos a PascalCase (USER -> User)
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            }
+            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
         .join('');
 };
 

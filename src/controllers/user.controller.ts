@@ -1,5 +1,11 @@
 import { Request, Response } from 'express';
-import { FoxServerInterface } from 'tsfox/core/interfaces/factory.interface';
+
+// TODO: Integrar con capa de dominio real. Definimos un tipo básico provisional.
+interface UserControllerEntity {
+    id?: string;
+    // agrega campos reales aquí
+    [key: string]: unknown;
+}
 
 /**
  * UserController Controller
@@ -10,20 +16,19 @@ export class UserController {
     /**
      * Get all usercontrollers
      */
-    async index(req: Request, res: Response): Promise<Response> {
+    async index(_req: Request, res: Response): Promise<Response> {
         try {
-            // TODO: Implement usercontroller listing logic
-            const data = []; // Fetch from your data source
-            
+            const data: UserControllerEntity[] = []; // Replace with real fetch
             return res.status(200).json({
                 success: true,
                 data,
                 message: 'UserControllers retrieved successfully'
             });
-        } catch (error) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
             return res.status(500).json({
                 success: false,
-                error: error.message,
+                error: message,
                 message: 'Failed to retrieve usercontrollers'
             });
         }
@@ -58,10 +63,11 @@ export class UserController {
                 data,
                 message: 'UserController retrieved successfully'
             });
-        } catch (error) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
             return res.status(500).json({
                 success: false,
-                error: error.message,
+                error: message,
                 message: 'Failed to retrieve usercontroller'
             });
         }
@@ -90,10 +96,11 @@ export class UserController {
                 data: created,
                 message: 'UserController created successfully'
             });
-        } catch (error) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
             return res.status(500).json({
                 success: false,
-                error: error.message,
+                error: message,
                 message: 'Failed to create usercontroller'
             });
         }
@@ -122,10 +129,11 @@ export class UserController {
                 data: updated,
                 message: 'UserController updated successfully'
             });
-        } catch (error) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
             return res.status(500).json({
                 success: false,
-                error: error.message,
+                error: message,
                 message: 'Failed to update usercontroller'
             });
         }
@@ -152,10 +160,11 @@ export class UserController {
                 success: true,
                 message: 'UserController deleted successfully'
             });
-        } catch (error) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
             return res.status(500).json({
                 success: false,
-                error: error.message,
+                error: message,
                 message: 'Failed to delete usercontroller'
             });
         }

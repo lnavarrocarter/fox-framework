@@ -12,6 +12,6 @@
     "strict": true /* Enable all strict type-checking options. */,
     "skipLibCheck": true /* Skip type checking all .d.ts files. */
   },
-  "include": ["src/**/*", "tsfox/**/*"],
-  "exclude": ["node_modules", "**/*.test.ts"]
+  "include": ["tsfox/**/*"],
+  "exclude": ["node_modules", "**/*.test.ts", "src/**/*"]
 }

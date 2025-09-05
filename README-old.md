@@ -524,13 +524,13 @@ const logger = createLogger({
 
 ```bash
 # Generar controlador
-npx tsfox generate:controller UserController
+npx -p @foxframework/core tsfox generate:controller UserController
 
 # Generar modelo
-npx tsfox generate:model User
+npx -p @foxframework/core tsfox generate:model User
 
 # Generar vista
-npx tsfox generate:view users/index
+npx -p @foxframework/core tsfox generate:view users/index
 ```
 
 ## 📊 API Reference
@@ -573,29 +573,29 @@ Fox Framework incluye soporte completo para Docker con generación automática d
 
 ```bash
 # Generar Dockerfile y docker-compose.yml
-npx tsfox docker init
+npx -p @foxframework/core tsfox docker init
 
 # Generar solo Dockerfile
-npx tsfox docker init --dockerfile-only
+npx -p @foxframework/core tsfox docker init --dockerfile-only
 
 # Generar para producción con Nginx
-npx tsfox docker init --nginx --env production
+npx -p @foxframework/core tsfox docker init --nginx --env production
 ```
 
 ### Comandos Docker integrados
 
 ```bash
 # Construir imagen
-npx tsfox docker build
+npx -p @foxframework/core tsfox docker build
 
 # Ejecutar en desarrollo
-npx tsfox docker run --dev
+npx -p @foxframework/core tsfox docker run --dev
 
 # Ver logs
-npx tsfox docker logs
+npx -p @foxframework/core tsfox docker logs
 
 # Ejecutar con docker-compose
-npx tsfox docker compose up
+npx -p @foxframework/core tsfox docker compose up
 ```
 
 ### Dockerfile automático

@@ -164,8 +164,8 @@ npm test             # Ejecutar tests
 
 ### CLI del Framework
 ```bash
-npx tsfox generate controller <name>  # Generar controlador
-npx tsfox new project <name>          # Nuevo proyecto
+npx -p @foxframework/core tsfox generate controller <name>  # Generar controlador
+npx -p @foxframework/core tsfox new project <name>          # Nuevo proyecto
 ```
 
 ---

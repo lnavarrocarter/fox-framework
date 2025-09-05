@@ -13,14 +13,33 @@ A **modern, production-ready web framework** for TypeScript/Node.js with enterpr
 
 ```bash
 npm install @foxframework/core
+# (Opcional) instalación global para usar el binario sin prefijo
+# npm install -g @foxframework/core
 ```
 
 ### Create a New Project
 
 ```bash
-npx tsfox new my-app
+# Método recomendado (sin instalación global)
+npx -p @foxframework/core tsfox new my-app
 cd my-app
+npm install
 npm run dev
+
+# Si estás trabajando desde el repositorio fuente (monorepo/clonado):
+git clone https://github.com/lnavarrocarter/fox-framework.git
+cd fox-framework
+npm install
+npm run build   # genera dist/
+npx -p @foxframework/core tsfox new demo-app
+```
+
+Si no has corrido `npm run build`, el binario apunta a `dist/tsfox/cli/index.js` y fallará con "Cannot find module". Ejecuta el build primero o usa el modo desarrollo:
+
+```bash
+node tsfox/cli/index.ts new my-app  # con ts-node
+# o
+npx ts-node tsfox/cli/index.ts new my-app
 ```
 
 ### Basic Usage
@@ -132,17 +151,18 @@ const app = FoxFactory.create({
 
 ```bash
 # Create new project
-npx tsfox new <project-name>
+npx -p @foxframework/core tsfox new <project-name>
 
 # Generate components
-npx tsfox generate controller users
-npx tsfox generate service auth
-npx tsfox generate middleware validation
+npx -p @foxframework/core tsfox generate controller users
+npx -p @foxframework/core tsfox generate service auth
+npx -p @foxframework/core tsfox generate middleware validation
 
 # Docker operations  
-npx tsfox docker init
-npx tsfox docker build
-npx tsfox docker deploy
+npx -p @foxframework/core tsfox docker init
+npx -p @foxframework/core tsfox docker build
+# Despliegue (si soporte activo)
+npx -p @foxframework/core tsfox deploy --interactive
 ```
 
 ## 🧪 **Testing**
