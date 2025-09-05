@@ -18,9 +18,24 @@ npm install @foxframework/core
 ### Create a New Project
 
 ```bash
+# Método recomendado (publicado)
 npx tsfox new my-app
 cd my-app
+npm install
 npm run dev
+
+# Si estás trabajando desde el repositorio fuente (monorepo/clonado):
+git clone https://github.com/lnavarrocarter/fox-framework.git
+cd fox-framework
+npm install
+npm run build   # genera dist/
+npx tsfox new demo-app
+```
+
+Si no has corrido `npm run build`, el binario apunta a `dist/tsfox/cli/index.js` y fallará con "Cannot find module". Ejecuta el build primero o usa el modo desarrollo:
+
+```bash
+node tsfox/cli/index.ts new my-app  # requiere ts-node instalado global o usar: npx ts-node tsfox/cli/index.ts new my-app
 ```
 
 ### Basic Usage

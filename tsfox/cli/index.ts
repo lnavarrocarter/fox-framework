@@ -8,12 +8,13 @@ import { HealthCommands } from './commands/health';
 import { MetricsCommands } from './commands/metrics';
 import { CacheCommands } from './commands/cache';
 import { PerformanceCommands } from './commands/performance';
+import { registerAIGenerateCommand } from './ai/generate';
 
 const program = new Command();
 
 program
     .version('1.0.0')
-    .description('Fox Framework CLI');
+    .description('Fox Framework CLI with AI capabilities');
 
 program
     .command('generate:controller <n>')
@@ -254,6 +255,9 @@ PerformanceCommands.forEach(performanceCommand => {
         }
     });
 });
+
+// Add AI commands
+registerAIGenerateCommand(program);
 
 // Only run if this is the main module
 if (require.main === module) {

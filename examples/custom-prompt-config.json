@@ -1,0 +1,59 @@
+{
+  "name": "Fox AI Custom Prompts Example",
+  "description": "Example configuration for using custom prompts with Fox Framework AI",
+  "customPrompts": {
+    "controller": {
+      "customPrompt": "Generate a controller following Domain-Driven Design patterns. Use repository pattern for data access. Include proper domain events and value objects where appropriate. Add comprehensive error handling with custom exceptions.",
+      "codeStyle": {
+        "indentation": "spaces",
+        "indentSize": 4,
+        "semicolons": true,
+        "quotes": "single",
+        "trailingCommas": true,
+        "naming": {
+          "classes": "PascalCase",
+          "methods": "camelCase",
+          "variables": "camelCase",
+          "constants": "UPPER_SNAKE_CASE"
+        },
+        "patterns": {
+          "errorHandling": "result-pattern",
+          "validation": "zod",
+          "logging": "winston",
+          "database": "repository"
+        }
+      }
+    },
+    "middleware": {
+      "customPrompt": "Create middleware with comprehensive logging, metrics collection, and error tracking. Use dependency injection pattern. Include configuration validation and graceful degradation.",
+      "codeStyle": {
+        "indentation": "spaces",
+        "indentSize": 2,
+        "semicolons": true,
+        "quotes": "double",
+        "naming": {
+          "classes": "PascalCase",
+          "methods": "camelCase"
+        }
+      }
+    },
+    "model": {
+      "customPrompt": "Generate models using Active Record pattern with full TypeScript support. Include data validation, serialization methods, and relationship handling. Add audit fields and soft delete functionality.",
+      "codeStyle": {
+        "indentation": "tabs",
+        "indentSize": 1,
+        "semicolons": false,
+        "quotes": "single",
+        "naming": {
+          "classes": "PascalCase",
+          "methods": "camelCase",
+          "variables": "camelCase"
+        },
+        "patterns": {
+          "validation": "class-validator",
+          "database": "active-record"
+        }
+      }
+    }
+  }
+}
