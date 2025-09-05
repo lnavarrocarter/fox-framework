@@ -39,7 +39,6 @@ npx -p @foxframework/core tsfox ai:generate controller User --interactive
 npx -p @foxframework/core tsfox ai:generate middleware Auth --interactive  
 npx -p @foxframework/core tsfox ai:generate route User --interactive
 npx -p @foxframework/core tsfox ai:generate model User --interactive
-```
 
 ### ✅ **Mock Implementation**
 - **Responses inteligentes** basadas en patrones de prompts
@@ -116,7 +115,9 @@ El sistema incluye capacidades de análisis automático:
 
 ### **Modo Rápido**
 ```bash
+
 npx -p @foxframework/core tsfox ai:generate controller User
+
 # Genera con valores sensatos por defecto
 ```
 
