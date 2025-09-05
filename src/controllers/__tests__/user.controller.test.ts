@@ -1,4 +1,4 @@
-import { UserController } from './usercontroller.controller';
+import { UserController } from '../user.controller';
 import { Request, Response } from 'express';
 
 describe('UserControllerController', () => {

@@ -44,8 +44,13 @@ router.get('/metrics', async (req, res) => {
   }
 });
 
-// User routes
-router.use('/user', new UserController().router);
+// User routes (explicit binding instead of non-existent internal router)
+const userController = new UserController();
+router.get('/user', (req, res) => userController.index(req, res));
+router.get('/user/:id', (req, res) => userController.show(req, res));
+router.post('/user', (req, res) => userController.store(req, res));
+router.put('/user/:id', (req, res) => userController.update(req, res));
+router.delete('/user/:id', (req, res) => userController.destroy(req, res));
 
 // Add your routes here
 
