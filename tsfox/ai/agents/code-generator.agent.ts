@@ -33,6 +33,18 @@ export class CodeGeneratorAgent implements AIAgentInterface {
     }
 
     async configure(config: AIAgentConfig): Promise<void> {
+        if (config.provider && config.provider !== 'openai') {
+            throw new Error(`Unsupported AI provider: ${config.provider}`);
+        }
+        if (config.temperature !== undefined && (config.temperature < 0 || config.temperature > 1)) {
+            throw new Error('Temperature must be between 0 and 1');
+        }
+        if (config.maxTokens !== undefined && config.maxTokens <= 0) {
+            throw new Error('maxTokens must be greater than 0');
+        }
+        if (config.model !== undefined && config.model.trim() === '') {
+            throw new Error('Model name cannot be empty');
+        }
         this.config = { ...this.config, ...config };
         this.provider = new OpenAIProvider(this.config);
         await this.provider.initialize();

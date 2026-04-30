@@ -367,7 +367,7 @@ jobs:
     
     - name: Deploy to staging
       run: |
-        npx tsfox deploy \
+  npx -p @foxframework/core tsfox deploy \
           --provider aws \
           --environment staging \
           --region ${{ secrets.AWS_REGION }} \
@@ -384,7 +384,7 @@ jobs:
     
     - name: Deploy to production
       run: |
-        npx tsfox deploy \
+  npx -p @foxframework/core tsfox deploy \
           --provider aws \
           --environment production \
           --region ${{ secrets.AWS_REGION }} \

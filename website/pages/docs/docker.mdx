@@ -175,27 +175,42 @@ volumes:
 
 ## Comandos CLI para Docker
 
-Fox Framework CLI incluye comandos para gestionar contenedores:
+Fox Framework CLI incluye comandos para gestionar contenedores (versión actual):
 
 ```bash
-# Generar archivos Docker
-npx tsfox docker init
+# Generar configuración Docker (Dockerfile + docker-compose.dev.yml)
+npx -p @foxframework/core tsfox docker init
 
-# Construir imagen
-npx tsfox docker build
+# Construir imagen (acepta tag opcional como argumento)
+npx -p @foxframework/core tsfox docker build
+npx -p @foxframework/core tsfox docker build my-app:1.0.0
 
-# Ejecutar contenedor de desarrollo
-npx tsfox docker dev
+# Ejecutar contenedor simple (foreground por defecto)
+npx -p @foxframework/core tsfox docker run -p 3000:3000
+npx -p @foxframework/core tsfox docker run --detach -p 3000:3000
 
-# Ejecutar en modo producción
-npx tsfox docker run
+# Orquestar servicios con docker-compose (desarrollo / multi servicios)
+npx -p @foxframework/core tsfox docker compose up -d
+npx -p @foxframework/core tsfox docker compose logs
+npx -p @foxframework/core tsfox docker compose down
 
-# Detener contenedores
-npx tsfox docker stop
+# Ver logs (modo compose por defecto)
+npx -p @foxframework/core tsfox docker logs -f
+# Logs de un servicio específico	npx -p @foxframework/core tsfox docker logs api -f
 
-# Limpiar contenedores y volúmenes
-npx tsfox docker clean
+# Logs de un contenedor directo en vez de compose
+npx -p @foxframework/core tsfox docker logs --container -f
+
+# Reconstruir y levantar
+npx -p @foxframework/core tsfox docker compose up -d --build
+
+# Limpiar volúmenes (usa docker compose directamente)
+docker compose down -v
 ```
+
+Notas:
+- Los comandos legacy `docker dev`, `docker stop`, `docker clean` fueron removidos / nunca implementados en el nuevo CLI modular.
+- Usa `docker compose down` para detener y `docker compose down -v` para limpiar volúmenes.
 
 ## Integración con Microservicios
 

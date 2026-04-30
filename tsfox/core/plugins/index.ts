@@ -246,8 +246,8 @@ export const PluginHelpers = {
       public readonly version = version;
       public readonly description?: string;
       
-      private context?: any;
-      private initialized = false;
+      public context?: any;
+      public initialized = false;
 
       async initialize(context: any): Promise<void> {
         this.context = context;
@@ -263,19 +263,19 @@ export const PluginHelpers = {
         }
       }
 
-      protected async onInitialize(context: any): Promise<void> {
+      async onInitialize(context: any): Promise<void> {
         // Override in subclass
       }
 
-      protected async onDestroy(): Promise<void> {
+      async onDestroy(): Promise<void> {
         // Override in subclass
       }
 
-      protected getContext() {
+      getContext() {
         return this.context;
       }
 
-      protected isInitialized(): boolean {
+      isInitialized(): boolean {
         return this.initialized;
       }
     };

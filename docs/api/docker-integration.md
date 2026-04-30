@@ -44,16 +44,16 @@ Fox Framework incluye soporte completo para Docker con generación automática d
 
 ```bash
 # Configuración completa (Dockerfile + docker-compose.yml)
-npx tsfox docker init
+npx -p @foxframework/core tsfox docker init
 
 # Solo Dockerfile
-npx tsfox docker init --dockerfile-only
+npx -p @foxframework/core tsfox docker init --dockerfile-only
 
 # Con base de datos PostgreSQL
-npx tsfox docker init --database postgresql
+npx -p @foxframework/core tsfox docker init --database postgresql
 
 # Para producción con Nginx
-npx tsfox docker init --nginx --env production
+npx -p @foxframework/core tsfox docker init --nginx --env production
 ```
 
 ### Estructura generada
@@ -79,7 +79,7 @@ project/
 Genera toda la configuración Docker necesaria.
 
 ```bash
-npx tsfox docker init [options]
+npx -p @foxframework/core tsfox docker init [options]
 ```
 
 **Opciones:**
@@ -95,16 +95,16 @@ npx tsfox docker init [options]
 
 ```bash
 # Configuración básica
-npx tsfox docker init
+npx -p @foxframework/core tsfox docker init
 
 # Solo Dockerfile para desarrollo
-npx tsfox docker init --dockerfile-only --env development
+npx -p @foxframework/core tsfox docker init --dockerfile-only --env development
 
 # Configuración completa con PostgreSQL y Nginx
-npx tsfox docker init --database postgresql --nginx
+npx -p @foxframework/core tsfox docker init --database postgresql --nginx
 
 # Configuración personalizada
-npx tsfox docker init --base-image node:18-alpine --port 4000
+npx -p @foxframework/core tsfox docker init --base-image node:18-alpine --port 4000
 ```
 
 ### docker build
@@ -112,7 +112,7 @@ npx tsfox docker init --base-image node:18-alpine --port 4000
 Construye la imagen Docker del proyecto.
 
 ```bash
-npx tsfox docker build [options]
+npx -p @foxframework/core tsfox docker build [options]
 ```
 
 **Opciones:**
@@ -126,16 +126,16 @@ npx tsfox docker build [options]
 
 ```bash
 # Build básico
-npx tsfox docker build
+npx -p @foxframework/core tsfox docker build
 
 # Build con tag personalizado
-npx tsfox docker build --tag my-fox-app:latest
+npx -p @foxframework/core tsfox docker build --tag my-fox-app:latest
 
 # Build para producción
-npx tsfox docker build --env production
+npx -p @foxframework/core tsfox docker build --env production
 
 # Build multiplataforma
-npx tsfox docker build --platform linux/amd64,linux/arm64
+npx -p @foxframework/core tsfox docker build --platform linux/amd64,linux/arm64
 ```
 
 ### docker run
@@ -143,7 +143,7 @@ npx tsfox docker build --platform linux/amd64,linux/arm64
 Ejecuta el container de la aplicación.
 
 ```bash
-npx tsfox docker run [options]
+npx -p @foxframework/core tsfox docker run [options]
 ```
 
 **Opciones:**
@@ -157,16 +157,16 @@ npx tsfox docker run [options]
 
 ```bash
 # Ejecutar en desarrollo
-npx tsfox docker run --dev
+npx -p @foxframework/core tsfox docker run --dev
 
 # Ejecutar en puerto personalizado
-npx tsfox docker run --port 8080
+npx -p @foxframework/core tsfox docker run --port 8080
 
 # Ejecutar en background
-npx tsfox docker run --detach
+npx -p @foxframework/core tsfox docker run --detach
 
 # Con variables de entorno
-npx tsfox docker run --env-file .env.production
+npx -p @foxframework/core tsfox docker run --env-file .env.production
 ```
 
 ### docker logs
@@ -174,7 +174,7 @@ npx tsfox docker run --env-file .env.production
 Muestra los logs del container.
 
 ```bash
-npx tsfox docker logs [options]
+npx -p @foxframework/core tsfox docker logs [options]
 ```
 
 **Opciones:**
@@ -189,7 +189,7 @@ npx tsfox docker logs [options]
 Gestiona servicios con docker-compose.
 
 ```bash
-npx tsfox docker compose <command> [options]
+npx -p @foxframework/core tsfox docker compose <command> [options]
 ```
 
 **Comandos:**
@@ -205,16 +205,16 @@ npx tsfox docker compose <command> [options]
 
 ```bash
 # Levantar servicios
-npx tsfox docker compose up
+npx -p @foxframework/core tsfox docker compose up
 
 # Levantar en background
-npx tsfox docker compose up -d
+npx -p @foxframework/core tsfox docker compose up -d
 
 # Ver logs de un servicio
-npx tsfox docker compose logs app
+npx -p @foxframework/core tsfox docker compose logs app
 
 # Ejecutar comando en container
-npx tsfox docker compose exec app npm run migration
+npx -p @foxframework/core tsfox docker compose exec app npm run migration
 ```
 
 ## 🏭 Generadores
@@ -558,55 +558,55 @@ npx create-fox-app my-app
 cd my-app
 
 # 2. Generar configuración Docker
-npx tsfox docker init
+npx -p @foxframework/core tsfox docker init
 
 # 3. Construir imagen
-npx tsfox docker build
+npx -p @foxframework/core tsfox docker build
 
 # 4. Ejecutar aplicación
-npx tsfox docker run
+npx -p @foxframework/core tsfox docker run
 ```
 
 ### Ejemplo 2: Stack Completo con Base de Datos
 
 ```bash
 # 1. Generar configuración con PostgreSQL
-npx tsfox docker init --database postgresql
+npx -p @foxframework/core tsfox docker init --database postgresql
 
 # 2. Levantar stack completo
-npx tsfox docker compose up -d
+npx -p @foxframework/core tsfox docker compose up -d
 
 # 3. Ver logs
-npx tsfox docker compose logs -f app
+npx -p @foxframework/core tsfox docker compose logs -f app
 
 # 4. Ejecutar migraciones
-npx tsfox docker compose exec app npm run migration
+npx -p @foxframework/core tsfox docker compose exec app npm run migration
 ```
 
 ### Ejemplo 3: Deploy en Producción
 
 ```bash
 # 1. Generar configuración de producción
-npx tsfox docker init --env production --nginx
+npx -p @foxframework/core tsfox docker init --env production --nginx
 
 # 2. Build optimizado
-npx tsfox docker build --env production
+npx -p @foxframework/core tsfox docker build --env production
 
 # 3. Deploy con docker-compose
-npx tsfox docker compose -f docker-compose.yml up -d
+npx -p @foxframework/core tsfox docker compose -f docker-compose.yml up -d
 ```
 
 ### Ejemplo 4: Desarrollo con Hot Reload
 
 ```bash
 # 1. Generar configuración de desarrollo
-npx tsfox docker init --env development
+npx -p @foxframework/core tsfox docker init --env development
 
 # 2. Desarrollo con hot reload
-npx tsfox docker run --dev
+npx -p @foxframework/core tsfox docker run --dev
 
 # O con docker-compose
-npx tsfox docker compose -f docker-compose.dev.yml up
+npx -p @foxframework/core tsfox docker compose -f docker-compose.dev.yml up
 ```
 
 ## 🎯 Best Practices

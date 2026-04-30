@@ -10,6 +10,7 @@ import { PromptManager } from './core/prompt.manager';
 import { GenerateCommands } from './commands/generate';
 import { DockerCommands } from './commands/docker';
 import { DeploymentCLI } from './commands/deploy.command';
+import { ProjectCommands } from './commands/project';
 
 export class FoxCLI {
   private program: Command;
@@ -67,6 +68,35 @@ export class FoxCLI {
     // Deployment commands
     const deploymentCLI = new DeploymentCLI();
     this.program.addCommand(deploymentCLI['program']); // Access the internal program
+
+    // Project commands group (new, init, upgrade futuros)
+    const projectGroup = this.program
+      .command('project')
+      .alias('p')
+      .description('Comandos de gestión de proyecto');
+
+    this.commandManager.registerCommands(projectGroup, ProjectCommands);
+
+    // Atajo directo: tsfox new <name>
+    // Permite usar el patrón documentado npx tsfox new my-app
+    const newCmd = this.program
+      .command('new <name>')
+      .description('Crear un nuevo proyecto Fox Framework (alias de project new)')
+      .option('-t, --template <template>', 'Plantilla (basic, api, full)', 'basic')
+      .action(async (name: string, opts: any) => {
+        // Reutilizamos la acción del comando modular
+        const cmd = ProjectCommands.find(c => c.name === 'new');
+        if (!cmd) {
+          throw new Error('Comando new no disponible');
+        }
+        await cmd.action([name], { template: opts.template }, {
+          projectRoot: process.cwd(),
+          command: cmd,
+          verbose: false,
+          quiet: false,
+          noColor: false
+        });
+      });
 
     // TODO: Add other command groups
     // - Project commands (new, init, upgrade)

@@ -908,78 +908,79 @@ Fox Framework incluye un conjunto completo de comandos Docker integrados en el C
 
 #### docker init
 
-Genera configuración Docker completa para tu proyecto.
+Genera configuración base (Dockerfile, docker-compose.dev.yml). Actualmente las opciones soportadas reales en código son:
 
 ```bash
-npx tsfox docker init [options]
+npx -p @foxframework/core tsfox docker init
 ```
 
-**Opciones:**
-- `--dockerfile-only` - Genera solo Dockerfile
-- `--nginx` - Incluye configuración Nginx
-- `--env <environment>` - Especifica entorno (development/production)
-- `--database <type>` - Incluye base de datos (postgresql/mysql/mongodb/redis)
-
-**Ejemplos:**
-```bash
-# Configuración completa
-npx tsfox docker init
-
-# Solo Dockerfile
-npx tsfox docker init --dockerfile-only
-
-# Con Nginx para producción
-npx tsfox docker init --nginx --env production
-
-# Con PostgreSQL
-npx tsfox docker init --database postgresql
-```
+Flags documentados previamente (`--dockerfile-only`, `--database`, `--env`, `--base-image`, `--port`) aún no están implementados en el generador actual y se marcaron como roadmap.
 
 #### docker build
 
-Construye la imagen Docker del proyecto.
+Construye la imagen Docker del proyecto. El generador obtiene nombre y versión desde package.json si no se pasa tag como argumento.
 
 ```bash
-npx tsfox docker build [options]
+npx -p @foxframework/core tsfox docker build            # usa name:version de package.json
+npx -p @foxframework/core tsfox docker build my-app:1.0.0
 ```
 
-**Opciones:**
-- `--tag <name>` - Nombre de la imagen
-- `--env <environment>` - Entorno de build
+**Opciones soportadas:**
+
+- `--platform <value>` (ej: linux/amd64)
+- `--no-cache` (boolean)
+- `--push` (empuja al registry tras build)
+- `--target <development|production>`
 
 #### docker run
 
-Ejecuta el container de la aplicación.
+Ejecuta el contenedor en primer plano (o `--detach`). Usa la imagen construida previamente.
 
 ```bash
-npx tsfox docker run [options]
+npx -p @foxframework/core tsfox docker run --port 3000:3000
+npx -p @foxframework/core tsfox docker run --detach --port 8080:3000
 ```
 
-**Opciones:**
-- `--dev` - Modo desarrollo con hot reload
-- `--port <port>` - Puerto de exposición
-- `--env <environment>` - Variables de entorno
+**Opciones soportadas:**
+
+- `-d, --detach` (detached)
+- `-p, --port <host:container>` (default 3000:3000)
+- `--env-file <file>`
+- `--name <containerName>`
+**Opciones soportadas:**
+
+- `-f, --follow`
+- `--tail <number>` (default 100)
+- `--container` (interpreta argumento como nombre de contenedor)
+- `--file <composeFile>` (default docker-compose.dev.yml)
 
 #### docker logs
 
-Muestra los logs del container.
+Muestra logs de docker-compose por defecto o de un contenedor individual con `--container`.
 
 ```bash
-npx tsfox docker logs [options]
+npx -p @foxframework/core tsfox docker logs -f
+npx -p @foxframework/core tsfox docker logs api -f
+npx -p @foxframework/core tsfox docker logs --container -f
 ```
+
+**Opciones soportadas:**
+- `-f, --follow`
+- `--tail <number>` (default 100)
+- `--container` (interpreta argumento como nombre de contenedor)
+- `--file <composeFile>` (default docker-compose.dev.yml)
 
 #### docker compose
 
-Gestiona servicios con docker-compose.
+Wrapper para acciones comunes de docker-compose.
 
 ```bash
-npx tsfox docker compose <command>
+npx -p @foxframework/core tsfox docker compose up -d
+npx -p @foxframework/core tsfox docker compose logs
+npx -p @foxframework/core tsfox docker compose down
 ```
 
-**Comandos:**
-- `up` - Levanta todos los servicios
-- `down` - Para todos los servicios
-- `logs` - Muestra logs de servicios
+Acciones válidas: `up`, `down`, `logs`, `ps`, `restart`, `stop`, `start`, `pull`, `build`.
 
 ### DockerfileGenerator
 

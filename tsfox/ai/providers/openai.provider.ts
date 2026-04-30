@@ -44,13 +44,13 @@ export class OpenAIProvider {
     }
 
     private generateMockResponse(prompt: string): CodeGenerationResponse {
-        // Generate mock responses based on prompt patterns
+        // Generate mock responses based on prompt patterns (order matters)
         if (prompt.includes('controller')) {
             return this.generateMockController(prompt);
+        } else if (prompt.includes('route')) { // ensure 'route' recognized before generic 'middleware' word inside prompt
+            return this.generateMockRoute(prompt);
         } else if (prompt.includes('middleware')) {
             return this.generateMockMiddleware(prompt);
-        } else if (prompt.includes('route')) {
-            return this.generateMockRoute(prompt);
         } else if (prompt.includes('model')) {
             return this.generateMockModel(prompt);
         }
@@ -71,7 +71,7 @@ export class OpenAIProvider {
         const controllerName = nameMatch ? nameMatch[1] : 'Generic';
 
         const code = `import { Request, Response } from 'express';
-import { FoxServerInterface } from 'tsfox/core/interfaces/factory.interface';
+import { FoxServerInterface } from '../../core/interfaces/factory.interface';
 
 /**
  * ${controllerName} Controller
@@ -433,11 +433,13 @@ describe('${middlewareName}Middleware', () => {
 
         const method = methodMatch ? methodMatch[1] : 'GET';
         const path = pathMatch ? pathMatch[1] : '/';
-        const controller = controllerMatch ? controllerMatch[1] : 'Generic';
+    let controller = controllerMatch ? controllerMatch[1] : 'Generic';
+    // Normaliza nombre sin doble sufijo Controller
+    const baseControllerName = controller.endsWith('Controller') ? controller.replace(/Controller$/, '') : controller;
         const action = actionMatch ? actionMatch[1] : 'index';
 
-        const code = `import { RequestMethod } from 'tsfox/core/enums/methods.enums';
-import { ${controller}Controller } from '../controllers/${controller.toLowerCase()}.controller';
+    const code = `import { RequestMethod } from 'tsfox/core/enums/methods.enums';
+import { ${baseControllerName}Controller } from '../controllers/${baseControllerName.toLowerCase()}.controller';
 
 /**
  * ${controller} Routes
@@ -445,20 +447,20 @@ import { ${controller}Controller } from '../controllers/${controller.toLowerCase
  */
 
 // Initialize controller
-const ${controller.toLowerCase()}Controller = new ${controller}Controller();
+const ${baseControllerName.toLowerCase()}Controller = new ${baseControllerName}Controller();
 
 // Route definition
-export const ${controller.toLowerCase()}Routes = {
+export const ${baseControllerName.toLowerCase()}Routes = {
     method: RequestMethod.${method},
     path: '${path}',
-    handler: ${controller.toLowerCase()}Controller.${action},
+    handler: ${baseControllerName.toLowerCase()}Controller.${action},
     
     // Route metadata
     metadata: {
-        controller: '${controller}Controller',
+    controller: '${baseControllerName}Controller',
         action: '${action}',
         description: '${method} ${path} - ${action} action',
-        tags: ['${controller.toLowerCase()}', 'api']
+    tags: ['${baseControllerName.toLowerCase()}', 'api']
     },
     
     // Optional middleware
@@ -478,29 +480,34 @@ export const ${controller.toLowerCase()}Routes = {
     }
 };
 
-export default ${controller.toLowerCase()}Routes;`;
+export default ${baseControllerName.toLowerCase()}Routes;`;
 
-        const tests = `import { ${controller.toLowerCase()}Routes } from './${controller.toLowerCase()}.routes';
+    const tests = `import { ${baseControllerName.toLowerCase()}Routes } from './${baseControllerName.toLowerCase()}.routes';
 import { RequestMethod } from 'tsfox/core/enums/methods.enums';
 
-describe('${controller}Routes', () => {
+describe('${baseControllerName}Routes', () => {
     it('should have correct route configuration', () => {
-        expect(${controller.toLowerCase()}Routes.method).toBe(RequestMethod.${method});
-        expect(${controller.toLowerCase()}Routes.path).toBe('${path}');
-        expect(typeof ${controller.toLowerCase()}Routes.handler).toBe('function');
+    expect(${baseControllerName.toLowerCase()}Routes.method).toBe(RequestMethod.${method});
+    expect(${baseControllerName.toLowerCase()}Routes.path).toBe('${path}');
+    expect(typeof ${baseControllerName.toLowerCase()}Routes.handler).toBe('function');
     });
 
     it('should have metadata', () => {
-        expect(${controller.toLowerCase()}Routes.metadata).toBeDefined();
-        expect(${controller.toLowerCase()}Routes.metadata.controller).toBe('${controller}Controller');
-        expect(${controller.toLowerCase()}Routes.metadata.action).toBe('${action}');
+    expect(${baseControllerName.toLowerCase()}Routes.metadata).toBeDefined();
+    expect(${baseControllerName.toLowerCase()}Routes.metadata.controller).toBe('${baseControllerName}Controller');
+    expect(${baseControllerName.toLowerCase()}Routes.metadata.action).toBe('${action}');
     });
 });`;
 
         return {
             code,
             type: 'route',
-            dependencies: ['tsfox/core/enums/methods.enums', `../controllers/${controller.toLowerCase()}.controller`],
+            // Incluimos también el nombre simbólico del controller para test de integración
+            dependencies: [
+                'tsfox/core/enums/methods.enums',
+                `../controllers/${baseControllerName.toLowerCase()}.controller`,
+                `${baseControllerName}Controller`
+            ],
             tests,
             documentation: `# ${controller} Routes\n\nAI-generated route configuration.\n\n## Route Details\n- Method: ${method}\n- Path: ${path}\n- Controller: ${controller}\n- Action: ${action}`,
             confidence: 92
@@ -510,6 +517,18 @@ describe('${controller}Routes', () => {
     private generateMockModel(prompt: string): CodeGenerationResponse {
         const nameMatch = prompt.match(/Name:\s*(\w+)/);
         const modelName = nameMatch ? nameMatch[1] : 'Generic';
+        let properties: { name: string; type: string; required?: boolean }[] = [];
+        try {
+            const propsSeg = prompt.match(/Properties:\s*(\[[\s\S]*?\])\s*Relationships:/);
+            if (propsSeg) {
+                properties = JSON.parse(propsSeg[1]);
+            }
+        } catch { /* ignore */ }
+        const ifaceLines = properties.length ? properties.map(p => `    ${p.name}${p.required ? '' : '?'}: ${p.type};`).join('\n') : '    // TODO: Add specific properties based on your model specification';
+        const classLines = properties.length ? properties.map(p => `    public ${p.name}${p.required ? '' : '?'}: ${p.type};`).join('\n') : '    // Add your model properties here';
+        const toJSONLines = properties.length ? properties.map(p => `            ${p.name}: this.${p.name},`).join('\n') : '            // TODO: Add other properties';
+        const fromJSONLines = properties.length ? properties.map(p => `            ${p.name}: data.${p.name},`).join('\n') : '            // TODO: Add other properties';
+        const updateLines = properties.length ? properties.map(p => `        if (data.${p.name} !== undefined) this.${p.name} = data.${p.name};`).join('\n') : '        // TODO: Add property assignments';
 
         const code = `/**
  * ${modelName} Model Interface
@@ -518,10 +537,7 @@ describe('${controller}Routes', () => {
 export interface I${modelName} {
     id?: string | number;
     createdAt?: Date;
-    updatedAt?: Date;
-    
-    // TODO: Add specific properties based on your model specification
-    // Add your model properties here
+    updatedAt?: Date;\n${ifaceLines}
 }
 
 /**
@@ -530,128 +546,52 @@ export interface I${modelName} {
 export class ${modelName} implements I${modelName} {
     public id?: string | number;
     public createdAt?: Date;
-    public updatedAt?: Date;
+    public updatedAt?: Date;\n${classLines}
 
     constructor(data: Partial<I${modelName}> = {}) {
         Object.assign(this, data);
-        
-        if (!this.createdAt) {
-            this.createdAt = new Date();
-        }
+        if (!this.createdAt) this.createdAt = new Date();
         this.updatedAt = new Date();
     }
 
-    /**
-     * Convert to JSON object
-     */
     toJSON(): I${modelName} {
         return {
             id: this.id,
             createdAt: this.createdAt,
-            updatedAt: this.updatedAt,
-            // TODO: Add other properties
+            updatedAt: this.updatedAt,\n${toJSONLines}
         };
     }
 
-    /**
-     * Create from JSON object
-     */
     static fromJSON(data: any): ${modelName} {
         return new ${modelName}({
             id: data.id,
             createdAt: data.createdAt ? new Date(data.createdAt) : undefined,
-            updatedAt: data.updatedAt ? new Date(data.updatedAt) : undefined,
-            // TODO: Add other properties
+            updatedAt: data.updatedAt ? new Date(data.updatedAt) : undefined,\n${fromJSONLines}
         });
     }
 
-    /**
-     * Validate model data
-     */
     validate(): { valid: boolean; errors: string[] } {
         const errors: string[] = [];
-
-        // TODO: Add validation rules
-        // if (!this.requiredField) {
-        //     errors.push('Required field is missing');
-        // }
-
-        return {
-            valid: errors.length === 0,
-            errors
-        };
+        return { valid: errors.length === 0, errors };
     }
 
-    /**
-     * Update model data
-     */
     update(data: Partial<I${modelName}>): void {
         Object.assign(this, data);
         this.updatedAt = new Date();
+${updateLines}
     }
 
-    /**
-     * Clone model
-     */
-    clone(): ${modelName} {
-        return new ${modelName}(this.toJSON());
-    }
+    clone(): ${modelName} { return new ${modelName}(this.toJSON()); }
 }
 
-/**
- * ${modelName} Repository (if needed)
- */
 export class ${modelName}Repository {
     private models: Map<string | number, ${modelName}> = new Map();
-
-    /**
-     * Find by ID
-     */
-    findById(id: string | number): ${modelName} | undefined {
-        return this.models.get(id);
-    }
-
-    /**
-     * Find all
-     */
-    findAll(): ${modelName}[] {
-        return Array.from(this.models.values());
-    }
-
-    /**
-     * Save model
-     */
-    save(model: ${modelName}): ${modelName} {
-        if (!model.id) {
-            model.id = Date.now().toString();
-            model.createdAt = new Date();
-        }
-        model.updatedAt = new Date();
-        
-        this.models.set(model.id, model);
-        return model;
-    }
-
-    /**
-     * Delete model
-     */
-    delete(id: string | number): boolean {
-        return this.models.delete(id);
-    }
-
-    /**
-     * Count models
-     */
-    count(): number {
-        return this.models.size;
-    }
-
-    /**
-     * Clear all models
-     */
-    clear(): void {
-        this.models.clear();
-    }
+    findById(id: string | number): ${modelName} | undefined { return this.models.get(id); }
+    findAll(): ${modelName}[] { return Array.from(this.models.values()); }
+    save(model: ${modelName}): ${modelName} { if (!model.id) { model.id = Date.now().toString(); model.createdAt = new Date(); } model.updatedAt = new Date(); this.models.set(model.id, model); return model; }
+    delete(id: string | number): boolean { return this.models.delete(id); }
+    count(): number { return this.models.size; }
+    clear(): void { this.models.clear(); }
 }
 
 export default ${modelName};`;

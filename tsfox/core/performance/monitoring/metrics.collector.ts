@@ -178,6 +178,9 @@ export class MetricsCollector implements IMetricsCollector {
     this.collectionInterval = setInterval(() => {
       this.collectSystemMetrics();
     }, this.interval);
+    // .unref() prevents this interval from keeping the process alive when
+    // all other work is done (important for clean exits in test environments)
+    this.collectionInterval.unref();
   }
 
   /**

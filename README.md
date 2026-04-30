@@ -18,29 +18,50 @@ npm install @foxframework/core
 ### Create a New Project
 
 ```bash
-npx tsfox new my-app
+npx -p @foxframework/core tsfox new my-app
 cd my-app
+npm install
 npm run dev
+```
+
+If developing from source:
+
+```bash
+git clone https://github.com/lnavarrocarter/fox-framework.git
+cd fox-framework
+npm install
+npm run build   # generates dist/
+npx -p @foxframework/core tsfox new demo-app
 ```
 
 ### Basic Usage
 
 ```typescript
 import { FoxFactory } from '@foxframework/core';
+import { RequestMethod } from '@foxframework/core';
 
+// Option A: create() + listen() — Express-like style
 const app = FoxFactory.create({
+  port: 3000,
+  env: 'development',
+  jsonSpaces: 2,
+  staticFolder: 'public',
   requests: [
     {
       path: '/',
-      method: 'get',
+      method: RequestMethod.GET,
       handler: (req, res) => res.json({ message: 'Hello Fox!' })
     }
   ]
 });
 
 app.listen(3000, () => {
-  console.log('🦊 Fox Framework running on port 3000');
+  console.log('Fox Framework running on port 3000');
 });
+
+// Option B: createInstance() + FoxFactory.listen() — explicit style
+FoxFactory.createInstance({ port: 3000, env: 'development', jsonSpaces: 2, staticFolder: 'public' });
+FoxFactory.listen();
 ```
 
 ## ✨ **Features**
@@ -80,7 +101,7 @@ app.listen(3000, () => {
 - **Request tracing**
 
 ### 🗄️ **Data & Caching**
-- **Database abstraction** layer
+- **Database abstraction** layer with provider ecosystem (SQL, NoSQL, Redis, AWS)
 - **Multi-provider caching** (Memory, Redis, File)
 - **Response caching** middleware
 - **Cache invalidation** strategies
@@ -101,48 +122,62 @@ Visit our [complete documentation](https://github.com/lnavarrocarter/fox-framewo
 #### REST API
 ```typescript
 import { FoxFactory } from '@foxframework/core';
+import { RequestMethod } from '@foxframework/core';
 
 const app = FoxFactory.create({
+  port: 3000,
+  env: 'development',
+  jsonSpaces: 2,
+  staticFolder: 'public',
   requests: [
-    { path: '/users', method: 'get', handler: getAllUsers },
-    { path: '/users', method: 'post', handler: createUser },
-    { path: '/users/:id', method: 'get', handler: getUser },
-    { path: '/users/:id', method: 'put', handler: updateUser },
-    { path: '/users/:id', method: 'delete', handler: deleteUser }
+    { path: '/users',     method: RequestMethod.GET,    handler: getAllUsers },
+    { path: '/users',     method: RequestMethod.POST,   handler: createUser },
+    { path: '/users/:id', method: RequestMethod.GET,    handler: getUser },
+    { path: '/users/:id', method: RequestMethod.PUT,    handler: updateUser },
+    { path: '/users/:id', method: RequestMethod.DELETE, handler: deleteUser }
   ]
 });
+
+app.listen(3000);
 ```
 
 #### With Middleware
 ```typescript
-import { FoxFactory, authMiddleware, loggingMiddleware } from '@foxframework/core';
+import { FoxFactory, RequestLoggingMiddleware, AuthMiddleware } from '@foxframework/core';
+import { RequestMethod } from '@foxframework/core';
 
 const app = FoxFactory.create({
-  middleware: [
-    loggingMiddleware(),
-    authMiddleware({ secret: 'your-jwt-secret' })
+  port: 3000,
+  env: 'development',
+  jsonSpaces: 2,
+  staticFolder: 'public',
+  middlewares: [
+    RequestLoggingMiddleware.create(),
+    AuthMiddleware.jwt({ secret: 'your-jwt-secret' })
   ],
   requests: [
-    { path: '/protected', method: 'get', handler: protectedRoute }
+    { path: '/protected', method: RequestMethod.GET, handler: protectedRoute }
   ]
 });
+
+app.listen(3000);
 ```
 
 ## 🛠️ **CLI Commands**
 
 ```bash
 # Create new project
-npx tsfox new <project-name>
+npx -p @foxframework/core tsfox new <project-name>
 
 # Generate components
-npx tsfox generate controller users
-npx tsfox generate service auth
-npx tsfox generate middleware validation
+npx -p @foxframework/core tsfox generate controller users
+npx -p @foxframework/core tsfox generate service auth
+npx -p @foxframework/core tsfox generate middleware validation
 
-# Docker operations  
-npx tsfox docker init
-npx tsfox docker build
-npx tsfox docker deploy
+# Docker operations
+npx -p @foxframework/core tsfox docker init
+npx -p @foxframework/core tsfox docker build
+npx -p @foxframework/core tsfox deploy --interactive
 ```
 
 ## 🧪 **Testing**
@@ -195,10 +230,26 @@ npm run test:coverage      # With coverage
 
 ## 📦 **Ecosystem**
 
-- **@foxframework/core** - Core framework (this package)
-- **@foxframework/cli** - Extended CLI tools
-- **@foxframework/plugins** - Community plugins
-- **@foxframework/templates** - Project templates
+### Core
+
+- **[@foxframework/core](https://www.npmjs.com/package/@foxframework/core)** — Core framework (routing, middleware, logging, caching, security, validation)
+
+### Database Providers
+
+Install only the driver(s) you need — all are **peer-dependency** based.
+
+| Package | Database | Install |
+|---|---|---|
+| [@foxframework/db-postgres](packages/db-postgres/README.md) | PostgreSQL | `npm i @foxframework/db-postgres pg` |
+| [@foxframework/db-mysql](packages/db-mysql/README.md) | MySQL / MariaDB | `npm i @foxframework/db-mysql mysql2` |
+| [@foxframework/db-sqlite](packages/db-sqlite/README.md) | SQLite | `npm i @foxframework/db-sqlite better-sqlite3` |
+| [@foxframework/db-mongo](packages/db-mongo/README.md) | MongoDB | `npm i @foxframework/db-mongo mongodb` |
+| [@foxframework/db-redis](packages/db-redis/README.md) | Redis | `npm i @foxframework/db-redis ioredis` |
+| [@foxframework/db-rds](packages/db-rds/README.md) | AWS RDS / Aurora | `npm i @foxframework/db-rds @foxframework/db-postgres pg` |
+| [@foxframework/db-documentdb](packages/db-documentdb/README.md) | AWS DocumentDB | `npm i @foxframework/db-documentdb @foxframework/db-mongo mongodb` |
+| [@foxframework/db-dynamodb](packages/db-dynamodb/README.md) | AWS DynamoDB | `npm i @foxframework/db-dynamodb @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb` |
+
+All providers share the same interfaces (`IDbProvider`, `IRepository`, `IQueryBuilder`, `IMongoProvider`, `IRedisProvider`, `IDynamoProvider`) exported from `@foxframework/core`.
 
 ## 📄 **License**
 

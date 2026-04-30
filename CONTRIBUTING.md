@@ -114,7 +114,7 @@ npm run lint:fix     # Corregir problemas automáticamente
 npm run format       # Formatear código con Prettier
 
 # CLI
-npx tsfox --help     # Ver comandos CLI disponibles
+npx -p @foxframework/core tsfox --help     # Ver comandos CLI disponibles
 ```
 
 ### Herramientas de Desarrollo

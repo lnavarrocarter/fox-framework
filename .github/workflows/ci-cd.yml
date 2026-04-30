@@ -19,7 +19,7 @@ on:
         - production
 
 env:
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -30,33 +30,32 @@ jobs:
   test:
     runs-on: ubuntu-latest
     name: 🧪 Test Suite
-    
+
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
-      
+
     - name: 🟢 Setup Node.js ${{ env.NODE_VERSION }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
-        
+
     - name: 📦 Install dependencies
       run: npm ci
-      
+
     - name: 🔍 Lint code
       run: npm run lint
-      continue-on-error: true
-      
-    - name: 🧪 Run unit tests
-      run: npm run test:unit
-      
-    - name: 🔗 Run integration tests
-      run: npm run test:integration
-      
+
+    - name: 🧪 Run core tests
+      run: npm test -- --forceExit
+
+    - name: 🧪 Run package tests
+      run: npm run test:packages
+
     - name: 📊 Generate coverage report
-      run: npm run test:coverage
-      
+      run: npm run test:coverage -- --forceExit
+
     - name: 📈 Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
@@ -66,7 +65,7 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: false
         verbose: true
-      
+
     - name: 📈 Upload coverage reports
       uses: actions/upload-artifact@v4
       with:
@@ -81,34 +80,34 @@ jobs:
     runs-on: ubuntu-latest
     name: 🔐 Security Scan
     needs: test
-    
+
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
-      
+
     - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
-        
+
     - name: 📦 Install dependencies
       run: npm ci
-      
+
     - name: 🛡️ Run npm audit
       run: npm run security:audit
       continue-on-error: true
-      
+
     - name: 🔍 Run security checks
       run: |
         echo "🔍 Checking for potential security issues..."
-        # Check for sensitive files
         if find . -name "*.env*" -not -path "./node_modules/*" | grep -q .; then
           echo "⚠️ Warning: .env files found in repository"
         fi
-        # Check for API keys or secrets in code
-        if grep -r "api_key\|secret\|password" --include="*.ts" --include="*.js" . | grep -v node_modules | grep -q .; then
-          echo "⚠️ Warning: Potential secrets found in code"
+        if grep -rEn "password\s*=\s*['\"]" --include="*.ts" --include="*.js" . \
+           | grep -v node_modules | grep -v "\.test\." \
+           | grep -vE "(process\.|env\.|config\.|placeholder|example)" | grep -q .; then
+          echo "⚠️ Warning: Potential hardcoded secrets found in code"
         fi
         echo "✅ Security scan completed"
 
@@ -119,34 +118,57 @@ jobs:
     runs-on: ubuntu-latest
     name: 🏗️ Build & Package
     needs: [test, security]
-    
+
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
-      
+
     - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
-        
+
     - name: 📦 Install dependencies
       run: npm ci
-      
-    - name: 🏗️ Build TypeScript
-      run: npm run build
-      
+
+    - name: 🏗️ Build @foxframework/core
+      run: |
+        npm run build:core
+        # Overwrite the published (no .d.ts) dist with the freshly compiled one
+        # so that workspace packages resolve types via node_modules
+        cp -r dist/. node_modules/@foxframework/core/dist/
+
+    - name: 🏗️ Build all packages (dependency order)
+      run: |
+        npm run build --workspace=packages/db-postgres
+        npm run build --workspace=packages/db-mysql
+        npm run build --workspace=packages/db-sqlite
+        npm run build --workspace=packages/db-mongo
+        npm run build --workspace=packages/db-redis
+        npm run build --workspace=packages/db-dynamodb
+        npm run build --workspace=packages/db-rds
+        npm run build --workspace=packages/db-documentdb
+
+    - name: 🔍 (Optional) Build Examples
+      run: npm run build:examples || echo "Skipping examples build"
+      continue-on-error: true
+
     - name: 📋 Create build artifact
       run: |
         mkdir -p build-artifacts
-        cp -r dist/ build-artifacts/ 2>/dev/null || echo "No dist directory found, creating..."
-        mkdir -p build-artifacts/dist
+        cp -r dist/ build-artifacts/ 2>/dev/null || mkdir -p build-artifacts/dist
         cp package*.json build-artifacts/
         cp tsconfig.json build-artifacts/
         cp -r tsfox/ build-artifacts/ 2>/dev/null || true
-        cp -r src/ build-artifacts/ 2>/dev/null || true
+        for pkg in packages/*/; do
+          if [ -d "$pkg/dist" ]; then
+            mkdir -p "build-artifacts/$pkg"
+            cp -r "$pkg/dist" "build-artifacts/$pkg/"
+          fi
+        done
         ls -la build-artifacts/
-        
+
     - name: 📤 Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -162,21 +184,21 @@ jobs:
     name: 🐳 Docker Build & Push
     needs: build
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-    
+
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
-      
+
     - name: 🐳 Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
-      
+
     - name: 🔑 Login to Container Registry
       uses: docker/login-action@v3
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-        
+
     - name: 📋 Extract metadata
       id: meta
       uses: docker/metadata-action@v5
@@ -188,7 +210,7 @@ jobs:
           type=sha
           type=raw,value=latest,enable={{is_default_branch}}
           type=raw,value=staging,enable=${{ github.ref == 'refs/heads/develop' }}
-          
+
     - name: 🏗️ Build and push Docker image
       uses: docker/build-push-action@v5
       with:
@@ -208,66 +230,52 @@ jobs:
     name: 🚀 Deploy to Staging
     needs: [build, docker]
     if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
-    environment: 
+    environment:
       name: staging
       url: ${{ vars.STAGING_URL || 'http://localhost:3001' }}
-    
+
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
-      
+
     - name: 🟢 Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
-        
+
     - name: 📦 Install dependencies
       run: npm ci
-      
+
     - name: 📥 Download build artifacts
       uses: actions/download-artifact@v4
       with:
         name: fox-framework-build-${{ github.sha }}
         path: build-artifacts/
-        
+
     - name: 🚀 Deploy to staging (simulation)
       run: |
         echo "🚀 Deploying Fox Framework to Staging..."
-        echo "📦 Build artifacts available:"
         ls -la build-artifacts/
-        
-        # Simulate deployment process
         echo "🔧 Setting up staging environment..."
         echo "📋 Environment: staging"
         echo "🌐 URL: ${{ vars.STAGING_URL || 'http://localhost:3001' }}"
         echo "🏷️  Version: ${{ github.sha }}"
-        
-        # Start staging server for validation
         echo "🎬 Starting staging server..."
         npm run staging:start &
         STAGING_PID=$!
         echo "📝 Staging server PID: $STAGING_PID"
-        
-        # Wait for server to be ready
         echo "⏳ Waiting for staging server to be ready..."
         sleep 10
-        
-        # Store PID for later cleanup
         echo $STAGING_PID > staging.pid
-        
+
     - name: 🧪 Run staging validation
       run: |
         echo "🧪 Running staging validation tests..."
-        # Set staging URL for validation
         export STAGING_URL="http://localhost:3001"
-        
-        # Wait a bit more for server to be fully ready
         sleep 5
-        
-        # Run validation
-        npm run staging:validate:remote || echo "⚠️ Some validations failed but continuing..."
-        
+        npm run staging:validate:remote
+
     - name: 🧹 Cleanup staging server
       if: always()
       run: |
@@ -277,7 +285,6 @@ jobs:
           kill $STAGING_PID 2>/dev/null || echo "Process already terminated"
           rm staging.pid
         fi
-        # Kill any remaining staging processes
         pkill -f "staging/server.ts" || echo "No staging processes found"
 
   # ==========================================
@@ -288,45 +295,39 @@ jobs:
     name: 🌟 Deploy to Production
     needs: deploy-staging
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
-    environment: 
+    environment:
       name: production
       url: ${{ vars.PRODUCTION_URL || 'https://fox-framework.com' }}
-    
+
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
-      
+
     - name: 📥 Download build artifacts
       uses: actions/download-artifact@v4
       with:
         name: fox-framework-build-${{ github.sha }}
         path: build-artifacts/
-        
+
     - name: 🌟 Deploy to production (simulation)
       run: |
         echo "🌟 Deploying Fox Framework to Production..."
-        echo "📦 Build artifacts available:"
         ls -la build-artifacts/
-        
         echo "🔧 Setting up production deployment..."
         echo "📋 Environment: production"
         echo "🌐 URL: ${{ vars.PRODUCTION_URL || 'https://fox-framework.com' }}"
         echo "🏷️  Version: ${{ github.sha }}"
         echo "📅 Deploy time: $(date)"
-        
-        # Simulate production deployment steps
         echo "✅ Production deployment simulation completed"
-        
+
     - name: 🔍 Production health check
       run: |
         echo "🔍 Running production health checks..."
-        
-        # Simulate health check
         echo "✅ Health check passed"
         echo "📊 Response time: <100ms"
         echo "💾 Memory usage: <80%"
         echo "🔄 Uptime: 100%"
-        
+
     - name: 📊 Performance baseline
       run: |
         echo "📊 Establishing performance baseline..."
@@ -343,7 +344,7 @@ jobs:
     name: 📢 Notifications
     needs: [deploy-staging, deploy-production]
     if: always()
-    
+
     steps:
     - name: 📋 Determine deployment status
       id: status
@@ -358,7 +359,7 @@ jobs:
           echo "status=failure" >> $GITHUB_OUTPUT
           echo "message=❌ Fox Framework deployment failed. Check logs for details." >> $GITHUB_OUTPUT
         fi
-        
+
     - name: 📢 Create deployment summary
       run: |
         echo "## 🦊 Fox Framework Deployment Summary" >> $GITHUB_STEP_SUMMARY
@@ -376,3 +377,109 @@ jobs:
         echo "- **Docker:** ${{ needs.docker.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Staging:** ${{ needs.deploy-staging.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Production:** ${{ needs.deploy-production.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================
+  # 📦 NPM PUBLISH — Core + All Packages
+  # Triggered automatically on GitHub Release (published)
+  # ==========================================
+  publish:
+    runs-on: ubuntu-latest
+    name: 📦 Publish to NPM
+    needs: [test, security, build]
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🟢 Setup Node.js with NPM registry
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        registry-url: 'https://registry.npmjs.org'
+        cache: 'npm'
+
+    - name: 📦 Install dependencies
+      run: npm ci
+
+    # ── Build ──────────────────────────────────────────────────────────────
+    - name: 🏗️ Build @foxframework/core
+      run: |
+        npm run build:core
+        cp -r dist/. node_modules/@foxframework/core/dist/
+
+    - name: 🏗️ Build all packages (dependency order)
+      run: |
+        npm run build --workspace=packages/db-postgres
+        npm run build --workspace=packages/db-mysql
+        npm run build --workspace=packages/db-sqlite
+        npm run build --workspace=packages/db-mongo
+        npm run build --workspace=packages/db-redis
+        npm run build --workspace=packages/db-dynamodb
+        npm run build --workspace=packages/db-rds
+        npm run build --workspace=packages/db-documentdb
+
+    # ── Publish core ───────────────────────────────────────────────────────
+    - name: 📦 Publish @foxframework/core
+      run: npm publish --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    # ── Publish DB packages ────────────────────────────────────────────────
+    - name: 📦 Publish @foxframework/db-postgres
+      run: npm publish --workspace=packages/db-postgres --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/db-mysql
+      run: npm publish --workspace=packages/db-mysql --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/db-sqlite
+      run: npm publish --workspace=packages/db-sqlite --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/db-mongo
+      run: npm publish --workspace=packages/db-mongo --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/db-redis
+      run: npm publish --workspace=packages/db-redis --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/db-rds
+      run: npm publish --workspace=packages/db-rds --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/db-documentdb
+      run: npm publish --workspace=packages/db-documentdb --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/db-dynamodb
+      run: npm publish --workspace=packages/db-dynamodb --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    # ── Summary ────────────────────────────────────────────────────────────
+    - name: 📢 Publish summary
+      run: |
+        echo "## 📦 NPM Publish Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Release:** ${{ github.event.release.tag_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Registry:** https://registry.npmjs.org" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Published packages:" >> $GITHUB_STEP_SUMMARY
+        echo "| Package | Version |" >> $GITHUB_STEP_SUMMARY
+        echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+        echo "| @foxframework/core | $(node -p "require('./package.json').version") |" >> $GITHUB_STEP_SUMMARY
+        for pkg in packages/db-*/; do
+          PKG_NAME=$(node -p "require('./${pkg}package.json').name")
+          PKG_VER=$(node -p "require('./${pkg}package.json').version")
+          echo "| ${PKG_NAME} | ${PKG_VER} |" >> $GITHUB_STEP_SUMMARY
+        done

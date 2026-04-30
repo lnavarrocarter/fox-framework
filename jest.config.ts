@@ -5,14 +5,14 @@ const config: Config = {
   testEnvironment: 'node',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   globalTeardown: '<rootDir>/jest.teardown.ts',
-  roots: ['<rootDir>/src', '<rootDir>/tsfox'],
+  roots: ['<rootDir>/examples/getting-started', '<rootDir>/tsfox'],
   testMatch: [
     '**/__tests__/**/*.test.ts',
     '**/?(*.)+(spec|test).ts'
   ],
   collectCoverageFrom: [
     'tsfox/**/*.ts',
-    'src/**/*.ts',
+    'examples/getting-started/**/*.ts',
     '!**/*.d.ts',
     '!**/node_modules/**',
     '!**/__tests__/**',
@@ -36,7 +36,8 @@ const config: Config = {
   detectOpenHandles: process.env.NODE_ENV === 'development',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/tsfox/$1',
-    '^@src/(.*)$': '<rootDir>/src/$1',
+    '^@/$': '<rootDir>/tsfox/index',
+    '^@src/(.*)$': '<rootDir>/examples/getting-started/$1',
     '^inquirer$': '<rootDir>/__mocks__/inquirer.js'
   },
   transformIgnorePatterns: [

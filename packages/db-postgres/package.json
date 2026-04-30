@@ -1,0 +1,58 @@
+{
+  "name": "@foxframework/db-postgres",
+  "version": "1.0.0",
+  "description": "PostgreSQL provider for Fox Framework — Repository pattern + QueryBuilder with connection pooling via pg",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint 'src/**/*.ts'"
+  },
+  "keywords": [
+    "fox-framework",
+    "postgresql",
+    "postgres",
+    "repository-pattern",
+    "query-builder",
+    "typescript"
+  ],
+  "peerDependencies": {
+    "@foxframework/core": ">=1.0.0",
+    "pg": ">=8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "pg": "^8.13.0",
+    "@foxframework/core": "*",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lnavarrocarter/fox-framework.git",
+    "directory": "packages/db-postgres"
+  },
+  "bugs": {
+    "url": "https://github.com/lnavarrocarter/fox-framework/issues"
+  },
+  "homepage": "https://github.com/lnavarrocarter/fox-framework/tree/main/packages/db-postgres#readme"
+}

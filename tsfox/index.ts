@@ -1,4 +1,4 @@
-import { FoxFactory } from './core/fox.factory';
+import { FoxFactory, FoxApp } from './core/fox.factory';
 import { ServerConfig, Route, Middleware, HttpError } from './core/types';
 import { Router } from './core/router.factory';
 
@@ -94,9 +94,12 @@ export {
     ResponseValidationOptions
 } from './core/features/validation';
 
+// Database interfaces
+export * from './core/db';
+
 const startServer = (config: ServerConfig): void => {
     const app = FoxFactory.createInstance(config)
     app.start();
 };
 
-export { startServer, Router, HttpError, Middleware, Route, ServerConfig };
+export { startServer, Router, HttpError, Middleware, Route, ServerConfig, FoxApp };

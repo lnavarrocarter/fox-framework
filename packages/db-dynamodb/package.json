@@ -1,0 +1,26 @@
+{
+  "name": "@foxframework/db-dynamodb",
+  "version": "1.0.0",
+  "description": "AWS DynamoDB provider for Fox Framework — full DynamoDB API with table auto-creation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist/**/*", "README.md", "LICENSE", "package.json"],
+  "publishConfig": { "access": "public" },
+  "scripts": { "build": "tsc -p tsconfig.build.json", "test": "jest", "test:coverage": "jest --coverage" },
+  "keywords": ["fox-framework", "aws", "dynamodb", "typescript"],
+  "peerDependencies": {
+    "@foxframework/core": ">=1.0.0",
+    "@aws-sdk/client-dynamodb": ">=3.0.0",
+    "@aws-sdk/lib-dynamodb": ">=3.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0",
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/lib-dynamodb": "^3.700.0",
+    "@foxframework/core": "*"
+  }
+}
