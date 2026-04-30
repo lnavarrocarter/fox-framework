@@ -133,7 +133,11 @@ jobs:
       run: npm ci
 
     - name: 🏗️ Build @foxframework/core
-      run: npm run build:core
+      run: |
+        npm run build:core
+        # Overwrite the published (no .d.ts) dist with the freshly compiled one
+        # so that workspace packages resolve types via node_modules
+        cp -r dist/. node_modules/@foxframework/core/dist/
 
     - name: 🏗️ Build all packages (dependency order)
       run: |
@@ -400,7 +404,9 @@ jobs:
 
     # ── Build ──────────────────────────────────────────────────────────────
     - name: 🏗️ Build @foxframework/core
-      run: npm run build:core
+      run: |
+        npm run build:core
+        cp -r dist/. node_modules/@foxframework/core/dist/
 
     - name: 🏗️ Build all packages (dependency order)
       run: |

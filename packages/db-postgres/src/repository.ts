@@ -51,7 +51,7 @@ export class PostgresRepository<T extends QueryResultRow, PK = number> implement
     return result.rows;
   }
 
-  async count(options: Pick<FindOptions<T>, 'where'> = {}): Promise<number> {
+  async count(options: Partial<Pick<FindOptions<T>, 'where'>> = {}): Promise<number> {
     const { whereSQL, params } = this.buildWhereSQL(options.where, 1);
     const sql = `SELECT COUNT(*) AS count FROM ${this.table}${whereSQL}`;
     const result = await this.rawQuery<{ count: string }>(sql, params);
