@@ -135,8 +135,16 @@ jobs:
     - name: 🏗️ Build @foxframework/core
       run: npm run build:core
 
-    - name: 🏗️ Build all packages
-      run: npm run build --workspaces --if-present
+    - name: 🏗️ Build all packages (dependency order)
+      run: |
+        npm run build --workspace=packages/db-postgres
+        npm run build --workspace=packages/db-mysql
+        npm run build --workspace=packages/db-sqlite
+        npm run build --workspace=packages/db-mongo
+        npm run build --workspace=packages/db-redis
+        npm run build --workspace=packages/db-dynamodb
+        npm run build --workspace=packages/db-rds
+        npm run build --workspace=packages/db-documentdb
 
     - name: 🔍 (Optional) Build Examples
       run: npm run build:examples || echo "Skipping examples build"
@@ -394,8 +402,16 @@ jobs:
     - name: 🏗️ Build @foxframework/core
       run: npm run build:core
 
-    - name: 🏗️ Build all packages
-      run: npm run build --workspaces --if-present
+    - name: 🏗️ Build all packages (dependency order)
+      run: |
+        npm run build --workspace=packages/db-postgres
+        npm run build --workspace=packages/db-mysql
+        npm run build --workspace=packages/db-sqlite
+        npm run build --workspace=packages/db-mongo
+        npm run build --workspace=packages/db-redis
+        npm run build --workspace=packages/db-dynamodb
+        npm run build --workspace=packages/db-rds
+        npm run build --workspace=packages/db-documentdb
 
     # ── Publish core ───────────────────────────────────────────────────────
     - name: 📦 Publish @foxframework/core

@@ -14,7 +14,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "lint": "eslint 'src/**/*.ts'"

@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "files": ["dist/**/*", "README.md", "LICENSE", "package.json"],
   "publishConfig": { "access": "public" },
-  "scripts": { "build": "tsc -p tsconfig.json", "test": "jest", "test:coverage": "jest --coverage" },
+  "scripts": { "build": "tsc -p tsconfig.build.json", "test": "jest", "test:coverage": "jest --coverage" },
   "keywords": ["fox-framework", "aws", "dynamodb", "typescript"],
   "peerDependencies": {
     "@foxframework/core": ">=1.0.0",
