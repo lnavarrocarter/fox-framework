@@ -9,7 +9,6 @@
   },
   "files": [
     "dist/tsfox/**/*",
-    "dist/src/**/*",
     "README.md",
     "LICENSE",
     "package.json"
@@ -17,6 +16,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lnavarrocarter/fox-framework.git"
@@ -29,10 +31,12 @@
     "start": "node dist/src/server/index.js",
     "start:dev": "ts-node src/server/index.ts",
     "dev": "nodemon --watch 'src/**/*.ts' --watch 'tsfox/**/*.ts' --exec 'ts-node' src/server/index.ts",
-  "build": "npm run build:core",
-  "build:core": "tsc -p tsconfig.json",
-  "build:examples": "tsc -p tsconfig.example.json",
+    "build": "npm run build:core",
+    "build:core": "tsc -p tsconfig.json",
+    "build:examples": "tsc -p tsconfig.example.json",
     "test": "jest",
+    "test:packages": "npm run test --workspaces --if-present",
+    "test:all": "npm test && npm run test:packages",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --detectOpenHandles",
     "test:integration": "jest --testMatch='**/__tests__/integration/**/*.test.ts' --detectOpenHandles",
@@ -44,11 +48,12 @@
     "staging:validate:remote": "ts-node staging/validate-remote.ts",
     "staging:full": "npm run staging:validate",
     "clean": "rm -rf dist coverage",
-    "lint": "echo 'ESLint not configured yet'",
-    "lint:fix": "echo 'ESLint not configured yet'",
+    "lint": "eslint 'tsfox/**/*.ts'",
+    "lint:fix": "eslint 'tsfox/**/*.ts' --fix",
+    "format": "prettier --write 'tsfox/**/*.ts'",
+    "format:check": "prettier --check 'tsfox/**/*.ts'",
     "build:clean": "rm -rf dist && npm run build",
     "build:watch": "tsc --watch",
-    "ai:demo": "ts-node ai-demo.ts",
     "ai:test": "jest tsfox/ai/__tests__/ --detectOpenHandles",
     "docker:build": "docker build -t fox-framework:latest .",
     "docker:run": "docker run -p 3000:3000 fox-framework:latest",
@@ -69,7 +74,7 @@
   },
   "keywords": [
     "framework",
-    "web-framework", 
+    "web-framework",
     "typescript",
     "nodejs",
     "express",
@@ -109,8 +114,14 @@
     "@types/jest": "^29.5.8",
     "@types/node": "^20.10.4",
     "@types/supertest": "^2.0.16",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
+    "eslint": "^10.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
     "jest": "^29.7.0",
     "nodemon": "^3.0.1",
+    "prettier": "^3.8.3",
     "supertest": "^6.3.4",
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.1",

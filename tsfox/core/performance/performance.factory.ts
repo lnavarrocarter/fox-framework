@@ -113,11 +113,12 @@ export class PerformanceFactory {
     if (global.gc) {
       // Force garbage collection every 30 seconds in development
       if (process.env.NODE_ENV === 'development') {
-        setInterval(() => {
+        const gcInterval = setInterval(() => {
           if (global.gc) {
             global.gc();
           }
         }, 30000);
+        gcInterval.unref();
       }
     }
   }
@@ -482,6 +483,7 @@ class SystemMetricsTracker {
     this.interval = setInterval(() => {
       this.collectSystemMetrics();
     }, 5000); // Collect every 5 seconds
+    this.interval.unref();
   }
 
   stop(): void {

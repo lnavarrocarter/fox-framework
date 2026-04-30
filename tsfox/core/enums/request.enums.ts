@@ -14,7 +14,8 @@ export enum RequestType {
 export interface RequestMethodsContext { 
     method: RequestMethod, 
     path: string, 
-    callback: any 
+    callback?: any;   // original API
+    handler?: any;    // alias for callback, matches the Route interface style
 }
 
 export enum ResponseType {

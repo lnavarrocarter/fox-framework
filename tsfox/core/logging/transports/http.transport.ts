@@ -53,6 +53,9 @@ export class HttpTransport implements ITransport {
           console.error('HTTP transport batch send failed:', err);
         });
       }, this.options.batchTimeout || 5000);
+      // .unref() prevents this timer from keeping the Node.js process alive
+      // when all other work is done (e.g. in test environments)
+      this.batchTimer.unref();
     }
   }
 
@@ -97,7 +100,11 @@ export class HttpTransport implements ITransport {
       
       if (attempt < maxAttempts) {
         const delay = (this.options.retryDelay || 1000) * attempt;
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => {
+          const t = setTimeout(resolve, delay);
+          // .unref() prevents retry timers from keeping the process alive
+          if (t && typeof t === 'object' && 'unref' in t) t.unref();
+        });
         return this.sendWithRetry(payload, attempt + 1);
       }
       
