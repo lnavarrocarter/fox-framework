@@ -104,8 +104,9 @@ jobs:
         if find . -name "*.env*" -not -path "./node_modules/*" | grep -q .; then
           echo "⚠️ Warning: .env files found in repository"
         fi
-        if grep -rn "password\s*=\s*['\"][^${\|env\|process]" \
-           --include="*.ts" --include="*.js" . | grep -v node_modules | grep -v "\.test\." | grep -q .; then
+        if grep -rEn "password\s*=\s*['\"]" --include="*.ts" --include="*.js" . \
+           | grep -v node_modules | grep -v "\.test\." \
+           | grep -vE "(process\.|env\.|config\.|placeholder|example)" | grep -q .; then
           echo "⚠️ Warning: Potential hardcoded secrets found in code"
         fi
         echo "✅ Security scan completed"
