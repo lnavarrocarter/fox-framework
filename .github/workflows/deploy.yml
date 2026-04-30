@@ -3,10 +3,14 @@
 name: 'Fox Framework CI/CD'
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options: [staging, production]
 
 env:
   NODE_VERSION: '18'
