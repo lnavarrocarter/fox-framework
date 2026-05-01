@@ -86,3 +86,15 @@ export type {
   VectorSearchOptions,
   VectorSearchResult,
 } from './tools';
+
+// Streaming UI
+export { SseStream, AgentSseEmitter, createAgentSseHandler } from './streaming';
+export type {
+  SseEvent,
+  ISseStream,
+  ServerResponseLike,
+  AgentSseEmitterOptions,
+  AgentSseHandlerOptions,
+  RequestLike,
+  ResponseLike,
+} from './streaming';
