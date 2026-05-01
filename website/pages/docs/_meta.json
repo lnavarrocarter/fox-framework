@@ -25,6 +25,13 @@
   "logging": "Logging",
   "cli": "Herramientas CLI",
   "plugins": "Sistema de Plugins",
+  "ai-agents": {
+    "title": "AI & Agents (v1.3)",
+    "type": "separator"
+  },
+  "agents": "Sistema de Agentes",
+  "model-providers": "Model Providers",
+  "serverless": "Serverless Adapters",
   "deployment": {
     "title": "Despliegue y Operaciones",
     "type": "separator"
@@ -38,6 +45,7 @@
     "title": "Otros",
     "type": "separator"
   },
+  "changelog": "Changelog",
   "faq": "Preguntas Frecuentes",
   "migration-guide": "Guía de Migración",
   "contributing": "Contribuir al Framework"

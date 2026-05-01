@@ -1,0 +1,188 @@
+# Model Providers
+
+Fox Framework v1.3 incluye tres **model providers** nativos para integrar LLMs en tus agentes. Todos usan `fetch` nativo — sin SDKs de terceros, zero dependencias extra.
+
+## Instalación
+
+```bash
+# Instala solo el provider que necesitas
+npm install @foxframework/model-openai
+npm install @foxframework/model-anthropic
+npm install @foxframework/model-ollama
+```
+
+## OpenAI Provider
+
+Compatible con la API de OpenAI `/chat/completions`. Soporta tool calls y streaming SSE.
+
+```typescript
+import { OpenAIProvider } from '@foxframework/model-openai';
+
+const model = new OpenAIProvider({
+  apiKey: process.env.OPENAI_API_KEY,
+  model: 'gpt-4o',              // default: gpt-4o
+  baseUrl: 'https://api.openai.com/v1',  // custom endpoint (Azure, proxies)
+  organization: 'org-...',      // opcional
+});
+```
+
+### Completions
+
+```typescript
+const result = await model.complete([
+  { role: 'system', content: 'You are a helpful assistant.' },
+  { role: 'user', content: 'What is 2 + 2?' },
+]);
+console.log(result.content); // "4"
+console.log(result.usage);   // { promptTokens, completionTokens, totalTokens }
+```
+
+### Streaming
+
+```typescript
+for await (const chunk of model.stream(messages)) {
+  process.stdout.write(chunk);
+}
+```
+
+### Tool Calls
+
+```typescript
+const result = await model.complete(messages, {
+  tools: [myTool],
+  toolChoice: 'auto',
+});
+
+if (result.toolCalls) {
+  for (const call of result.toolCalls) {
+    const output = await myTool.execute(call.arguments);
+  }
+}
+```
+
+## Anthropic Provider
+
+Compatible con la API de Anthropic `/messages`. Soporta `tool_use` blocks y streaming.
+
+```typescript
+import { AnthropicProvider } from '@foxframework/model-anthropic';
+
+const model = new AnthropicProvider({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  model: 'claude-opus-4-5',    // default: claude-opus-4-5
+  maxTokens: 4096,
+});
+```
+
+### Uso básico
+
+```typescript
+const result = await model.complete([
+  { role: 'user', content: 'Explain quantum entanglement simply.' },
+]);
+```
+
+### System prompt
+
+El sistema extrae automáticamente el mensaje `{ role: 'system' }` y lo envía en el campo `system` de la API de Anthropic:
+
+```typescript
+const result = await model.complete([
+  { role: 'system', content: 'You are a physics professor.' },
+  { role: 'user', content: 'Explain quantum entanglement.' },
+]);
+```
+
+## Ollama Provider
+
+Compatible con Ollama local `/api/chat`. Ideal para desarrollo sin costos ni conexión externa.
+
+```typescript
+import { OllamaProvider } from '@foxframework/model-ollama';
+
+const model = new OllamaProvider({
+  baseUrl: 'http://localhost:11434', // default
+  model: 'llama3.2',
+  keepAlive: '5m',     // tiempo que el modelo permanece cargado
+  options: {
+    temperature: 0.7,
+    num_predict: 512,
+  },
+});
+```
+
+### Setup Ollama
+
+```bash
+# Instalar Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Descargar un modelo
+ollama pull llama3.2
+ollama pull mistral
+ollama pull codellama
+```
+
+### Streaming ndjson
+
+Ollama usa newline-delimited JSON. El provider lo maneja automáticamente:
+
+```typescript
+for await (const chunk of model.stream(messages)) {
+  process.stdout.write(chunk);
+}
+```
+
+## Usar con ReActAgent
+
+Todos los providers implementan `IModelProvider` y son intercambiables:
+
+```typescript
+import { ReActAgent } from '@foxframework/core/agents';
+import { OpenAIProvider } from '@foxframework/model-openai';
+// o: import { AnthropicProvider } from '@foxframework/model-anthropic';
+// o: import { OllamaProvider } from '@foxframework/model-ollama';
+
+const agent = new ReActAgent({
+  model: new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY }),
+  tools: [myTool],
+});
+```
+
+## Comparación
+
+| Feature | OpenAI | Anthropic | Ollama |
+|---|---|---|---|
+| Tool calls | ✅ | ✅ | ✅ |
+| Streaming | ✅ SSE | ✅ SSE | ✅ ndjson |
+| Local/offline | ❌ | ❌ | ✅ |
+| Cost | Paid | Paid | Free |
+| Best model | gpt-4o | claude-opus | llama3.2 |
+| SDK dependency | ❌ (fetch) | ❌ (fetch) | ❌ (fetch) |
+
+## Crear un Provider Custom
+
+Implementa `IModelProvider` para cualquier API compatible:
+
+```typescript
+import { IModelProvider, Message, CompletionResult } from '@foxframework/core/agents';
+
+class MyCustomProvider implements IModelProvider {
+  async complete(messages: Message[]): Promise<CompletionResult> {
+    const response = await fetch('https://my-llm-api.com/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages }),
+    });
+    const data = await response.json();
+    return {
+      content: data.text,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    };
+  }
+
+  async *stream(messages: Message[]): AsyncGenerator<string> {
+    // implementación opcional
+  }
+}
+```

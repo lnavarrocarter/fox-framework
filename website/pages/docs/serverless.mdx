@@ -1,0 +1,131 @@
+# Serverless Adapters
+
+`@foxframework/serverless` permite desplegar cualquier aplicación Fox en entornos serverless sin cambiar el código de tu app. Soporta AWS Lambda, Vercel y Google Cloud Functions.
+
+## Instalación
+
+```bash
+npm install @foxframework/serverless
+```
+
+## AWS Lambda
+
+```typescript
+import { createFoxApp } from '@foxframework/core';
+import { LambdaAdapter } from '@foxframework/serverless';
+
+const app = createFoxApp();
+app.get('/hello', (req, res) => res.json({ message: 'Hello from Lambda!' }));
+
+export const handler = LambdaAdapter.createHandler(app);
+```
+
+El `LambdaAdapter` soporta:
+- **API Gateway v1** (REST API) — `event.httpMethod`, `event.headers`
+- **API Gateway v2** (HTTP API) — `event.requestContext.http`
+- **Lambda Function URL** — misma estructura que v2
+- **Query strings** — `queryStringParameters` y `multiValueQueryStringParameters`
+- **Binary responses** — base64 automático para `Content-Type: image/*`, `application/pdf`, etc.
+- **Cookies** — `Set-Cookie` múltiple via `multiValueHeaders`
+
+```typescript
+// Con configuración avanzada
+export const handler = LambdaAdapter.createHandler(app, {
+  binaryMediaTypes: ['image/png', 'application/pdf'],
+  basePath: '/api',
+});
+```
+
+### `serverless.yml` ejemplo
+
+```yaml
+functions:
+  api:
+    handler: dist/handler.handler
+    events:
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+```
+
+## Vercel
+
+```typescript
+import { createFoxApp } from '@foxframework/core';
+import { VercelAdapter } from '@foxframework/serverless';
+
+const app = createFoxApp();
+// configura rutas...
+
+export default VercelAdapter.createHandler(app);
+```
+
+```json
+// vercel.json
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+}
+```
+
+## Google Cloud Functions
+
+```typescript
+import { createFoxApp } from '@foxframework/core';
+import { GcpAdapter } from '@foxframework/serverless';
+
+const app = createFoxApp();
+// configura rutas...
+
+export const foxApp = GcpAdapter.createHandler(app);
+```
+
+## Cold Start Middleware
+
+Detecta y responde al cold start (primera invocación tras un período de inactividad):
+
+```typescript
+import { coldStartMiddleware, onColdStart } from '@foxframework/serverless';
+
+// Registrar callback antes de crear el handler
+onColdStart(() => {
+  console.log('Cold start detected — warming up connections...');
+  // inicializar pool de DB, cache, etc.
+});
+
+const app = createFoxApp();
+app.use(coldStartMiddleware());
+
+export const handler = LambdaAdapter.createHandler(app);
+```
+
+El middleware agrega el header `X-Cold-Start: true` en la primera respuesta.
+
+## Factory Helper
+
+```typescript
+import { createServerlessHandler } from '@foxframework/serverless';
+
+const app = createFoxApp();
+
+// Detecta automáticamente el entorno
+export const handler = createServerlessHandler(app, {
+  platform: process.env.PLATFORM as 'lambda' | 'vercel' | 'gcp',
+});
+```
+
+## Comparación de Plataformas
+
+| Feature | Lambda | Vercel | GCP Functions |
+|---|---|---|---|
+| HTTP API | ✅ | ✅ | ✅ |
+| Binary response | ✅ base64 | ✅ | ✅ |
+| Cold start detection | ✅ | ✅ | ✅ |
+| Streaming | ❌ (v1) | ❌ | ❌ |
+| Max timeout | 15 min | 10 s (Hobby) | 60 min |
+
+## Notas de Implementación
+
+- El `LambdaAdapter` lee `res.statusCode` directamente (no solo desde `writeHead`) para compatibilidad total con Express
+- `multiValueHeaders: {}` no aplasta `event.headers` — se hace merge solo cuando hay valores
+- El body se procesa con `process.nextTick()` para que body-parser se registre primero
+- Los adapters no tienen `@foxframework/core` como peer dependency — son completamente standalone

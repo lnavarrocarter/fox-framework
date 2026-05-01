@@ -1,0 +1,222 @@
+# Sistema de Agentes AI
+
+Fox Framework v1.3 incorpora un sistema completo de **agentes AI** directamente en el core del framework. Permite construir agentes inteligentes que razonan, usan herramientas, mantienen memoria, y pueden orquestarse en sistemas multi-agente.
+
+## Arquitectura
+
+```
+tsfox/core/agents/
+├── interfaces/       # IAgent, IModelProvider, ITool, IMemoryStore, IOrchestrator
+├── errors/           # AgentError, MaxIterationsError, ToolExecutionError, ...
+├── base/             # BaseAgent, InMemoryStore
+├── react/            # ReActAgent
+├── orchestrator/     # Orchestrator multi-agente
+└── integrations/     # Event, Auth, Cache, Metrics
+```
+
+## Instalación
+
+El sistema de agentes está incluido en `@foxframework/core`. Para usar un modelo LLM necesitas un provider:
+
+```bash
+npm install @foxframework/core
+npm install @foxframework/model-openai   # o model-anthropic, model-ollama
+```
+
+## ReActAgent
+
+El `ReActAgent` implementa el loop **Reasoning + Acting**: el modelo razona qué hacer, elige una herramienta, observa el resultado, y repite hasta tener una respuesta final.
+
+```typescript
+import { ReActAgent } from '@foxframework/core/agents';
+import { OpenAIProvider } from '@foxframework/model-openai';
+
+const agent = new ReActAgent({
+  model: new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY }),
+  tools: [searchTool, calculatorTool],
+  maxIterations: 10,
+  systemPrompt: 'You are a helpful research assistant.',
+});
+
+const result = await agent.run('What is the population of Tokyo?');
+console.log(result.output);
+```
+
+### Definir una Tool
+
+```typescript
+import { ITool } from '@foxframework/core/agents';
+
+const searchTool: ITool = {
+  name: 'search',
+  description: 'Search the web for information',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: 'Search query' }
+    },
+    required: ['query']
+  },
+  execute: async ({ query }) => {
+    // tu lógica de búsqueda
+    return `Results for: ${query}`;
+  }
+};
+```
+
+### Abortar una ejecución
+
+```typescript
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 5000); // timeout de 5s
+
+const result = await agent.run('Long task...', { signal: controller.signal });
+```
+
+## Orchestrator
+
+El `Orchestrator` coordina múltiples agentes. Usa el LLM para crear un plan de subtareas, las ejecuta en waves (respetando dependencias), y sintetiza el resultado final.
+
+```typescript
+import { Orchestrator } from '@foxframework/core/agents';
+import { ReActAgent } from '@foxframework/core/agents';
+
+const orchestrator = new Orchestrator({
+  model: new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY }),
+  agents: { research: researchAgent, analysis: analysisAgent },
+  maxConcurrency: 3,
+});
+
+const result = await orchestrator.run(
+  'Research climate change and provide a summary with key statistics.'
+);
+```
+
+### Ejecución por waves
+
+Las subtareas con `dependsOn` se ejecutan después de que sus dependencias terminen. Las tareas sin dependencias corren en paralelo dentro de la misma wave:
+
+```
+Wave 1: [research_task]          ← sin dependencias
+Wave 2: [analysis_task]          ← dependsOn: research_task
+Wave 3: [summary_task]           ← dependsOn: analysis_task
+```
+
+## Memoria
+
+Todos los agentes tienen acceso a un `IMemoryStore`. Por defecto usa `InMemoryStore` con búsqueda por palabras clave.
+
+```typescript
+// Guardar en memoria
+await agent.memory.set('user_preference', { theme: 'dark' });
+
+// Recuperar
+const pref = await agent.memory.get('user_preference');
+
+// Búsqueda semántica por keyword
+const results = await agent.memory.search('user preferences');
+```
+
+## Integraciones
+
+### Event Integration
+
+Conecta el ciclo de vida del agente al sistema de eventos de Fox:
+
+```typescript
+import { AgentEventBus, AgentEventSubscriber } from '@foxframework/core/agents';
+
+// Emitir eventos del agente al bus
+const eventedAgent = new AgentEventBus(agent, eventEmitter);
+const result = await eventedAgent.run('task');
+// Emite: agent.started, agent.completed, agent.failed, agent.tool_called
+
+// Ejecutar agentes en respuesta a eventos
+const subscriber = new AgentEventSubscriber(eventBus, agent);
+subscriber.subscribe('user.message');
+```
+
+### Auth Integration
+
+```typescript
+import { AuthenticatedAgent, AgentRateLimit } from '@foxframework/core/agents';
+
+const secureAgent = new AuthenticatedAgent(agent, tokenValidator, {
+  requiredRoles: ['admin'],
+});
+
+// Rate limiting por userId
+const rateLimited = new AgentRateLimit(agent, {
+  maxRequests: 10,
+  windowMs: 60_000,
+});
+
+const result = await secureAgent.run('task', {
+  authToken: 'Bearer eyJ...',
+});
+```
+
+### Cache Integration
+
+```typescript
+import { CachedAgent, InMemoryAgentCache } from '@foxframework/core/agents';
+
+const cachedAgent = new CachedAgent(agent, new InMemoryAgentCache(), {
+  ttl: 5 * 60 * 1000, // 5 minutos
+});
+// Respuestas idénticas se sirven del cache (key = SHA-256 del input)
+```
+
+### Metrics Integration
+
+```typescript
+import { AgentMetrics, AgentMetricsRegistry } from '@foxframework/core/agents';
+
+const tracked = new AgentMetrics(agent);
+await tracked.run('task');
+
+console.log(tracked.metrics);
+// {
+//   totalRuns: 1, successRuns: 1, failedRuns: 0,
+//   totalTokens: 342, avgLatency: 1240, p95Latency: 1240,
+//   lastRunAt: Date
+// }
+
+// Registro global de todos los agentes
+const registry = new AgentMetricsRegistry();
+registry.register('myAgent', tracked);
+const report = registry.report();
+```
+
+## Interfaces
+
+### IAgent
+
+```typescript
+interface IAgent {
+  readonly id: string;
+  readonly status: AgentStatus; // 'idle' | 'running' | 'completed' | 'failed' | 'aborted'
+  run(input: string, options?: RunOptions): Promise<AgentResult>;
+  abort(): void;
+}
+```
+
+### IModelProvider
+
+```typescript
+interface IModelProvider {
+  complete(messages: Message[], options?: CompletionOptions): Promise<CompletionResult>;
+  stream?(messages: Message[], options?: CompletionOptions): AsyncGenerator<string>;
+}
+```
+
+### ITool
+
+```typescript
+interface ITool {
+  name: string;
+  description: string;
+  parameters: JSONSchema;
+  execute(params: Record<string, unknown>): Promise<string>;
+}
+```

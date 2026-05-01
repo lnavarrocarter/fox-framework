@@ -1,0 +1,93 @@
+# Changelog
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  Fox Framework sigue [Semantic Versioning](https://semver.org/). El historial completo también está disponible en [CHANGELOG.md](https://github.com/lnavarrocarter/fox-framework/blob/main/CHANGELOG.md) en el repositorio.
+</Callout>
+
+## v1.3.0 — 2026-05-01
+
+Esta es la release más grande hasta la fecha. Introduce el **sistema completo de Agentes AI**, tres **model providers** nativos (OpenAI, Anthropic, Ollama), y **adapters serverless** para AWS Lambda, Vercel y GCP.
+
+### Nuevas features
+
+#### Sistema de Agentes AI
+- `ReActAgent` — loop Thought → Action → Observation con tool dispatch y memoria
+- `Orchestrator` — planificador multi-agente con wave execution y control de concurrencia
+- `BaseAgent` — base abstracta con AbortController, status tracking y tool registry
+- `InMemoryStore` — memoria de agente con búsqueda por palabras clave
+- Integraciones: `AgentEventBus`, `AuthenticatedAgent`, `CachedAgent`, `AgentMetrics`
+- 53 tests (22 core + 31 integraciones)
+
+#### Model Providers (zero vendor SDKs)
+- `@foxframework/model-openai` — completions, tool calls, streaming SSE (9 tests)
+- `@foxframework/model-anthropic` — messages, tool_use blocks, streaming SSE (8 tests)
+- `@foxframework/model-ollama` — ndjson streaming, keep_alive (10 tests)
+
+#### Serverless Adapters
+- `@foxframework/serverless` — LambdaAdapter, VercelAdapter, GcpAdapter
+- `coldStartMiddleware` con callbacks `onColdStart()`
+- 19 tests
+
+#### Event System (Epic A)
+- CQRS: `CommandBus`, `QueryBus` con typed errors
+- Event Sourcing: `AggregateRoot`, `InMemoryEventSourcingRepository` (auto-snapshots), `ProjectionManager`, `SagaManager`
+- Adapters: `SseAdapter` (zero-dep), `RedisEventAdapter` (ioredis lazy peer dep)
+- Middleware: `EventLoggingMiddleware`, `EventMetricsMiddleware` (latencia real, rolling RPS)
+- 46 tests
+
+---
+
+## v1.2.0 — 2026-04-15
+
+### Nuevas features
+
+- **Auth Ecosystem** — 6 packages: `@foxframework/auth-{jwt,2fa,oauth,cognito,firebase,ldap}` (112 tests)
+- Core auth interfaces: `IAuthProvider`, `ITokenValidator`, middleware `createAuthMiddleware`, `requireRoles`, `requirePermissions`
+- **Database Ecosystem** — 8 packages: `@foxframework/db-{postgres,mysql,sqlite,mongo,redis,rds,documentdb,dynamodb}`
+- CI/CD automatizado con `npm publish` en GitHub Release
+
+---
+
+## v1.1.0 — 2026-03-01
+
+- Estabilización del core
+- Integración Express
+- Template engine (Handlebars)
+- CLI tools (`tsfox` binary)
+- Plugin system, logging, monitoring
+- Docker integration
+
+---
+
+## v1.0.0 — 2026-01-01
+
+- Release inicial de Fox Framework
+- Sistema de rutas modular
+- Pipeline de middleware
+- Diseño TypeScript-first
+- Arquitectura Factory pattern
+- CLI scaffolding básico
+
+---
+
+## Roadmap
+
+### v1.4.0 — Planificado
+- **Agent Tools Library** — Tools pre-construidas: HTTP, filesystem, SQL, vector search
+- **Vector Store Integration** — `@foxframework/vector-{pinecone,weaviate,chroma}`
+- **Streaming UI** — Helper SSE para output de agentes en tiempo real
+- **Agent Observability** — Trazas OpenTelemetry por agente run
+
+### v1.5.0 — Planificado
+- **Workflow Engine** — Workflows duraderos con checkpoint/resume
+- **`@foxframework/mcp`** — Servidor/cliente Model Context Protocol
+- **GraphQL Layer** — Generación de schema desde controllers Fox
+- **WebSocket Support** — Canales WebSocket junto a rutas HTTP
+
+### v2.0.0 — Futuro
+- **Edge Runtime** — Cloudflare Workers / Deno Deploy
+- **Database Migrations** — Runner integrado con db-* packages
+- **Schema Validation** — Zod/Valibot en el request pipeline
+- **Fox Studio** — Herramienta visual para orquestación de agentes
