@@ -1,0 +1,35 @@
+{
+  "name": "@foxframework/auth-ldap",
+  "version": "1.0.0",
+  "description": "LDAP/Active Directory authentication provider for Fox Framework — IDirectoryProvider with full user sync",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist/**/*", "README.md", "LICENSE", "package.json"],
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint 'src/**/*.ts'"
+  },
+  "keywords": ["fox-framework", "ldap", "active-directory", "authentication", "typescript"],
+  "peerDependencies": {
+    "@foxframework/core": ">=1.1.0",
+    "ldapts": ">=4.0.0"
+  },
+  "devDependencies": {
+    "@foxframework/core": "*",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lnavarrocarter/fox-framework.git",
+    "directory": "packages/auth-ldap"
+  },
+  "bugs": { "url": "https://github.com/lnavarrocarter/fox-framework/issues" },
+  "homepage": "https://github.com/lnavarrocarter/fox-framework/tree/main/packages/auth-ldap#readme"
+}

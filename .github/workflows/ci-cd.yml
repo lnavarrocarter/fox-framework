@@ -149,6 +149,12 @@ jobs:
         npm run build --workspace=packages/db-dynamodb
         npm run build --workspace=packages/db-rds
         npm run build --workspace=packages/db-documentdb
+        npm run build --workspace=packages/auth-jwt
+        npm run build --workspace=packages/auth-2fa
+        npm run build --workspace=packages/auth-oauth
+        npm run build --workspace=packages/auth-cognito
+        npm run build --workspace=packages/auth-firebase
+        npm run build --workspace=packages/auth-ldap
 
     - name: 🔍 (Optional) Build Examples
       run: npm run build:examples || echo "Skipping examples build"
@@ -421,6 +427,12 @@ jobs:
         npm run build --workspace=packages/db-dynamodb
         npm run build --workspace=packages/db-rds
         npm run build --workspace=packages/db-documentdb
+        npm run build --workspace=packages/auth-jwt
+        npm run build --workspace=packages/auth-2fa
+        npm run build --workspace=packages/auth-oauth
+        npm run build --workspace=packages/auth-cognito
+        npm run build --workspace=packages/auth-firebase
+        npm run build --workspace=packages/auth-ldap
 
     # ── Publish core ───────────────────────────────────────────────────────
     - name: 📦 Publish @foxframework/core
@@ -469,6 +481,37 @@ jobs:
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+    # ── Publish Auth packages ──────────────────────────────────────────────
+    - name: 📦 Publish @foxframework/auth-jwt
+      run: npm publish --workspace=packages/auth-jwt --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/auth-2fa
+      run: npm publish --workspace=packages/auth-2fa --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/auth-oauth
+      run: npm publish --workspace=packages/auth-oauth --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/auth-cognito
+      run: npm publish --workspace=packages/auth-cognito --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/auth-firebase
+      run: npm publish --workspace=packages/auth-firebase --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/auth-ldap
+      run: npm publish --workspace=packages/auth-ldap --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
     # ── Summary ────────────────────────────────────────────────────────────
     - name: 📢 Publish summary
       run: |
@@ -481,7 +524,7 @@ jobs:
         echo "| Package | Version |" >> $GITHUB_STEP_SUMMARY
         echo "|---|---|" >> $GITHUB_STEP_SUMMARY
         echo "| @foxframework/core | $(node -p "require('./package.json').version") |" >> $GITHUB_STEP_SUMMARY
-        for pkg in packages/db-*/; do
+        for pkg in packages/db-*/ packages/auth-*/; do
           PKG_NAME=$(node -p "require('./${pkg}package.json').name")
           PKG_VER=$(node -p "require('./${pkg}package.json').version")
           echo "| ${PKG_NAME} | ${PKG_VER} |" >> $GITHUB_STEP_SUMMARY
