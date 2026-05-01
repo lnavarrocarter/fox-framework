@@ -4,7 +4,7 @@
 # ==========================================
 # 🏗️ BUILD STAGE
 # ==========================================
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -27,9 +27,8 @@ COPY tsconfig.json ./
 # Install all dependencies (including dev dependencies for build)
 RUN npm ci --include=dev
 
-# Copy source code
+# Copy source code (project uses tsfox/, not src/)
 COPY tsfox/ ./tsfox/
-COPY src/ ./src/
 
 # Build TypeScript
 RUN npm run build
@@ -40,7 +39,7 @@ RUN npm prune --production && npm cache clean --force
 # ==========================================
 # 🚀 PRODUCTION STAGE
 # ==========================================
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
 # Set working directory
 WORKDIR /app
@@ -68,8 +67,6 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/tsfox ./tsfox
-COPY --from=builder /app/src ./src
 
 # Create logs directory
 RUN mkdir -p logs && chown -R foxuser:nodejs logs

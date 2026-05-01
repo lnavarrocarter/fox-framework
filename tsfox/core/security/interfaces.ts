@@ -5,6 +5,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { AuthUser } from '../auth/types';
 
 /**
  * Base middleware function type
@@ -73,18 +74,19 @@ export interface JwtOptions {
 
 /**
  * User interface for authentication
+ * @deprecated Use AuthUser from @foxframework/core auth module instead.
  */
 export interface User {
   /** Unique user identifier */
   id: string;
   /** User email */
-  email: string;
+  email?: string;
   /** User roles */
   roles: string[];
   /** User permissions */
   permissions: string[];
   /** Additional user data */
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -131,7 +133,7 @@ export interface RbacOptions {
   /** Whether user needs all roles or just one */
   requireAll?: boolean;
   /** Custom authorization function */
-  authorize?: (user: User, req: Request) => boolean | Promise<boolean>;
+  authorize?: (user: AuthUser, req: Request) => boolean | Promise<boolean>;
 }
 
 /**
