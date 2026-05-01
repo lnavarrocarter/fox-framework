@@ -29,6 +29,10 @@ import {
   EventMiddlewareChainFactory
 } from './middleware/middleware.chain';
 
+import { ProjectionManager } from './sourcing/projection-manager';
+import { EventProjection } from './interfaces/sourcing.interface';
+import { EventMetricsMiddleware } from './middleware/metrics.middleware';
+
 /**
  * Main event system implementation
  */
@@ -36,6 +40,8 @@ export class EventSystem implements EventSystemInterface {
   private emitter: ExtendedEventEmitterInterface;
   private store: EventStoreInterface;
   private bus: EventBusInterface;
+  private projectionManager: ProjectionManager;
+  private metricsMiddleware?: EventMetricsMiddleware;
   private stats: {
     totalEvents: number;
     startTime: Date;
@@ -46,21 +52,30 @@ export class EventSystem implements EventSystemInterface {
   };
 
   constructor(config?: Partial<EventConfig>) {
-    // Initialize middleware chain
+    // Initialize middleware chain (includes logging + metrics by default)
     const middlewareChain = EventMiddlewareChainFactory.createWithDefaults();
-    
+
+    // Grab the metrics middleware so we can read real latency later
+    const rawMetrics = middlewareChain.get('metrics');
+    if (rawMetrics) {
+      this.metricsMiddleware = rawMetrics as EventMetricsMiddleware;
+    }
+
     // Initialize emitter
     this.emitter = EventEmitterFactory.create(middlewareChain);
-    
+
     // Initialize store
-    this.store = config?.store 
+    this.store = config?.store
       ? EventStoreFactory.createFromConfig(config.store)
       : EventStoreFactory.createMemoryStore();
-    
+
     // Initialize bus
     this.bus = config?.bus
       ? EventBusFactory.createFromConfig(config.bus, this.emitter)
       : EventBusFactory.createMemoryBus(this.emitter);
+
+    // Projection manager
+    this.projectionManager = new ProjectionManager();
 
     // Initialize stats
     this.stats = {
@@ -147,11 +162,32 @@ export class EventSystem implements EventSystemInterface {
   }
 
   /**
-   * Register an event projection
+   * Register an event projection (routes events to ProjectionManager)
    */
-  registerProjection(projection: any): void {
-    // TODO: Implement projection registration
-    console.log('TODO: Implement projection registration for:', projection);
+  registerProjection(projection: EventProjection): void {
+    this.projectionManager.register(projection).catch(err =>
+      console.error('[EventSystem] registerProjection error:', err)
+    );
+
+    // Wire: every event emitted on the bus is forwarded to projections
+    this.emitter.on(projection.eventTypes.includes('*') ? '*' : projection.eventTypes[0], async (event) => {
+      await this.projectionManager.process(event);
+    });
+
+    if (projection.eventTypes.length > 1) {
+      for (const type of projection.eventTypes.slice(1)) {
+        this.emitter.on(type, async (event) => {
+          await this.projectionManager.process(event);
+        });
+      }
+    }
+  }
+
+  /**
+   * Get the projection manager for direct access
+   */
+  getProjectionManager(): ProjectionManager {
+    return this.projectionManager;
   }
 
   /**
@@ -161,13 +197,17 @@ export class EventSystem implements EventSystemInterface {
     const uptime = Date.now() - this.stats.startTime.getTime();
     const eventsPerSecond = uptime > 0 ? (this.stats.totalEvents / (uptime / 1000)) : 0;
 
+    // Read real average latency from the metrics middleware if available
+    const metricsSnapshot = this.metricsMiddleware?.getSnapshot();
+    const averageLatency = metricsSnapshot?.averageEmitLatencyMs ?? 0;
+
     return {
       totalEvents: this.stats.totalEvents,
       eventsPerSecond,
-      averageLatency: 0, // TODO: Implement latency tracking
+      averageLatency,
       failedEvents: this.stats.failedEvents,
       retriedEvents: this.stats.retriedEvents,
-      memoryUsage: this.stats.memoryUsage,
+      memoryUsage: process.memoryUsage().heapUsed,
       activeSubscriptions: this.emitter.getSubscriptions().length,
       lastProcessed: this.stats.lastProcessed
     };
