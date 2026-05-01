@@ -41,3 +41,31 @@ export { BaseAgent } from './base/base.agent';
 export { ReActAgent } from './react/react.agent';
 export { Orchestrator } from './orchestrator/orchestrator';
 export type { OrchestratorConfig } from './orchestrator/orchestrator';
+
+// Integrations
+export {
+  AgentEventBus,
+  AgentEventSubscriber,
+  AGENT_EVENTS,
+  AuthenticatedAgent,
+  AgentRateLimit,
+  AuthError,
+  RateLimitError,
+  CachedAgent,
+  InMemoryAgentCache,
+  AgentMetrics,
+  AgentMetricsRegistry,
+} from './integrations';
+export type {
+  IEventEmitter,
+  IEventBus,
+  AgentRunStartedPayload,
+  AgentRunCompletedPayload,
+  AgentRunFailedPayload,
+  ITokenValidator,
+  AuthenticatedAgentOptions,
+  RateLimitOptions,
+  IAgentCache,
+  CachedAgentOptions,
+  AgentMetricSnapshot,
+} from './integrations';
