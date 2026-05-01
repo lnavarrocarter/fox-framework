@@ -69,3 +69,20 @@ export type {
   CachedAgentOptions,
   AgentMetricSnapshot,
 } from './integrations';
+
+// Tools
+export {
+  HttpTool,
+  FilesystemTool,
+  createFilesystemTool,
+  CalculatorTool,
+  JsonPathTool,
+  createSqlQueryTool,
+  createVectorSearchTool,
+} from './tools';
+export type {
+  IQueryExecutor,
+  IVectorSearchProvider,
+  VectorSearchOptions,
+  VectorSearchResult,
+} from './tools';
