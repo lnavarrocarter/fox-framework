@@ -98,3 +98,13 @@ export type {
   RequestLike,
   ResponseLike,
 } from './streaming';
+
+// Telemetry
+export { NoOpSpan, NoOpTracer, AgentTracer } from './telemetry';
+export type {
+  ITracer,
+  ISpan,
+  SpanOptions,
+  SpanStatus,
+  AgentTracerOptions,
+} from './telemetry';
