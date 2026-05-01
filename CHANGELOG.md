@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-05-01
+
+### Major Features
+
+#### Epic D1 — Agent Tools Library (`tsfox/core/agents/tools/`)
+6 production-ready tools implementing the `ITool` interface, usable by any `ReActAgent`:
+
+- **`HttpTool`** — GET/POST/PUT/PATCH/DELETE with headers, body, timeout; returns status + body
+- **`FilesystemTool`** — read/write/append/delete/list with path validation (no `../` traversal)
+- **`CalculatorTool`** — safe expression evaluator supporting `+`, `-`, `*`, `/`, `**`, `%`, `()`, `Math.*`
+- **`JsonPathTool`** — JSONPath-style dot-notation queries with array indexing and wildcards
+- **`SqlQueryTool`** — parameterized SQL runner via injected `IDbConnection` (SELECT/INSERT/UPDATE/DELETE)
+- **`VectorSearchTool`** — semantic search via injected `IVectorSearchProvider` with topK and score threshold
+- 44 tests
+
+#### Epic D2 — Vector Store Packages
+3 new packages providing `IVectorSearchProvider` implementations with zero vendor SDKs (native fetch):
+
+- **`@foxframework/vector-pinecone`** — Pinecone REST API (upsert, query, delete, fetchById)
+- **`@foxframework/vector-weaviate`** — Weaviate GraphQL + REST API (upsert, query, delete, fetchById)
+- **`@foxframework/vector-chroma`** — ChromaDB REST API with lazy collection ID cache (upsert, query, delete, fetchById)
+- 34 tests (10 + 12 + 12)
+
+#### Epic D3 — Streaming UI (`tsfox/core/agents/streaming/`)
+SSE-based streaming infrastructure for agent runs:
+
+- **`SseStream`** — `ReadableStream<Uint8Array>` writer with typed `AgentSseEvent` union (token/step/done/error)
+- **`AgentSseEmitter`** — wraps any `IAgent`, hooks `onStep`/`onToken` callbacks to emit SSE events
+- **`createAgentSseHandler`** — Fox route factory: `POST /agent/stream` → `text/event-stream` response; supports AbortController cancellation
+- 21 tests
+
+#### Epic D4 — OpenTelemetry Tracing
+Vendor-neutral tracing with zero `@opentelemetry/*` imports in core:
+
+- **`ITracer` / `ISpan` / `SpanOptions`** — interfaces in `tsfox/core/agents/telemetry/`
+- **`NoOpSpan` / `NoOpTracer`** — zero-cost defaults for opt-out or testing
+- **`AgentTracer`** — `IAgent` proxy emitting:
+  - `agent.run` span: `agent.id/name`, `run.id/status/stepCount`, `run.answer`, `llm.*_tokens`
+  - `agent.tool_call` span per tool_call step: `tool.name/call_id/arguments`, error status
+  - String attributes truncated to configurable `maxAttrLength` (default 256)
+- **`@foxframework/otel-agents`** — new package bridging to `@opentelemetry/api` (peerDep); `OtelAgentTracer` maps `SpanStatus` → `SpanStatusCode`, wraps non-`Error` exceptions
+- 25 tests (15 core + 10 package)
+
+### Packages Added
+| Package | Description |
+|---|---|
+| `@foxframework/vector-pinecone` | Pinecone vector store provider (fetch-native) |
+| `@foxframework/vector-weaviate` | Weaviate vector store provider (fetch-native) |
+| `@foxframework/vector-chroma` | ChromaDB vector store provider (fetch-native) |
+| `@foxframework/otel-agents` | OpenTelemetry adapter for Fox agents (peerDep `@opentelemetry/api`) |
+
+### CI/CD Updates
+- Build and publish steps now include: `vector-pinecone`, `vector-weaviate`, `vector-chroma`, `otel-agents`
+- Publish summary glob updated to include all `packages/vector-*/` and `packages/otel-agents/`
+
+---
+
 ## [1.3.0] - 2026-05-01
 
 ### Major Features
