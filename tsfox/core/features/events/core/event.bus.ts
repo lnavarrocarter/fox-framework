@@ -329,11 +329,20 @@ export class EventBusFactory {
   static createFromConfig(config: EventBusConfig, emitter: ExtendedEventEmitterInterface): EventBusInterface {
     const bus = new MemoryEventBus(emitter);
 
-    // Add configured adapters
     if (config.adapters) {
       for (const [name, adapterConfig] of Object.entries(config.adapters)) {
-        // TODO: Create adapters from configuration
-        console.log(`TODO: Create adapter ${name} with config:`, adapterConfig);
+        if (name === 'redis') {
+          const { RedisEventAdapter } = require('../adapters/redis.adapter');
+          const adapter = new RedisEventAdapter(adapterConfig);
+          bus.addAdapter('redis', adapter);
+        } else if (name === 'sse') {
+          const { SseAdapter } = require('../adapters/sse.adapter');
+          const adapter = new SseAdapter(adapterConfig);
+          adapter.connect();
+          bus.addAdapter('sse', adapter);
+        } else {
+          console.warn(`[EventBusFactory] unknown adapter type: "${name}" — skipping`);
+        }
       }
     }
 

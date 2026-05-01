@@ -174,9 +174,14 @@ export class EventMiddlewareChainFactory {
    */
   static createWithDefaults(): EventMiddlewareChain {
     const chain = new MemoryEventMiddlewareChain();
-    
-    // TODO: Add default middleware (logging, metrics, etc.)
-    
+
+    // Lazy imports avoid circular deps at module load time
+    const { EventLoggingMiddleware } = require('./logging.middleware');
+    const { EventMetricsMiddleware } = require('./metrics.middleware');
+
+    chain.add(new EventMetricsMiddleware({ priority: 10 }));
+    chain.add(new EventLoggingMiddleware({ priority: 100, level: 'debug' }));
+
     return chain;
   }
 }

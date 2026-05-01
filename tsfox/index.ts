@@ -97,6 +97,9 @@ export {
 // Database interfaces
 export * from './core/db';
 
+// Auth System Exports
+export * from './core/auth';
+
 const startServer = (config: ServerConfig): void => {
     const app = FoxFactory.createInstance(config)
     app.start();

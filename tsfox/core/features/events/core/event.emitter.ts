@@ -387,7 +387,8 @@ export class EventEmitterFactory {
    * Create event emitter with default middleware
    */
   static createWithDefaults(): ExtendedEventEmitterInterface {
-    // TODO: Add default middleware chain
-    return new EventEmitter();
+    const { EventMiddlewareChainFactory } = require('../middleware/middleware.chain');
+    const chain = EventMiddlewareChainFactory.createWithDefaults();
+    return new EventEmitter(chain);
   }
 }

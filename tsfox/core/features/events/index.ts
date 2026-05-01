@@ -44,7 +44,7 @@ export {
   EventAdapterInterface,
   AdapterSubscriptionOptions,
   AdapterStats,
-  RedisAdapterConfig,
+  RedisAdapterConfig as BusRedisAdapterConfig,
   RabbitMQAdapterConfig
 } from './interfaces/adapter.interface';
 
@@ -53,6 +53,25 @@ export * from './interfaces/middleware.interface';
 
 // Middleware
 export * from './middleware/middleware.chain';
+export { EventLoggingMiddleware } from './middleware/logging.middleware';
+export type { LoggingMiddlewareOptions } from './middleware/logging.middleware';
+export { EventMetricsMiddleware } from './middleware/metrics.middleware';
+export type { MetricsMiddlewareOptions, EventMetricsSnapshot } from './middleware/metrics.middleware';
+
+// CQRS
+export { CommandBus, CommandBusError } from './cqrs/command-bus';
+export { QueryBus, QueryBusError } from './cqrs/query-bus';
+
+// Event Sourcing
+export { AggregateRoot, InMemoryEventSourcingRepository } from './sourcing/aggregate-root';
+export { ProjectionManager } from './sourcing/projection-manager';
+export { SagaManager } from './sourcing/saga-manager';
+
+// Adapters
+export { SseAdapter } from './adapters/sse.adapter';
+export type { SseAdapterOptions } from './adapters/sse.adapter';
+export { RedisEventAdapter } from './adapters/redis.adapter';
+export type { RedisAdapterConfig } from './adapters/redis.adapter';
 
 // Re-export main classes for convenience
 export {
@@ -73,3 +92,4 @@ export {
 export {
   EventMiddlewareChainFactory
 } from './middleware/middleware.chain';
+

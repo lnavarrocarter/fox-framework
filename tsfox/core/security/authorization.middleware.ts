@@ -5,7 +5,8 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { SecurityMiddleware, User, RbacOptions } from './interfaces';
+import { SecurityMiddleware, RbacOptions } from './interfaces';
+import { AuthUser } from '../auth/types';
 
 /**
  * Authorization middleware class for role and permission-based access control
@@ -204,7 +205,7 @@ export class AuthorizationMiddleware {
    * Conditional authorization based on custom logic
    */
   static conditional(
-    condition: (user: User, req: Request) => boolean | Promise<boolean>,
+    condition: (user: AuthUser, req: Request) => boolean | Promise<boolean>,
     errorMessage: string = 'Access denied'
   ): SecurityMiddleware {
     return async (req: Request, res: Response, next: NextFunction) => {
