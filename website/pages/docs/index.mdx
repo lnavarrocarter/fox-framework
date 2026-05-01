@@ -9,9 +9,32 @@ Fox Framework es un framework web completo diseñado para desarrollo de aplicaci
 - **Arquitectura Modular**: Basada en patrones de diseño como Factory y Dependency Injection
 - **Event System**: Implementación completa de Event Sourcing y CQRS
 - **Database Abstraction**: Soporte para múltiples bases de datos con una API unificada
+- **Authentication**: Ecosistema completo con JWT, 2FA, OAuth, Cognito, Firebase y LDAP
+- **AI Agents**: Sistema nativo de agentes con ReAct, Orchestrator y model providers
+- **Serverless**: Adapters para AWS Lambda, Vercel y Google Cloud Functions
 - **Microservices**: Capacidades nativas para arquitecturas distribuidas
 - **Docker Integration**: Soporte completo para containerización y deployment
 - **CLI Tools**: Herramientas potentes para generación de código y tareas de desarrollo
+
+## Novedades en v1.3
+
+Fox Framework v1.3 es la release más grande hasta la fecha, con tres nuevos sistemas:
+
+### Sistema de Agentes AI
+Construye agentes inteligentes que razonan, usan herramientas y se orquestan:
+- **`ReActAgent`** — Reasoning + Acting loop nativo en el framework
+- **`Orchestrator`** — Coordinación multi-agente con wave execution
+- **Integraciones** — Event, Auth, Cache y Metrics para agentes
+
+### Model Providers (zero vendor SDKs)
+Providers nativos con fetch, sin dependencias externas:
+- **`@foxframework/model-openai`** — OpenAI GPT-4o, streaming, tool calls
+- **`@foxframework/model-anthropic`** — Claude, streaming, tool_use
+- **`@foxframework/model-ollama`** — Modelos locales Ollama
+
+### Serverless Adapters
+Despliega tu app Fox en cualquier plataforma serverless:
+- **`@foxframework/serverless`** — Lambda, Vercel y GCP en un solo package
 
 ## Filosofía de Diseño
 
@@ -22,6 +45,7 @@ Fox Framework está construido sobre estos principios:
 3. **Developer Experience**: Prioriza la facilidad de uso y la productividad
 4. **Performance**: Optimizado para aplicaciones de alto rendimiento
 5. **Escalabilidad**: Diseñado para crecer con tu aplicación
+6. **Zero Bloat**: Peer dependencies opcionales — instala solo lo que necesitas
 
 ## Para Quién es Fox Framework
 
@@ -29,8 +53,9 @@ Fox Framework es ideal para:
 
 - **Desarrolladores Full-Stack**: Que buscan un framework completo para toda su stack
 - **Equipos Enterprise**: Que necesitan características avanzadas y escalabilidad
-- **Startups**: Que quieren moverse rápido sin sacrificar calidad
+- **Startups AI-first**: Que quieren agents y LLMs integrados desde el día uno
 - **APIs y Microservicios**: Perfectos para arquitecturas modernas distribuidas
+- **Serverless**: Deployment en Lambda, Vercel o GCP sin cambiar el código
 
 ## Comparación con Otros Frameworks
 
@@ -41,11 +66,15 @@ Fox Framework es ideal para:
 | Event Sourcing | ✅ Integrado | ❌ No | ⚠️ Add-on | ❌ No |
 | Docker | ✅ Integrado | ❌ No | ⚠️ Manual | ❌ No |
 | DB Abstraction | ✅ Multi-DB | ❌ No | ⚠️ TypeORM | ❌ No |
+| AI Agents | ✅ Nativo | ❌ No | ❌ No | ❌ No |
+| Serverless | ✅ Nativo | ❌ No | ⚠️ Add-on | ❌ No |
 | Testing | ✅ Integrado | ❌ No | ✅ Integrado | ❌ No |
 
 ## Próximos Pasos
 
 - [Guía de Inicio Rápido](/docs/getting-started)
 - [Conceptos Fundamentales](/docs/fundamentals)
-- [Arquitectura](/docs/architecture)
-- [Ejemplos Prácticos](/examples)
+- [Sistema de Agentes AI](/docs/agents)
+- [Model Providers](/docs/model-providers)
+- [Serverless Adapters](/docs/serverless)
+- [Changelog](/docs/changelog)

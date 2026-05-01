@@ -155,6 +155,10 @@ jobs:
         npm run build --workspace=packages/auth-cognito
         npm run build --workspace=packages/auth-firebase
         npm run build --workspace=packages/auth-ldap
+        npm run build --workspace=packages/serverless
+        npm run build --workspace=packages/model-openai
+        npm run build --workspace=packages/model-anthropic
+        npm run build --workspace=packages/model-ollama
 
     - name: 🔍 (Optional) Build Examples
       run: npm run build:examples || echo "Skipping examples build"
@@ -433,6 +437,10 @@ jobs:
         npm run build --workspace=packages/auth-cognito
         npm run build --workspace=packages/auth-firebase
         npm run build --workspace=packages/auth-ldap
+        npm run build --workspace=packages/serverless
+        npm run build --workspace=packages/model-openai
+        npm run build --workspace=packages/model-anthropic
+        npm run build --workspace=packages/model-ollama
 
     # ── Publish core ───────────────────────────────────────────────────────
     - name: 📦 Publish @foxframework/core
@@ -512,6 +520,28 @@ jobs:
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+    # ── Publish Serverless package ─────────────────────────────────────────
+    - name: 📦 Publish @foxframework/serverless
+      run: npm publish --workspace=packages/serverless --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    # ── Publish Model packages ─────────────────────────────────────────────
+    - name: 📦 Publish @foxframework/model-openai
+      run: npm publish --workspace=packages/model-openai --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/model-anthropic
+      run: npm publish --workspace=packages/model-anthropic --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/model-ollama
+      run: npm publish --workspace=packages/model-ollama --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
     # ── Summary ────────────────────────────────────────────────────────────
     - name: 📢 Publish summary
       run: |
@@ -524,7 +554,7 @@ jobs:
         echo "| Package | Version |" >> $GITHUB_STEP_SUMMARY
         echo "|---|---|" >> $GITHUB_STEP_SUMMARY
         echo "| @foxframework/core | $(node -p "require('./package.json').version") |" >> $GITHUB_STEP_SUMMARY
-        for pkg in packages/db-*/ packages/auth-*/; do
+        for pkg in packages/db-*/ packages/auth-*/ packages/serverless/ packages/model-*/; do
           PKG_NAME=$(node -p "require('./${pkg}package.json').name")
           PKG_VER=$(node -p "require('./${pkg}package.json').version")
           echo "| ${PKG_NAME} | ${PKG_VER} |" >> $GITHUB_STEP_SUMMARY
