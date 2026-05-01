@@ -159,6 +159,9 @@ jobs:
         npm run build --workspace=packages/model-openai
         npm run build --workspace=packages/model-anthropic
         npm run build --workspace=packages/model-ollama
+        npm run build --workspace=packages/vector-pinecone
+        npm run build --workspace=packages/vector-weaviate
+        npm run build --workspace=packages/vector-chroma
 
     - name: 🔍 (Optional) Build Examples
       run: npm run build:examples || echo "Skipping examples build"
@@ -441,6 +444,9 @@ jobs:
         npm run build --workspace=packages/model-openai
         npm run build --workspace=packages/model-anthropic
         npm run build --workspace=packages/model-ollama
+        npm run build --workspace=packages/vector-pinecone
+        npm run build --workspace=packages/vector-weaviate
+        npm run build --workspace=packages/vector-chroma
 
     # ── Publish core ───────────────────────────────────────────────────────
     - name: 📦 Publish @foxframework/core
@@ -542,6 +548,22 @@ jobs:
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+    # ── Publish Vector Store packages ─────────────────────────────────────
+    - name: 📦 Publish @foxframework/vector-pinecone
+      run: npm publish --workspace=packages/vector-pinecone --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/vector-weaviate
+      run: npm publish --workspace=packages/vector-weaviate --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: 📦 Publish @foxframework/vector-chroma
+      run: npm publish --workspace=packages/vector-chroma --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
     # ── Summary ────────────────────────────────────────────────────────────
     - name: 📢 Publish summary
       run: |
@@ -554,7 +576,7 @@ jobs:
         echo "| Package | Version |" >> $GITHUB_STEP_SUMMARY
         echo "|---|---|" >> $GITHUB_STEP_SUMMARY
         echo "| @foxframework/core | $(node -p "require('./package.json').version") |" >> $GITHUB_STEP_SUMMARY
-        for pkg in packages/db-*/ packages/auth-*/ packages/serverless/ packages/model-*/; do
+        for pkg in packages/db-*/ packages/auth-*/ packages/serverless/ packages/model-*/ packages/vector-*/; do
           PKG_NAME=$(node -p "require('./${pkg}package.json').name")
           PKG_VER=$(node -p "require('./${pkg}package.json').version")
           echo "| ${PKG_NAME} | ${PKG_VER} |" >> $GITHUB_STEP_SUMMARY
