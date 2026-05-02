@@ -26,7 +26,7 @@
   "cli": "Herramientas CLI",
   "plugins": "Sistema de Plugins",
   "ai-agents": {
-    "title": "AI & Agents (v1.3)",
+    "title": "AI & Agents (v1.4)",
     "type": "separator"
   },
   "agents": "Sistema de Agentes",

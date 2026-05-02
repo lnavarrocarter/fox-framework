@@ -214,9 +214,276 @@ interface IModelProvider {
 
 ```typescript
 interface ITool {
-  name: string;
-  description: string;
-  parameters: JSONSchema;
-  execute(params: Record<string, unknown>): Promise<string>;
+  definition: {
+    name: string;
+    description: string;
+    parameters: JSONSchema;
+  };
+  execute(params: Record<string, unknown>, context: AgentContext): Promise<string>;
 }
+```
+
+---
+
+## Built-in Tools (v1.4)
+
+Fox Framework ships six ready-to-use tools in `@foxframework/core/agents/tools`. Import them individually:
+
+```typescript
+import {
+  CalculatorTool,
+  HttpTool,
+  FilesystemTool,
+  createFilesystemTool,
+  JsonPathTool,
+  createSqlQueryTool,
+  createVectorSearchTool,
+} from '@foxframework/core/agents/tools';
+```
+
+### CalculatorTool
+
+Evaluates mathematical expressions safely (no `eval`). Supports arithmetic, `**`, `%`, and functions: `sqrt`, `abs`, `ceil`, `floor`, `round`, `log`, `sin`, `cos`, `tan`. Constants: `PI`, `E`.
+
+```typescript
+const agent = new ReActAgent({
+  model,
+  tools: [CalculatorTool],
+});
+// Agent input: "What is sqrt(144) + 2**8?"
+// Tool call: { expression: "sqrt(144) + 2**8" }
+// Result: "sqrt(144) + 2**8 = 268"
+```
+
+### HttpTool
+
+Makes HTTP requests (GET, POST, PUT, PATCH, DELETE) using native `fetch`. Returns formatted JSON or plain text.
+
+```typescript
+const agent = new ReActAgent({
+  model,
+  tools: [HttpTool],
+});
+// Agent input: "Get the latest rates from https://api.exchangerate.host/latest"
+```
+
+### FilesystemTool
+
+Reads, writes, appends, lists, and deletes files/directories. Use `createFilesystemTool` to restrict access to a safe directory:
+
+```typescript
+// Unrestricted (default)
+import { FilesystemTool } from '@foxframework/core/agents/tools';
+
+// Restricted to a specific directory
+const safeTool = createFilesystemTool({ allowedBase: '/tmp/agent-workspace' });
+
+const agent = new ReActAgent({ model, tools: [safeTool] });
+```
+
+Operations: `read`, `write`, `append`, `list`, `exists`, `delete`, `mkdir`.
+
+### JsonPathTool
+
+Queries and extracts data from JSON using path expressions:
+
+```typescript
+const agent = new ReActAgent({ model, tools: [JsonPathTool] });
+// Tool call: { json: '{"users":[{"name":"Alice"}]}', path: ".users[0].name", operation: "get" }
+// Result: '"Alice"'
+```
+
+Operations: `get`, `keys`, `count`, `flatten`, `pretty`.
+
+### SqlQueryTool (factory)
+
+Wraps any `IQueryExecutor` to let the agent run SQL. Read-only by default; set `allowMutations: true` to allow writes:
+
+```typescript
+import { createSqlQueryTool } from '@foxframework/core/agents/tools';
+import { PostgresProvider } from '@foxframework/db-postgres';
+
+const db = new PostgresProvider({ connectionString: process.env.DATABASE_URL });
+
+const sqlTool = createSqlQueryTool(db, {
+  allowMutations: false, // only SELECT (default)
+  maxRows: 50,           // cap results (default: 100)
+  label: 'database',    // tool name shown to the model
+});
+
+const agent = new ReActAgent({ model, tools: [sqlTool] });
+```
+
+### VectorSearchTool (factory)
+
+Wraps any `IVectorSearchProvider` (Pinecone, Weaviate, Chroma, or custom) for semantic retrieval:
+
+```typescript
+import { createVectorSearchTool } from '@foxframework/core/agents/tools';
+import { PineconeProvider } from '@foxframework/vector-pinecone';
+
+const vectorProvider = new PineconeProvider({
+  apiKey: process.env.PINECONE_API_KEY!,
+  indexHost: process.env.PINECONE_INDEX_HOST!,
+  embed: async (text) => myEmbeddingFn(text),
+});
+
+const vectorTool = createVectorSearchTool(vectorProvider, {
+  label: 'knowledge_search',
+  defaultTopK: 5,
+});
+
+const agent = new ReActAgent({ model, tools: [vectorTool] });
+```
+
+---
+
+## Streaming (v1.4)
+
+Stream agent steps to the browser over **Server-Sent Events (SSE)**. Three layers of abstraction:
+
+### SseStream — low-level
+
+Wraps any `ServerResponse`-compatible object and writes formatted SSE frames:
+
+```typescript
+import { SseStream } from '@foxframework/core/agents/streaming';
+
+app.get('/sse', (req, res) => {
+  const sse = new SseStream(res); // sets SSE headers automatically
+  sse.send({ event: 'message', data: { text: 'Hello!' } });
+  sse.close();
+});
+```
+
+### AgentSseEmitter — mid-level
+
+Runs an agent and streams every step as SSE events:
+
+```typescript
+import { AgentSseEmitter } from '@foxframework/core/agents/streaming';
+
+app.get('/agent/stream', async (req, res) => {
+  const emitter = new AgentSseEmitter(myAgent, res, {
+    heartbeatIntervalMs: 15_000, // keeps proxy connections alive (default: 15s)
+  });
+  await emitter.run(req.query.input as string);
+});
+```
+
+SSE events emitted:
+
+| Event | Payload | When |
+|---|---|---|
+| `step` | `{ stepNumber, type, content, toolCall?, toolResult? }` | After each agent step |
+| `done` | `{ runId, answer, status, usage, stepCount }` | Run completed |
+| `error` | `{ message }` | Run threw an exception |
+| `heartbeat` | `{}` | Every `heartbeatIntervalMs` |
+
+### createAgentSseHandler — route factory
+
+Creates a ready-to-use Express/Fox request handler:
+
+```typescript
+import { createAgentSseHandler } from '@foxframework/core/agents/streaming';
+
+// Default: reads input from req.query.input, req.body.input, or req.body.message
+app.get('/stream', createAgentSseHandler(myAgent));
+
+// Custom input extraction
+app.post('/stream', createAgentSseHandler(myAgent, {
+  getInput: (req) => (req.body as any).question,
+  heartbeatIntervalMs: 10_000,
+}));
+```
+
+### Client-side consumption
+
+```typescript
+const es = new EventSource('/stream?input=What+is+the+capital+of+France%3F');
+
+es.addEventListener('step', (e) => {
+  const step = JSON.parse(e.data);
+  console.log(`[${step.type}] ${step.content}`);
+});
+
+es.addEventListener('done', (e) => {
+  const result = JSON.parse(e.data);
+  console.log('Answer:', result.answer);
+  es.close();
+});
+
+es.addEventListener('error', (e) => {
+  console.error('Agent error:', JSON.parse(e.data).message);
+  es.close();
+});
+```
+
+---
+
+## Telemetry / Tracing (v1.4)
+
+### AgentTracer
+
+`AgentTracer` is a proxy that wraps any `IAgent` and emits spans for every run and tool call. It is vendor-neutral — plug in any `ITracer` backend.
+
+```typescript
+import { AgentTracer } from '@foxframework/core/agents/telemetry';
+
+// With a no-op tracer (default — zero overhead)
+const tracedAgent = new AgentTracer(myAgent);
+
+// With a custom tracer
+const tracedAgent = new AgentTracer(myAgent, { tracer: myTracer });
+```
+
+Spans emitted:
+
+| Span | Attributes |
+|---|---|
+| `agent.run` | `agent.id`, `agent.name`, `agent.input`, `run.id`, `run.status`, `run.stepCount`, `run.answer`, `llm.*_tokens` |
+| `agent.tool_call` | `tool.name`, `tool.call_id`, `tool.arguments`, `agent.id`, `step.number` |
+
+### ITracer interface
+
+Implement `ITracer` for any tracing backend:
+
+```typescript
+import type { ITracer, ISpan } from '@foxframework/core/agents/telemetry';
+
+class ConsoleTracer implements ITracer {
+  startSpan(name: string): ISpan {
+    const start = Date.now();
+    console.log(`[span start] ${name}`);
+    return {
+      setAttribute: (k, v) => { console.log(`  ${k}=${v}`); return this as any; },
+      recordException: (e) => { console.error('  exception:', e); return this as any; },
+      setStatus: (s, m) => { console.log(`  status=${s}`, m ?? ''); return this as any; },
+      end: () => console.log(`[span end] ${name} (${Date.now() - start}ms)`),
+    };
+  }
+}
+
+const tracedAgent = new AgentTracer(myAgent, { tracer: new ConsoleTracer() });
+```
+
+### OpenTelemetry via @foxframework/otel-agents
+
+For production OTel tracing, install the adapter package:
+
+```bash
+npm install @foxframework/otel-agents @opentelemetry/api @opentelemetry/sdk-node
+```
+
+```typescript
+import { trace } from '@opentelemetry/api';
+import { OtelAgentTracer } from '@foxframework/otel-agents';
+import { AgentTracer } from '@foxframework/core/agents/telemetry';
+
+// Assumes OTel SDK is already initialised (NodeSDK.start())
+const tracer = new OtelAgentTracer(trace.getTracer('fox-agents', '1.0.0'));
+const tracedAgent = new AgentTracer(myAgent, { tracer });
+
+// All runs now emit OTel spans compatible with Jaeger, Zipkin, OTLP, etc.
+const result = await tracedAgent.run('Summarise the quarterly report.');
 ```
