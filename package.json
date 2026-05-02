@@ -17,7 +17,8 @@
     "access": "public"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "example-apps/*"
   ],
   "repository": {
     "type": "git",
