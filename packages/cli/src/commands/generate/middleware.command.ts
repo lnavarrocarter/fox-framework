@@ -1,5 +1,5 @@
 // tsfox/cli/commands/generate/middleware.command.ts
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 
 export const MiddlewareCommand: CommandInterface = {
   name: 'middleware',

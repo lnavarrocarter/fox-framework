@@ -1,7 +1,7 @@
-import { CommandInterface, CLIContext, ValidationResult, GeneratedFile } from '../interfaces/cli.interface';
-import { DockfileGenerator } from '../generators/dockfile.generator';
-import { ComposeGenerator } from '../generators/compose.generator';
-import { TemplateManager } from '../core/template.manager';
+import { CommandInterface, CLIContext, ValidationResult, GeneratedFile } from '../../interfaces/cli.interface';
+import { DockfileGenerator } from '../../generators/dockfile.generator';
+import { ComposeGenerator } from '../../generators/compose.generator';
+import { TemplateManager } from '../../core/template.manager';
 
 export const DockerInitCommand: CommandInterface = {
   name: 'init',

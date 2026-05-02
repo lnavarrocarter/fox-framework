@@ -1,5 +1,5 @@
 // tsfox/cli/commands/project/new.command.ts
-import { CommandInterface } from '../interfaces/cli.interface';
+import { CommandInterface } from '../../interfaces/cli.interface';
 import path from 'path';
 import fs from 'fs';
 

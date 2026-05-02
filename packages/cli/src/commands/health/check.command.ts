@@ -1,5 +1,5 @@
 // tsfox/cli/commands/health/check.command.ts
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 import axios from 'axios';
 
 export const HealthCheckCommand: CommandInterface = {

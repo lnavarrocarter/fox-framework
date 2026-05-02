@@ -1,7 +1,7 @@
 // tsfox/cli/commands/generate/controller.command.ts
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
-import { ControllerGenerator } from '../generators/controller.generator';
-import { TemplateManager } from '../core/template.manager';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
+import { ControllerGenerator } from '../../generators/controller.generator';
+import { TemplateManager } from '../../core/template.manager';
 
 export const ControllerCommand: CommandInterface = {
   name: 'controller',

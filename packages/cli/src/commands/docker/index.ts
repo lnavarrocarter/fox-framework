@@ -1,4 +1,4 @@
-import { CommandInterface } from '../interfaces/cli.interface';
+import { CommandInterface } from '../../interfaces/cli.interface';
 import { DockerInitCommand } from './init.command';
 import { DockerBuildCommand } from './build.command';
 import { DockerRunCommand } from './run.command';

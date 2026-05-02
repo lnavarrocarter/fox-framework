@@ -1,4 +1,4 @@
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 
 export const DockerBuildCommand: CommandInterface = {
   name: 'build',

@@ -1,5 +1,5 @@
 // tsfox/cli/commands/performance/index.ts
-import { CommandInterface } from '../interfaces/cli.interface';
+import { CommandInterface } from '../../interfaces/cli.interface';
 import { PerformanceBenchmarkCommand } from './benchmark.command';
 import { PerformanceAnalyzeCommand } from './analyze.command';
 import { PerformanceReportCommand } from './report.command';

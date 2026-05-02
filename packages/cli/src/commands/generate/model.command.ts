@@ -1,5 +1,5 @@
 // tsfox/cli/commands/generate/model.command.ts
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 
 export const ModelCommand: CommandInterface = {
   name: 'model',

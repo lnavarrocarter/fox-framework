@@ -1,5 +1,5 @@
 // tsfox/cli/commands/health/status.command.ts
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 import fs from 'fs';
 import path from 'path';
 

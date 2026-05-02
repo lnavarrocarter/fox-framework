@@ -1,4 +1,4 @@
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 
 export const DockerLogsCommand: CommandInterface = {
   name: 'logs',

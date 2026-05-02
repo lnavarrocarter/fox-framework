@@ -2,6 +2,7 @@
 
 // src/cli/index.ts
 import { Command } from 'commander';
+import { OptionDefinition } from './interfaces/cli.interface';
 import { generateController, generateModel, generateView } from './generators';
 import { DockerCommands } from './commands/docker';
 import { HealthCommands } from './commands/health';
@@ -178,7 +179,7 @@ CacheCommands.forEach(cacheCommand => {
     
     // Add options
     if (cacheCommand.options) {
-        cacheCommand.options.forEach(option => {
+        cacheCommand.options.forEach((option: OptionDefinition) => {
             let optionStr = option.alias ? `-${option.alias}, --${option.name}` : `--${option.name}`;
             
             // Add value placeholder for non-boolean options
@@ -223,7 +224,7 @@ PerformanceCommands.forEach(performanceCommand => {
     
     // Add options
     if (performanceCommand.options) {
-        performanceCommand.options.forEach(option => {
+        performanceCommand.options.forEach((option: OptionDefinition) => {
             let optionStr = option.alias ? `-${option.alias}, --${option.name}` : `--${option.name}`;
             
             // Add value placeholder for non-boolean options

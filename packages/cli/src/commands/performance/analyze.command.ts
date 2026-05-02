@@ -1,5 +1,5 @@
 // tsfox/cli/commands/performance/analyze.command.ts
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 import fs from 'fs/promises';
 import path from 'path';
 

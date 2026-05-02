@@ -1,5 +1,5 @@
 // tsfox/cli/commands/cache/benchmark.command.ts
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 
 export const CacheBenchmarkCommand: CommandInterface = {
   name: 'benchmark',
@@ -85,7 +85,8 @@ export const CacheBenchmarkCommand: CommandInterface = {
       console.log('');
       
       // Dynamic import of cache system
-      const { CacheFactory } = await import('../../../core/cache/cache.factory');
+      // @ts-ignore — resolved at runtime from @foxframework/core
+      const { CacheFactory } = await import('@foxframework/core/dist/tsfox/core/cache/cache.factory');
       
       // Create cache instance
       const cacheConfig = {

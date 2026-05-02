@@ -1,5 +1,5 @@
 // tsfox/cli/commands/cache/flush.command.ts
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 import axios from 'axios';
 
 export const CacheFlushCommand: CommandInterface = {

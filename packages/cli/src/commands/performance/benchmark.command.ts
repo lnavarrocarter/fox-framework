@@ -1,5 +1,5 @@
 // tsfox/cli/commands/performance/benchmark.command.ts
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 
 export const PerformanceBenchmarkCommand: CommandInterface = {
   name: 'benchmark',
@@ -102,7 +102,8 @@ export const PerformanceBenchmarkCommand: CommandInterface = {
       console.log('');
       
       // Dynamic import of performance system
-      const { PerformanceBenchmark } = await import('../../../core/performance/benchmarking');
+      // @ts-ignore — resolved at runtime from @foxframework/core
+      const { PerformanceBenchmark } = await import('@foxframework/core/dist/tsfox/core/performance/benchmarking');
       
       const benchmark = new PerformanceBenchmark({
         duration,

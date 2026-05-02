@@ -1,5 +1,5 @@
 // tsfox/cli/commands/metrics/export.command.ts
-import { CommandInterface, CLIContext, ValidationResult } from '../interfaces/cli.interface';
+import { CommandInterface, CLIContext, ValidationResult } from '../../interfaces/cli.interface';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
