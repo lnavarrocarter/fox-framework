@@ -452,122 +452,145 @@ jobs:
 
     # ── Publish core ───────────────────────────────────────────────────────
     - name: 📦 Publish @foxframework/core
+      continue-on-error: true
       run: npm publish --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     # ── Publish DB packages ────────────────────────────────────────────────
     - name: 📦 Publish @foxframework/db-postgres
+      continue-on-error: true
       run: npm publish --workspace=packages/db-postgres --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/db-mysql
+      continue-on-error: true
       run: npm publish --workspace=packages/db-mysql --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/db-sqlite
+      continue-on-error: true
       run: npm publish --workspace=packages/db-sqlite --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/db-mongo
+      continue-on-error: true
       run: npm publish --workspace=packages/db-mongo --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/db-redis
+      continue-on-error: true
       run: npm publish --workspace=packages/db-redis --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/db-rds
+      continue-on-error: true
       run: npm publish --workspace=packages/db-rds --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/db-documentdb
+      continue-on-error: true
       run: npm publish --workspace=packages/db-documentdb --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/db-dynamodb
+      continue-on-error: true
       run: npm publish --workspace=packages/db-dynamodb --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     # ── Publish Auth packages ──────────────────────────────────────────────
     - name: 📦 Publish @foxframework/auth-jwt
+      continue-on-error: true
       run: npm publish --workspace=packages/auth-jwt --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/auth-2fa
+      continue-on-error: true
       run: npm publish --workspace=packages/auth-2fa --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/auth-oauth
+      continue-on-error: true
       run: npm publish --workspace=packages/auth-oauth --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/auth-cognito
+      continue-on-error: true
       run: npm publish --workspace=packages/auth-cognito --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/auth-firebase
+      continue-on-error: true
       run: npm publish --workspace=packages/auth-firebase --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/auth-ldap
+      continue-on-error: true
       run: npm publish --workspace=packages/auth-ldap --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     # ── Publish Serverless package ─────────────────────────────────────────
     - name: 📦 Publish @foxframework/serverless
+      continue-on-error: true
       run: npm publish --workspace=packages/serverless --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     # ── Publish Model packages ─────────────────────────────────────────────
     - name: 📦 Publish @foxframework/model-openai
+      continue-on-error: true
       run: npm publish --workspace=packages/model-openai --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/model-anthropic
+      continue-on-error: true
       run: npm publish --workspace=packages/model-anthropic --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/model-ollama
+      continue-on-error: true
       run: npm publish --workspace=packages/model-ollama --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     # ── Publish Vector Store packages ─────────────────────────────────────
     - name: 📦 Publish @foxframework/vector-pinecone
+      continue-on-error: true
       run: npm publish --workspace=packages/vector-pinecone --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/vector-weaviate
+      continue-on-error: true
       run: npm publish --workspace=packages/vector-weaviate --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: 📦 Publish @foxframework/vector-chroma
+      continue-on-error: true
       run: npm publish --workspace=packages/vector-chroma --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     # ── Publish OTel package ───────────────────────────────────────────────
     - name: 📦 Publish @foxframework/otel-agents
+      continue-on-error: true
       run: npm publish --workspace=packages/otel-agents --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
