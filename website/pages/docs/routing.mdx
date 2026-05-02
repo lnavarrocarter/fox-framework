@@ -20,7 +20,7 @@ El sistema de rutas de Fox Framework proporciona una forma flexible y potente de
 Una configuración básica del sistema de rutas se vería así:
 
 ```typescript
-import { FoxFactory, Router, RequestMethod } from 'fox-framework/core';
+import { FoxFactory, Router, RequestMethod } from '@foxframework/core';
 import { UserController } from './controllers/user.controller';
 import { AuthMiddleware } from './middleware/auth.middleware';
 
@@ -228,7 +228,7 @@ src/
 
 ```typescript
 // src/routes/api.routes.ts
-import { Router } from 'fox-framework/core';
+import { Router } from '@foxframework/core';
 import { authMiddleware } from '../middleware';
 import { UserController } from '../controllers/user.controller';
 
@@ -247,7 +247,7 @@ export function registerApiRoutes(router: Router): void {
 }
 
 // src/routes/web.routes.ts
-import { Router } from 'fox-framework/core';
+import { Router } from '@foxframework/core';
 
 export function registerWebRoutes(router: Router): void {
   router.get('/', HomeController, 'index');
@@ -262,7 +262,7 @@ export function registerWebRoutes(router: Router): void {
 }
 
 // src/routes/index.ts
-import { Router } from 'fox-framework/core';
+import { Router } from '@foxframework/core';
 import { registerApiRoutes } from './api.routes';
 import { registerWebRoutes } from './web.routes';
 import { registerAdminRoutes } from './admin.routes';
@@ -284,7 +284,7 @@ export function registerRoutes(): Router {
 }
 
 // src/server/index.ts
-import { FoxFactory } from 'fox-framework/core';
+import { FoxFactory } from '@foxframework/core';
 import { registerRoutes } from '../routes';
 
 const router = registerRoutes();
@@ -304,7 +304,7 @@ router.get('/users/:id', userController.show, { name: 'users.show' });
 router.post('/users', userController.create, { name: 'users.create' });
 
 // Usar nombres para generar URLs
-import { url } from 'fox-framework/core/router';
+import { url } from '@foxframework/core';
 
 // En controladores o middlewares
 const profileUrl = url('users.show', { id: 123 }); // "/users/123"
@@ -476,7 +476,7 @@ router.setErrorHandler((error, ctx) => {
 ## Rutas con Rate Limiting
 
 ```typescript
-import { rateLimiter } from 'fox-framework/middleware';
+import { rateLimiter } from '@foxframework/core';
 
 // Limitar una ruta específica
 router.post('/login', 
@@ -515,7 +515,7 @@ router.group('/api', {
 ## Rutas con Caché
 
 ```typescript
-import { cacheMiddleware } from 'fox-framework/middleware';
+import { cacheMiddleware } from '@foxframework/core';
 
 // Caché básica
 router.get('/products', 
@@ -551,7 +551,7 @@ router.get('/dashboard',
 ## Rutas para Archivos Estáticos
 
 ```typescript
-import { staticFiles } from 'fox-framework/middleware';
+import { staticFiles } from '@foxframework/core';
 
 // Servir archivos estáticos
 router.use('/assets', staticFiles('./public/assets'));
@@ -570,7 +570,7 @@ router.use('/public', staticFiles(['./public', './assets']));
 ## Rutas para Autenticación
 
 ```typescript
-import { auth } from 'fox-framework/middleware';
+import { auth } from '@foxframework/core';
 
 // Rutas de autenticación
 router.group('/auth', (auth) => {
@@ -642,7 +642,7 @@ router.post('/orders/:id/refund', OrderController, 'processRefund');
 ## Rutas para API GraphQL
 
 ```typescript
-import { graphqlHandler } from 'fox-framework/graphql';
+import { graphqlHandler } from '@foxframework/graphql';
 import { schema } from '../graphql/schema';
 
 // Ruta GraphQL principal
@@ -660,7 +660,7 @@ if (process.env.NODE_ENV === 'development') {
 ## Testing de Rutas
 
 ```typescript
-import { createTestRouter } from 'fox-framework/testing';
+import { createTestRouter } from '@foxframework/testing';
 
 describe('User Routes', () => {
   let router;
@@ -729,7 +729,7 @@ describe('User Routes', () => {
 ## Rutas para WebSockets
 
 ```typescript
-import { WebSocketRouter } from 'fox-framework/websockets';
+import { WebSocketRouter } from '@foxframework/websockets';
 import { authMiddleware } from '../middleware';
 import { ChatController } from '../controllers/chat.controller';
 

@@ -28,7 +28,7 @@ export type NextFunction = () => Promise<any>;
 Veamos un middleware sencillo de registro:
 
 ```typescript
-import { Middleware } from 'fox-framework/core';
+import { Middleware } from '@foxframework/core';
 
 export const loggingMiddleware: Middleware = async (ctx, next) => {
   const start = Date.now();
@@ -52,7 +52,7 @@ Hay varias formas de registrar middleware:
 ### Middleware Global
 
 ```typescript
-import { FoxFactory } from 'fox-framework/core';
+import { FoxFactory } from '@foxframework/core';
 import { loggingMiddleware, corsMiddleware, securityHeadersMiddleware } from './middleware';
 
 const server = FoxFactory.createServer({
@@ -70,7 +70,7 @@ const server = FoxFactory.createServer({
 ### Middleware en Rutas
 
 ```typescript
-import { Router } from 'fox-framework/core';
+import { Router } from '@foxframework/core';
 import { authMiddleware, validateUserMiddleware } from './middleware';
 
 const router = new Router();
@@ -109,7 +109,7 @@ router.group({ middleware: [authMiddleware] }, (auth) => {
 ### Middleware en Controladores
 
 ```typescript
-import { Controller, Get, UseMiddleware } from 'fox-framework/core';
+import { Controller, Get, UseMiddleware } from '@foxframework/core';
 import { authMiddleware, loggingMiddleware } from '../middleware';
 
 // Middleware a nivel de controlador
@@ -443,7 +443,7 @@ router.get('/api/reports/complex',
 ## Middleware de Compresión
 
 ```typescript
-import { Middleware } from 'fox-framework/core';
+import { Middleware } from '@foxframework/core';
 import zlib from 'zlib';
 import stream from 'stream';
 import { promisify } from 'util';
@@ -612,7 +612,7 @@ router.use(corsMiddleware({
 ## Middleware de Autenticación
 
 ```typescript
-import { Middleware } from 'fox-framework/core';
+import { Middleware } from '@foxframework/core';
 import jwt from 'jsonwebtoken';
 import { UserService } from '../services/user.service';
 
@@ -705,8 +705,8 @@ router.get('/products',
 ## Middleware de Validación
 
 ```typescript
-import { Middleware } from 'fox-framework/core';
-import { Schema, ValidationError } from 'fox-framework/validation';
+import { Middleware } from '@foxframework/core';
+import { Schema, ValidationError } from '@foxframework/validation';
 
 export function validateMiddleware(schema: Schema, options: {
   source?: 'body' | 'query' | 'params';
@@ -784,7 +784,7 @@ router.get('/search',
 ## Middleware de Caché
 
 ```typescript
-import { Middleware } from 'fox-framework/core';
+import { Middleware } from '@foxframework/core';
 import NodeCache from 'node-cache';
 
 // Caché en memoria
@@ -867,7 +867,7 @@ router.get('/dashboard',
 ## Middleware de Archivos
 
 ```typescript
-import { Middleware } from 'fox-framework/core';
+import { Middleware } from '@foxframework/core';
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -979,7 +979,7 @@ router.post('/upload-gallery',
 ## Middleware de Logging Estructurado
 
 ```typescript
-import { Middleware } from 'fox-framework/core';
+import { Middleware } from '@foxframework/core';
 import winston from 'winston';
 
 // Configurar logger
@@ -1063,7 +1063,7 @@ export const requestLoggerMiddleware: Middleware = async (ctx, next) => {
 ## Middleware de Métricas
 
 ```typescript
-import { Middleware } from 'fox-framework/core';
+import { Middleware } from '@foxframework/core';
 import prometheus from 'prom-client';
 
 // Inicializar colectores de métricas
@@ -1156,7 +1156,7 @@ router.get('/metrics', (ctx) => {
 ## Middleware de Localización
 
 ```typescript
-import { Middleware } from 'fox-framework/core';
+import { Middleware } from '@foxframework/core';
 import i18next from 'i18next';
 
 // Configurar i18next
@@ -1229,7 +1229,7 @@ const userController = {
 ## Testing de Middleware
 
 ```typescript
-import { createTestContext } from 'fox-framework/testing';
+import { createTestContext } from '@foxframework/testing';
 import { authMiddleware } from '../middleware/auth.middleware';
 import jwt from 'jsonwebtoken';
 

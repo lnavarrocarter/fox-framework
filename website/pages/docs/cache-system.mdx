@@ -19,8 +19,8 @@ El Sistema de Cache de Fox Framework proporciona una solución robusta y flexibl
 ### Configuración
 
 ```typescript
-import { FoxFactory } from 'fox-framework/core';
-import { CacheFactory } from 'fox-framework/cache';
+import { FoxFactory } from '@foxframework/core';
+import { CacheFactory } from '@foxframework/cache';
 
 // Crear instancia de caché
 const cache = CacheFactory.create({
@@ -246,7 +246,7 @@ await tagsCache.remember('products:list', async () => {
 Para cachear respuestas HTTP completas:
 
 ```typescript
-import { httpCacheMiddleware } from 'fox-framework/cache';
+import { httpCacheMiddleware } from '@foxframework/cache';
 
 // Middleware global para cache de respuestas
 server.use(httpCacheMiddleware({
@@ -322,7 +322,7 @@ export class ProductController {
 Para optimizar rendimiento con diferentes niveles de cache:
 
 ```typescript
-import { CacheFactory, MultiLevelCache } from 'fox-framework/cache';
+import { CacheFactory, MultiLevelCache } from '@foxframework/cache';
 
 // Crear caches individuales
 const memoryCache = CacheFactory.create({
@@ -803,8 +803,8 @@ export class ApiController {
 ### Cache para GraphQL
 
 ```typescript
-import { CacheFactory } from 'fox-framework/cache';
-import { createGraphQLCache } from 'fox-framework/cache/graphql';
+import { CacheFactory } from '@foxframework/cache';
+import { createGraphQLCache } from '@foxframework/core';
 
 // Crear caché específico para GraphQL
 const graphqlCache = createGraphQLCache({

@@ -17,7 +17,7 @@ Fox Framework incluye un sistema integral de testing que facilita la creación d
 ### Instalación de Dependencias
 
 ```bash
-npm install --save-dev @fox-framework/testing jest @types/jest supertest @types/supertest
+npm install --save-dev @foxframework/testing jest @types/jest supertest @types/supertest
 ```
 
 ### Configuración de Jest
@@ -25,7 +25,7 @@ npm install --save-dev @fox-framework/testing jest @types/jest supertest @types/
 **jest.config.js**
 ```javascript
 module.exports = {
-  preset: '@fox-framework/testing',
+  preset: '@foxframework/testing',
   testEnvironment: 'node',
   roots: ['<rootDir>/src', '<rootDir>/tests'],
   testMatch: [
@@ -51,8 +51,8 @@ module.exports = {
 
 **tests/setup.ts**
 ```typescript
-import { TestingModule } from '@fox-framework/testing';
-import { DatabaseTestHelper } from '@fox-framework/testing/database';
+import { TestingModule } from '@foxframework/testing';
+import { DatabaseTestHelper } from '@foxframework/testing/database';
 
 // Configuración global para tests
 beforeAll(async () => {
@@ -82,7 +82,7 @@ beforeEach(async () => {
 ### Test Unitario de Controlador
 
 ```typescript
-import { TestingModule, MockRequest, MockResponse } from '@fox-framework/testing';
+import { TestingModule, MockRequest, MockResponse } from '@foxframework/testing';
 import { UserController } from '../src/controllers/user.controller';
 import { UserService } from '../src/services/user.service';
 
@@ -165,7 +165,7 @@ describe('UserController', () => {
 ### Test de Integración de Controlador
 
 ```typescript
-import { TestingModule, TestServer } from '@fox-framework/testing';
+import { TestingModule, TestServer } from '@foxframework/testing';
 import request from 'supertest';
 import { Application } from 'express';
 
@@ -215,7 +215,7 @@ describe('User API Integration', () => {
 ### Test Unitario de Servicio
 
 ```typescript
-import { TestingModule } from '@fox-framework/testing';
+import { TestingModule } from '@foxframework/testing';
 import { UserService } from '../src/services/user.service';
 import { UserRepository } from '../src/repositories/user.repository';
 import { EmailService } from '../src/services/email.service';
@@ -279,7 +279,7 @@ describe('UserService', () => {
 ### Test de Middleware de Autenticación
 
 ```typescript
-import { TestingModule, MockRequest, MockResponse, MockNextFunction } from '@fox-framework/testing';
+import { TestingModule, MockRequest, MockResponse, MockNextFunction } from '@foxframework/testing';
 import { authMiddleware } from '../src/middleware/auth.middleware';
 import { JwtService } from '../src/services/jwt.service';
 
@@ -340,7 +340,7 @@ describe('AuthMiddleware', () => {
 ### Test de Repository
 
 ```typescript
-import { TestingModule, DatabaseTestHelper } from '@fox-framework/testing';
+import { TestingModule, DatabaseTestHelper } from '@foxframework/testing';
 import { UserRepository } from '../src/repositories/user.repository';
 import { User } from '../src/entities/user.entity';
 
@@ -392,7 +392,7 @@ describe('UserRepository', () => {
 ### Configuración E2E
 
 ```typescript
-import { TestingModule, E2ETestHelper } from '@fox-framework/testing';
+import { TestingModule, E2ETestHelper } from '@foxframework/testing';
 import { Application } from 'express';
 
 describe('User Management E2E', () => {
@@ -464,7 +464,7 @@ describe('User Management E2E', () => {
 ### Test Factories
 
 ```typescript
-import { Factory } from '@fox-framework/testing';
+import { Factory } from '@foxframework/testing';
 import { User } from '../src/entities/user.entity';
 import { Post } from '../src/entities/post.entity';
 
@@ -538,7 +538,7 @@ export const testFixtures = {
 ### Benchmark Tests
 
 ```typescript
-import { PerformanceTestHelper } from '@fox-framework/testing';
+import { PerformanceTestHelper } from '@foxframework/testing';
 
 describe('API Performance', () => {
   let helper: PerformanceTestHelper;

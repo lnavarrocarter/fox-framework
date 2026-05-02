@@ -33,7 +33,7 @@ fox plugin:install cache
 Una vez instalado, el plugin debe registrarse en la aplicación:
 
 ```typescript
-import { FoxFactory } from 'fox-framework/core';
+import { FoxFactory } from '@foxframework/core';
 import { CachePlugin } from 'fox-plugin-cache';
 
 // Crear servidor con plugins
@@ -69,7 +69,7 @@ La configuración de plugins también puede hacerse a través de un archivo dedi
 
 ```typescript
 // plugins.config.ts
-import { PluginRegistry } from 'fox-framework/core';
+import { PluginRegistry } from '@foxframework/core';
 import { CachePlugin } from 'fox-plugin-cache';
 import { AuthPlugin } from 'fox-plugin-auth';
 import { LogPlugin } from 'fox-plugin-log';
@@ -106,7 +106,7 @@ export default PluginRegistry.configure([
 ]);
 
 // En server.ts
-import { FoxFactory } from 'fox-framework/core';
+import { FoxFactory } from '@foxframework/core';
 import pluginsConfig from './plugins.config';
 
 const server = FoxFactory.createServer({
@@ -122,7 +122,7 @@ const server = FoxFactory.createServer({
 Un plugin en Fox Framework sigue esta estructura básica:
 
 ```typescript
-import { Plugin, PluginContext, PluginConfig } from 'fox-framework/core/plugin';
+import { Plugin, PluginContext, PluginConfig } from '@foxframework/core';
 
 // Definición de opciones del plugin
 export interface CachePluginOptions extends PluginConfig {
@@ -266,7 +266,7 @@ export class CachePlugin implements Plugin<CachePluginOptions> {
 Los plugins también pueden implementarse utilizando decoradores para una sintaxis más declarativa:
 
 ```typescript
-import { Plugin, PluginMeta, Inject, Hook, Command } from 'fox-framework/core/plugin';
+import { Plugin, PluginMeta, Inject, Hook, Command } from '@foxframework/core';
 
 @PluginMeta({
   name: 'auth',
@@ -407,7 +407,7 @@ Fox Framework proporciona plugins oficiales para funcionalidades comunes:
 
 ```typescript
 // Plugin de caché
-import { CachePlugin } from 'fox-framework/plugins/cache';
+import { CachePlugin } from '@foxframework/cache';
 const server = FoxFactory.createServer({
   plugins: [
     new CachePlugin({
@@ -419,7 +419,7 @@ const server = FoxFactory.createServer({
 });
 
 // Plugin de autenticación
-import { AuthPlugin } from 'fox-framework/plugins/auth';
+import { AuthPlugin } from '@foxframework/auth';
 const server = FoxFactory.createServer({
   plugins: [
     new AuthPlugin({
@@ -433,7 +433,7 @@ const server = FoxFactory.createServer({
 });
 
 // Plugin de validación
-import { ValidationPlugin } from 'fox-framework/plugins/validation';
+import { ValidationPlugin } from '@foxframework/validation';
 const server = FoxFactory.createServer({
   plugins: [
     new ValidationPlugin({
@@ -497,7 +497,7 @@ Puedes crear plugins personalizados para tu aplicación:
 
 ```typescript
 // src/plugins/analytics/index.ts
-import { Plugin, PluginContext } from 'fox-framework/core/plugin';
+import { Plugin, PluginContext } from '@foxframework/core';
 import { AnalyticsService } from './services/analytics.service';
 import { analyticsMiddleware } from './middleware/analytics.middleware';
 
@@ -573,7 +573,7 @@ Uso del plugin personalizado:
 
 ```typescript
 // server.ts
-import { FoxFactory } from 'fox-framework/core';
+import { FoxFactory } from '@foxframework/core';
 import { AnalyticsPlugin } from './plugins/analytics';
 
 const server = FoxFactory.createServer({
@@ -692,7 +692,7 @@ Activar plugins basados en condiciones:
 
 ```typescript
 // plugins.config.ts
-import { PluginRegistry } from 'fox-framework/core';
+import { PluginRegistry } from '@foxframework/core';
 
 export default PluginRegistry.configure([
   {
@@ -736,7 +736,7 @@ export default {
 Extender la funcionalidad de plugins existentes:
 
 ```typescript
-import { CachePlugin } from 'fox-framework/plugins/cache';
+import { CachePlugin } from '@foxframework/cache';
 
 // Extender un plugin con funcionalidades adicionales
 class EnhancedCachePlugin extends CachePlugin {
@@ -1112,8 +1112,10 @@ export class DatabasePlugin implements Plugin<DatabasePluginOptions> {
   
   // Método privado para crear conexión
   private async createConnection(name: string, config: any) {
-    // Implementación específica según el driver de base de datos
-    // ...
+    const { driver, host, port, database, user, password } = config;
+    const connectionString = `${driver}://${user}:${password}@${host}:${port}/${database}`;
+    const client = await import(driver);
+    return client.createConnection(connectionString);
   }
 }
 ```
@@ -1183,8 +1185,20 @@ export class LoggingPlugin implements Plugin<LoggingPluginOptions> {
   }
   
   private createLogger(name: string, options: LoggingPluginOptions): Logger {
-    // Implementación específica según opciones
-    // ...
+    return {
+      level: options.level ?? 'info',
+      name,
+      info: (msg, meta?) => this.write('info', name, msg, meta),
+      warn: (msg, meta?) => this.write('warn', name, msg, meta),
+      error: (msg, meta?) => this.write('error', name, msg, meta),
+      debug: (msg, meta?) => this.write('debug', name, msg, meta),
+    } as unknown as Logger;
+  }
+
+  private write(level: string, name: string, msg: string, meta?: object) {
+    const entry = JSON.stringify({ level, logger: name, msg, ...meta, ts: new Date().toISOString() });
+    if (level === 'error') process.stderr.write(entry + '\n');
+    else process.stdout.write(entry + '\n');
   }
   
   private createRequestLoggingMiddleware() {
@@ -1413,7 +1427,7 @@ export class AuthPlugin implements Plugin {
 ### Testing de Plugins
 
 ```typescript
-import { describe, it, expect, mock } from 'fox-framework/testing';
+import { describe, it, expect, mock } from '@foxframework/testing';
 import { CachePlugin } from '../src/cache-plugin';
 
 describe('CachePlugin', () => {

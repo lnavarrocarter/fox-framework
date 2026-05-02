@@ -23,7 +23,7 @@ Sí, completamente. Fox Framework está construido sobre Express, por lo que pue
 
 ### ¿Qué versión de Node.js necesito?
 
-Fox Framework requiere Node.js 16.0 o superior. Recomendamos usar la versión LTS más reciente para mejor estabilidad y rendimiento.
+Fox Framework requiere Node.js 18.0 o superior. Recomendamos usar la versión LTS más reciente para mejor estabilidad y rendimiento.
 
 ## 📦 Instalación y Configuración
 
@@ -97,7 +97,7 @@ src/
 Fox Framework incluye middleware de autenticación:
 
 ```typescript
-import { AuthMiddleware } from 'fox-framework/auth';
+import { AuthMiddleware } from '@foxframework/auth-jwt';
 
 // Configurar JWT
 const authConfig = {
@@ -125,7 +125,7 @@ Sí, Fox Framework es ORM-agnóstico. Puedes usar:
 Fox Framework incluye validación integrada:
 
 ```typescript
-import { ValidationMiddleware, Schema } from 'fox-framework/validation';
+import { ValidationMiddleware, Schema } from '@foxframework/validation';
 
 const userSchema = Schema.object({
   name: Schema.string().min(2).max(50),
@@ -146,7 +146,7 @@ router.post('/users',
 Fox Framework incluye múltiples estrategias de cache:
 
 ```typescript
-import { Cache } from 'fox-framework/cache';
+import { Cache } from '@foxframework/cache';
 
 // Cache en memoria
 const memoryCache = Cache.memory();
@@ -166,7 +166,7 @@ const value = await cache.get('key');
 Sí, Fox Framework soporta WebSockets:
 
 ```typescript
-import { SocketController } from 'fox-framework/websockets';
+import { SocketController } from '@foxframework/websockets';
 
 class ChatController extends SocketController {
   onConnection(socket: Socket) {
@@ -182,7 +182,7 @@ class ChatController extends SocketController {
 Usa el sistema de jobs integrado:
 
 ```typescript
-import { JobQueue } from 'fox-framework/jobs';
+import { JobQueue } from '@foxframework/jobs';
 
 const emailQueue = new JobQueue('email-queue');
 
@@ -337,7 +337,7 @@ npx -p @foxframework/core tsfox generate controller Users --crud --service --tes
 
 1. **Habilita el profiler**:
 ```typescript
-import { Profiler } from 'fox-framework/profiler';
+import { Profiler } from '@foxframework/core';
 Profiler.enable();
 ```
 
@@ -371,13 +371,13 @@ logging: {
 
 2. **Usa correlation IDs**:
 ```typescript
-import { CorrelationMiddleware } from 'fox-framework/logging';
+import { CorrelationMiddleware } from '@foxframework/logging';
 app.use(CorrelationMiddleware());
 ```
 
 3. **Monitorea errores**:
 ```typescript
-import { ErrorTracker } from 'fox-framework/monitoring';
+import { ErrorTracker } from '@foxframework/monitoring';
 ErrorTracker.configure({
   sentry: { dsn: 'tu-sentry-dsn' }
 });
@@ -413,7 +413,7 @@ cache: {
 Sí, Fox Framework es altamente extensible:
 
 ```typescript
-import { Plugin } from 'fox-framework/plugins';
+import { Plugin } from '@foxframework/core';
 
 class MiPlugin extends Plugin {
   name = 'mi-plugin';
@@ -440,7 +440,7 @@ Puedes agregar comandos personalizados:
 
 ```typescript
 // commands/mi-comando.ts
-import { Command } from 'fox-framework/cli';
+import { Command } from '@foxframework/cli';
 
 export class MiComando extends Command {
   signature = 'mi-comando {nombre}';
@@ -458,7 +458,7 @@ export class MiComando extends Command {
 Sí, Fox Framework es compatible con GraphQL:
 
 ```typescript
-import { GraphQLModule } from 'fox-framework/graphql';
+import { GraphQLModule } from '@foxframework/graphql';
 
 const server = FoxFactory.createServer({
   graphql: {
@@ -483,7 +483,7 @@ const express = require('express');
 const app = express();
 
 // Después (Fox Framework)
-import { FoxFactory } from 'fox-framework';
+import { FoxFactory } from '@foxframework/core';
 const app = FoxFactory.createServer();
 ```
 
@@ -532,7 +532,7 @@ router.post('/users', ValidationMiddleware.body(userSchema), controller.create);
 Usa el manejador de errores global:
 
 ```typescript
-import { ErrorHandler } from 'fox-framework/errors';
+import { ErrorHandler } from '@foxframework/core';
 
 app.use(ErrorHandler.global({
   // No mostrar stack traces en producción
@@ -554,7 +554,7 @@ app.use(ErrorHandler.global({
 Fox Framework incluye helpers para testing:
 
 ```typescript
-import { TestingModule } from 'fox-framework/testing';
+import { TestingModule } from '@foxframework/testing';
 
 describe('UserController', () => {
   let app: TestApplication;

@@ -17,14 +17,14 @@ Fox Framework incluye un sistema completo de monitoreo y métricas que te permit
 ### Instalación de Dependencias
 
 ```bash
-npm install @fox-framework/monitoring prometheus-client jaeger-client winston-elasticsearch
+npm install @foxframework/monitoring prometheus-client jaeger-client winston-elasticsearch
 ```
 
 ### Configuración Base
 
 ```typescript
-import { MonitoringModule } from '@fox-framework/monitoring';
-import { FoxFactory } from 'fox-framework/core';
+import { MonitoringModule } from '@foxframework/monitoring';
+import { FoxFactory } from '@foxframework/core';
 
 const server = FoxFactory.createServer({
   port: 3000,
@@ -96,7 +96,7 @@ Fox Framework recolecta automáticamente estas métricas:
 ### Métricas Personalizadas
 
 ```typescript
-import { MetricsCollector } from '@fox-framework/monitoring';
+import { MetricsCollector } from '@foxframework/monitoring';
 
 export class BusinessMetrics {
   private metrics: MetricsCollector;
@@ -145,8 +145,8 @@ export class BusinessMetrics {
 ### Uso en Controladores
 
 ```typescript
-import { FoxController, Request, Response } from 'fox-framework/core';
-import { Metrics } from '@fox-framework/monitoring';
+import { FoxController, Request, Response } from '@foxframework/core';
+import { Metrics } from '@foxframework/monitoring';
 
 export class UserController extends FoxController {
   constructor(
@@ -191,7 +191,7 @@ export class UserController extends FoxController {
 ### Health Check Básico
 
 ```typescript
-import { HealthCheck, HealthStatus } from '@fox-framework/monitoring';
+import { HealthCheck, HealthStatus } from '@foxframework/monitoring';
 
 export class AppHealthCheck extends HealthCheck {
   constructor(
@@ -342,7 +342,7 @@ export class DetailedHealthCheck extends HealthCheck {
 ### Configuración de Jaeger
 
 ```typescript
-import { JaegerTracer } from '@fox-framework/monitoring';
+import { JaegerTracer } from '@foxframework/monitoring';
 
 const tracer = new JaegerTracer({
   serviceName: 'fox-framework-app',
@@ -363,7 +363,7 @@ const tracer = new JaegerTracer({
 ### Instrumentación Automática
 
 ```typescript
-import { TraceMiddleware } from '@fox-framework/monitoring';
+import { TraceMiddleware } from '@foxframework/monitoring';
 
 // Middleware automático para HTTP requests
 app.use(TraceMiddleware.http({
@@ -383,7 +383,7 @@ TraceMiddleware.database(tracer, {
 ### Trazas Manuales
 
 ```typescript
-import { Tracer } from '@fox-framework/monitoring';
+import { Tracer } from '@foxframework/monitoring';
 
 export class OrderService {
   async processOrder(orderId: string): Promise<Order> {
@@ -431,7 +431,7 @@ export class OrderService {
 ### Configuración de Sentry
 
 ```typescript
-import { ErrorTracker } from '@fox-framework/monitoring';
+import { ErrorTracker } from '@foxframework/monitoring';
 
 const errorTracker = new ErrorTracker({
   sentry: {
@@ -452,7 +452,7 @@ const errorTracker = new ErrorTracker({
 ### Captura de Errores
 
 ```typescript
-import { ErrorHandler } from '@fox-framework/monitoring';
+import { ErrorHandler } from '@foxframework/monitoring';
 
 export class UserController extends FoxController {
   async createUser(req: Request, res: Response): Promise<void> {
@@ -533,7 +533,7 @@ export class UserController extends FoxController {
 ### Dashboard Personalizado
 
 ```typescript
-import { DashboardBuilder } from '@fox-framework/monitoring';
+import { DashboardBuilder } from '@foxframework/monitoring';
 
 export class BusinessDashboard {
   static build(): Dashboard {
@@ -568,7 +568,7 @@ export class BusinessDashboard {
 ### Configuración de Alertas
 
 ```typescript
-import { AlertManager } from '@fox-framework/monitoring';
+import { AlertManager } from '@foxframework/monitoring';
 
 const alertManager = new AlertManager({
   rules: [
@@ -668,7 +668,7 @@ export class BusinessAlerts {
 ### CPU Profiling
 
 ```typescript
-import { Profiler } from '@fox-framework/monitoring';
+import { Profiler } from '@foxframework/monitoring';
 
 export class PerformanceMonitor {
   static async profileCPU(duration: number = 30000): Promise<void> {

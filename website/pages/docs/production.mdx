@@ -116,9 +116,9 @@ PAYMENT_GATEWAY_API_KEY=your_payment_api_key
 
 **src/config/production.ts**
 ```typescript
-import { FoxConfig } from 'fox-framework/core';
-import { SecurityConfig } from 'fox-framework/security';
-import { DatabaseConfig } from 'fox-framework/database';
+import { FoxConfig } from '@foxframework/core';
+import { SecurityConfig } from '@foxframework/security';
+import { DatabaseConfig } from '@foxframework/database';
 
 export const productionConfig: FoxConfig = {
   // Servidor
@@ -313,7 +313,7 @@ ALTER TABLE orders SET (autovacuum_analyze_scale_factor = 0.05);
 ### Redis Optimizado para Producción
 
 ```typescript
-import { CacheConfig } from 'fox-framework/cache';
+import { CacheConfig } from '@foxframework/cache';
 
 export const cacheConfig: CacheConfig = {
   redis: {
@@ -421,7 +421,7 @@ export class ProductionCacheManager {
 ### Usando HashiCorp Vault
 
 ```typescript
-import { VaultClient } from 'fox-framework/vault';
+import { VaultClient } from '@foxframework/core';
 
 export class SecretManager {
   private vault: VaultClient;
@@ -488,7 +488,7 @@ export class AWSSecretManager {
 ### Logging Estructurado
 
 ```typescript
-import { Logger, LogLevel } from 'fox-framework/logging';
+import { Logger, LogLevel } from '@foxframework/logging';
 
 export const productionLogger = new Logger({
   level: LogLevel.INFO,
@@ -629,7 +629,7 @@ spec:
 ### Circuit Breaker Pattern
 
 ```typescript
-import { CircuitBreaker } from 'fox-framework/patterns';
+import { CircuitBreaker } from '@foxframework/core';
 
 export class ExternalServiceClient {
   private circuitBreaker: CircuitBreaker;

@@ -45,7 +45,7 @@ STORAGE_BUCKET=your-storage-bucket
 
 **src/config/production.ts**
 ```typescript
-import { FoxConfig } from 'fox-framework/core';
+import { FoxConfig } from '@foxframework/core';
 
 export const productionConfig: FoxConfig = {
   server: {
@@ -511,7 +511,7 @@ worker: node dist/src/workers/index.js
 ### Health Checks
 
 ```typescript
-import { HealthCheckController } from 'fox-framework/health';
+import { HealthCheckController } from '@foxframework/health';
 
 export class AppHealthController extends HealthCheckController {
   async checkHealth(): Promise<HealthStatus> {
@@ -537,7 +537,7 @@ export class AppHealthController extends HealthCheckController {
 ### Métricas y Logging
 
 ```typescript
-import { MetricsCollector, Logger } from 'fox-framework/monitoring';
+import { MetricsCollector, Logger } from '@foxframework/monitoring';
 
 export class ProductionMetrics {
   private metrics = new MetricsCollector();

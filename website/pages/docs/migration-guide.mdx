@@ -47,17 +47,17 @@ Antes de comenzar, evalúa tu proyecto actual:
 
 ```bash
 # Analiza tu proyecto Express existente
-npx @fox-framework/analyzer analyze ./src
+npx @foxframework/analyzer analyze ./src
 
 # Genera reporte de migración
-npx @fox-framework/analyzer migration-report
+npx @foxframework/analyzer migration-report
 ```
 
 ### Paso 1: Preparación del Entorno
 
 ```bash
 # Instalar Fox Framework en proyecto existente
-npm install fox-framework @fox-framework/migration-tools
+npm install @foxframework/core @foxframework/migration-tools
 
 # Backup del proyecto
 git checkout -b migration-to-fox-framework
@@ -89,8 +89,8 @@ app.listen(3000, () => {
 
 **Después (Fox Framework):**
 ```typescript
-import { FoxFactory } from 'fox-framework';
-import { corsMiddleware, helmetMiddleware } from 'fox-framework/middleware';
+import { FoxFactory } from '@foxframework/core';
+import { corsMiddleware, helmetMiddleware } from '@foxframework/core';
 
 const server = FoxFactory.createServer({
   port: 3000,
@@ -143,7 +143,7 @@ app.get('/api/users/:id', async (req, res) => {
 
 **Controller Fox Framework:**
 ```typescript
-import { FoxController, Request, Response } from 'fox-framework';
+import { FoxController, Request, Response } from '@foxframework/core';
 import { UserService } from '../services/user.service';
 
 export class UserController extends FoxController {
@@ -190,7 +190,7 @@ const authMiddleware = (req, res, next) => {
 
 **Fox Framework Middleware:**
 ```typescript
-import { Middleware, Request, Response, NextFunction } from 'fox-framework';
+import { Middleware, Request, Response, NextFunction } from '@foxframework/core';
 
 export class AuthMiddleware extends Middleware {
   async handle(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -251,7 +251,7 @@ fastify.register(myPlugin);
 
 **Plugin Fox Framework:**
 ```typescript
-import { Plugin } from 'fox-framework/plugins';
+import { Plugin } from '@foxframework/core';
 
 export class MyPlugin extends Plugin {
   name = 'my-utility';
@@ -328,7 +328,7 @@ export class UsersController {
 
 **Fox Framework Controller:**
 ```typescript
-import { FoxController, Route, Validate } from 'fox-framework';
+import { FoxController, Route, Validate } from '@foxframework/core';
 import { CreateUserDto } from '../dto/create-user.dto';
 
 export class UsersController extends FoxController {
@@ -370,7 +370,7 @@ export class UsersService {
 
 **Fox Framework Service:**
 ```typescript
-import { Service } from 'fox-framework';
+import { Service } from '@foxframework/core';
 
 @Service()
 export class UsersService {
@@ -484,7 +484,7 @@ const app = FoxFactory.createServer({
 
 ```bash
 # Ejecutar herramienta de migración
-npx @fox-framework/migrate v0-to-v1
+npx @foxframework/migrate v0-to-v1
 
 # Revisar cambios
 git diff
@@ -499,7 +499,7 @@ npm test
 
 ```bash
 # Instalar herramientas de migración
-npm install -g @fox-framework/migration-tools
+npm install -g @foxframework/migration-tools
 
 # Analizar proyecto actual
 fox-migrate analyze
@@ -571,7 +571,7 @@ npm list fox-framework
 
 # Re-instalar si es necesario
 npm uninstall fox-framework
-npm install fox-framework@latest
+npm install @foxframework/core@latest
 ```
 
 ### Middleware no funciona
@@ -591,7 +591,7 @@ const server = FoxFactory.createServer({
 
 ```typescript
 // Habilitar profiling temporalmente
-import { Profiler } from 'fox-framework/profiler';
+import { Profiler } from '@foxframework/core';
 
 if (process.env.NODE_ENV === 'development') {
   Profiler.enable();
@@ -602,7 +602,7 @@ if (process.env.NODE_ENV === 'development') {
 
 ```typescript
 // Actualizar helpers de testing
-import { TestingModule } from '@fox-framework/testing';
+import { TestingModule } from '@foxframework/testing';
 
 // Reemplazar supertest directo
 const app = await TestingModule.createTestApp();

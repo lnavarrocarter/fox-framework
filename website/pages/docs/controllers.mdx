@@ -17,7 +17,7 @@ Los controladores en Fox Framework son componentes fundamentales que gestionan l
 Un controlador básico en Fox Framework tiene esta estructura:
 
 ```typescript
-import { Controller, Get, Post, HttpContext, HttpResponse } from 'fox-framework/core';
+import { Controller, Get, Post, HttpContext, HttpResponse } from '@foxframework/core';
 import { UserService } from '../services/user.service';
 
 @Controller('/users')
@@ -65,7 +65,7 @@ Fox Framework proporciona varios decoradores para definir controladores y sus m�
 Este decorador define una clase como controlador y establece su ruta base:
 
 ```typescript
-import { Controller } from 'fox-framework/core';
+import { Controller } from '@foxframework/core';
 
 @Controller('/api/products')
 export class ProductController {
@@ -97,7 +97,7 @@ export class AdminController {
 Estos decoradores definen los métodos de controlador para diferentes verbos HTTP:
 
 ```typescript
-import { Controller, Get, Post, Put, Delete } from 'fox-framework/core';
+import { Controller, Get, Post, Put, Delete } from '@foxframework/core';
 
 @Controller('/posts')
 export class PostController {
@@ -132,7 +132,7 @@ export class PostController {
 Este decorador aplica middleware a un controlador o método específico:
 
 ```typescript
-import { Controller, Get, UseMiddleware } from 'fox-framework/core';
+import { Controller, Get, UseMiddleware } from '@foxframework/core';
 import { authMiddleware, loggingMiddleware } from '../middleware';
 
 // Middleware a nivel de controlador
@@ -160,8 +160,8 @@ export class AdminController {
 Este decorador aplica validación de entrada a los métodos de controlador:
 
 ```typescript
-import { Controller, Post, Validate } from 'fox-framework/core';
-import { Schema } from 'fox-framework/validation';
+import { Controller, Post, Validate } from '@foxframework/core';
+import { Schema } from '@foxframework/validation';
 
 @Controller('/users')
 export class UserController {
@@ -314,7 +314,7 @@ return ctx.response.json({
 Los controladores aprovechan el sistema de inyección de dependencias del framework:
 
 ```typescript
-import { Controller, Get, Inject } from 'fox-framework/core';
+import { Controller, Get, Inject } from '@foxframework/core';
 import { UserService } from '../services/user.service';
 import { LoggerService } from '../services/logger.service';
 import { ConfigService } from '../services/config.service';
@@ -498,7 +498,7 @@ Fox Framework incluye controladores base para casos de uso comunes:
 ### RESTController
 
 ```typescript
-import { RESTController } from 'fox-framework/core';
+import { RESTController } from '@foxframework/core';
 import { UserService } from '../services/user.service';
 
 @Controller('/api/users')
@@ -541,7 +541,7 @@ El `RESTController` ya incluye implementaciones para:
 ### ResourceController
 
 ```typescript
-import { ResourceController, Validate } from 'fox-framework/core';
+import { ResourceController, Validate } from '@foxframework/core';
 import { UserSchema } from '../schemas/user.schema';
 
 @Controller('/users')
@@ -577,8 +577,8 @@ export class UserController extends ResourceController {
 ## Controladores para Archivos
 
 ```typescript
-import { Controller, Post, Get } from 'fox-framework/core';
-import { UploadedFile } from 'fox-framework/files';
+import { Controller, Post, Get } from '@foxframework/core';
+import { UploadedFile } from '@foxframework/files';
 
 @Controller('/files')
 export class FileController {
@@ -645,7 +645,7 @@ export class FileController {
 ## Controladores para WebSockets
 
 ```typescript
-import { WebSocketController, OnConnect, OnMessage, OnDisconnect } from 'fox-framework/websockets';
+import { WebSocketController, OnConnect, OnMessage, OnDisconnect } from '@foxframework/websockets';
 
 @WebSocketController('/chat')
 export class ChatController {
@@ -713,7 +713,7 @@ export class ChatController {
 Fox Framework facilita el testing de controladores:
 
 ```typescript
-import { createTestContext } from 'fox-framework/testing';
+import { createTestContext } from '@foxframework/testing';
 import { UserController } from '../controllers/user.controller';
 import { UserService } from '../services/user.service';
 

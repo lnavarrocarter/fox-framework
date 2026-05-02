@@ -18,8 +18,8 @@ El sistema de logging de Fox Framework proporciona una forma flexible y potente 
 Para empezar a utilizar el sistema de logging:
 
 ```typescript
-import { FoxFactory } from 'fox-framework/core';
-import { LoggerFactory } from 'fox-framework/logging';
+import { FoxFactory } from '@foxframework/core';
+import { LoggerFactory } from '@foxframework/logging';
 
 // Crear logger con configuración
 const logger = LoggerFactory.create({
@@ -199,7 +199,7 @@ export class PaymentService {
 Puedes configurar múltiples destinos para tus logs según tus necesidades:
 
 ```typescript
-import { LoggerFactory } from 'fox-framework/logging';
+import { LoggerFactory } from '@foxframework/logging';
 
 const logger = LoggerFactory.create({
   transports: [
@@ -328,7 +328,7 @@ const logger = LoggerFactory.create({
 Registrar automáticamente las peticiones HTTP:
 
 ```typescript
-import { httpLogMiddleware } from 'fox-framework/logging';
+import { httpLogMiddleware } from '@foxframework/logging';
 
 // Configuración básica
 server.use(httpLogMiddleware());
@@ -402,7 +402,7 @@ Ejemplo de log HTTP generado:
 Para rastrear peticiones a través de microservicios:
 
 ```typescript
-import { correlationMiddleware } from 'fox-framework/logging';
+import { correlationMiddleware } from '@foxframework/logging';
 
 // Middleware para ID de correlación
 server.use(correlationMiddleware({
@@ -471,8 +471,8 @@ server.use((ctx, next) => {
 Para registrar errores en Sentry:
 
 ```typescript
-import { LoggerFactory } from 'fox-framework/logging';
-import { SentryTransport } from 'fox-framework/logging/transports/sentry';
+import { LoggerFactory } from '@foxframework/logging';
+import { SentryTransport } from '@foxframework/logging';
 
 // Configurar logger con Sentry
 const logger = LoggerFactory.create({
@@ -510,8 +510,8 @@ const logger = LoggerFactory.create({
 Para enviar logs a Elasticsearch:
 
 ```typescript
-import { LoggerFactory } from 'fox-framework/logging';
-import { ElasticsearchTransport } from 'fox-framework/logging/transports/elasticsearch';
+import { LoggerFactory } from '@foxframework/logging';
+import { ElasticsearchTransport } from '@foxframework/logging';
 
 const logger = LoggerFactory.create({
   transports: [
@@ -694,8 +694,8 @@ if (process.env.NODE_ENV === 'production') {
 ## Integración con Monitor de Aplicaciones
 
 ```typescript
-import { LoggerFactory } from 'fox-framework/logging';
-import { AppMonitor } from 'fox-framework/monitoring';
+import { LoggerFactory } from '@foxframework/logging';
+import { AppMonitor } from '@foxframework/monitoring';
 
 // Crear monitor de aplicación
 const monitor = new AppMonitor({
@@ -839,7 +839,7 @@ logger.error('Error de conexión a base de datos', {
 Registros específicos para auditoría de seguridad:
 
 ```typescript
-import { AuditLogger } from 'fox-framework/logging/audit';
+import { AuditLogger } from '@foxframework/logging';
 
 // Crear logger específico para auditoría
 const auditLogger = new AuditLogger({
@@ -913,8 +913,8 @@ export class AdminController {
 Para sistemas distribuidos y microservicios:
 
 ```typescript
-import { DistributedLogger } from 'fox-framework/logging/distributed';
-import { TraceContext } from 'fox-framework/tracing';
+import { DistributedLogger } from '@foxframework/logging';
+import { TraceContext } from '@foxframework/tracing';
 
 // Crear logger distribuido
 const logger = new DistributedLogger({
@@ -986,7 +986,7 @@ async function callUserService(ctx, userId) {
 Para análisis de comportamiento y flujos de negocio:
 
 ```typescript
-import { BusinessEventLogger } from 'fox-framework/logging/business';
+import { BusinessEventLogger } from '@foxframework/logging';
 
 // Crear logger para eventos de negocio
 const eventLogger = new BusinessEventLogger({

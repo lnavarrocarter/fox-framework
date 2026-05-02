@@ -10,7 +10,7 @@ Fox Framework está construido con una arquitectura modular que promueve la sepa
 
 ```typescript
 // Ejemplo de arquitectura modular
-import { FoxFactory } from 'fox-framework/core';
+import { FoxFactory } from '@foxframework/core';
 import { DatabaseProvider } from './providers/database.provider';
 import { AuthModule } from './modules/auth';
 import { UserModule } from './modules/user';
@@ -41,7 +41,7 @@ server.start();
 Los módulos encapsulan funcionalidades relacionadas, incluyendo controladores, servicios, middleware y configuración:
 
 ```typescript
-import { Module } from 'fox-framework/core';
+import { Module } from '@foxframework/core';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
 import { UserRepository } from './user.repository';
@@ -92,10 +92,10 @@ export class UserModule extends Module {
 Fox Framework incluye un potente sistema de inyección de dependencias que facilita la creación de componentes desacoplados y fáciles de testear:
 
 ```typescript
-import { Injectable, Inject } from 'fox-framework/core';
+import { Injectable, Inject } from '@foxframework/core';
 import { UserRepository } from './user.repository';
 import { EmailService } from '../email/email.service';
-import { Logger } from 'fox-framework/core/logging';
+import { Logger } from '@foxframework/core';
 
 @Injectable()
 export class UserService {
@@ -125,7 +125,7 @@ export class UserService {
 ### Registro de Servicios y Valores
 
 ```typescript
-import { Container } from 'fox-framework/core/di';
+import { Container } from '@foxframework/core';
 
 // Crear un contenedor de dependencias
 const container = new Container();
@@ -180,8 +180,8 @@ const orderController = container.create(OrderController);
 Fox Framework incluye un sistema de eventos que permite la comunicación entre componentes sin acoplamientos directos:
 
 ```typescript
-import { EventEmitter } from 'fox-framework/core/events';
-import { Injectable } from 'fox-framework/core';
+import { EventEmitter } from '@foxframework/core';
+import { Injectable } from '@foxframework/core';
 
 @Injectable()
 export class UserService {
@@ -224,7 +224,7 @@ export class NotificationService {
 Fox Framework aprovecha TypeScript para proporcionar eventos completamente tipados:
 
 ```typescript
-import { EventsDefinition, createEventEmitter } from 'fox-framework/core/events';
+import { EventsDefinition, createEventEmitter } from '@foxframework/core';
 
 // Definir tipado para eventos
 interface AppEvents extends EventsDefinition {
@@ -256,7 +256,7 @@ eventEmitter.emit('user.created', {
 ### Eventos Asíncronos
 
 ```typescript
-import { AsyncEventEmitter } from 'fox-framework/core/events';
+import { AsyncEventEmitter } from '@foxframework/core';
 
 const events = new AsyncEventEmitter();
 
@@ -281,7 +281,7 @@ console.log('Todos los manejadores de eventos han terminado');
 Fox Framework proporciona un sistema de configuración robusto que soporta múltiples fuentes y formatos:
 
 ```typescript
-import { ConfigFactory } from 'fox-framework/core/config';
+import { ConfigFactory } from '@foxframework/core';
 
 // Crear configuración a partir de múltiples fuentes
 const config = ConfigFactory.create({
@@ -413,7 +413,7 @@ config.onChange('features', (newFeatures, oldFeatures) => {
 Fox Framework incluye un sistema de logging versátil que soporta múltiples transportes y formatos:
 
 ```typescript
-import { LoggerFactory, LogLevel } from 'fox-framework/core/logging';
+import { LoggerFactory, LogLevel } from '@foxframework/core';
 
 // Crear logger con múltiples transportes
 const logger = LoggerFactory.create({
@@ -458,8 +458,8 @@ const logger = LoggerFactory.create({
 ### Uso del Logger
 
 ```typescript
-import { Injectable } from 'fox-framework/core';
-import { Logger } from 'fox-framework/core/logging';
+import { Injectable } from '@foxframework/core';
+import { Logger } from '@foxframework/core';
 
 @Injectable()
 export class PaymentService {
@@ -545,7 +545,7 @@ export class PaymentService {
 ### Middleware de Logging
 
 ```typescript
-import { loggerMiddleware } from 'fox-framework/core/middlewares';
+import { loggerMiddleware } from '@foxframework/core';
 
 // Registrar middleware de logging para peticiones HTTP
 server.use(loggerMiddleware({
@@ -578,7 +578,7 @@ server.use(loggerMiddleware({
 Fox Framework proporciona una capa de abstracción para trabajar con diferentes bases de datos de manera uniforme:
 
 ```typescript
-import { DatabaseFactory, QueryBuilder } from 'fox-framework/core/database';
+import { DatabaseFactory, QueryBuilder } from '@foxframework/core';
 
 // Crear instancia de base de datos
 const db = DatabaseFactory.create({
@@ -641,7 +641,7 @@ async function transferFunds(fromAccountId: string, toAccountId: string, amount:
 ### Repositorios Tipados
 
 ```typescript
-import { Repository, Entity, Column, PrimaryKey } from 'fox-framework/core/database';
+import { Repository, Entity, Column, PrimaryKey } from '@foxframework/core';
 
 // Definir entidad
 @Entity('users')
@@ -709,7 +709,7 @@ export class UserRepository extends Repository<User> {
 Fox Framework incluye un sistema de validación potente y flexible:
 
 ```typescript
-import { validate, IsEmail, Length, IsNotEmpty } from 'fox-framework/core/validation';
+import { validate, IsEmail, Length, IsNotEmpty } from '@foxframework/core';
 
 // Definir esquema de validación con decoradores
 class CreateUserDto {
@@ -770,7 +770,7 @@ async createUser(ctx: HttpContext) {
 ### Validación Manual
 
 ```typescript
-import { Validator, ValidationSchema } from 'fox-framework/core/validation';
+import { Validator, ValidationSchema } from '@foxframework/core';
 
 // Esquema de validación
 const productSchema: ValidationSchema = {
@@ -848,7 +848,7 @@ async createProduct(ctx: HttpContext) {
 ### Validación Personalizada
 
 ```typescript
-import { ValidationRule } from 'fox-framework/core/validation';
+import { ValidationRule } from '@foxframework/core';
 
 // Regla personalizada para validar ISBN
 const isValidISBN: ValidationRule = {
@@ -919,7 +919,7 @@ const bookSchema = {
 Fox Framework incluye un sistema de caché versátil que soporta múltiples backends:
 
 ```typescript
-import { CacheFactory, CacheManager } from 'fox-framework/core/cache';
+import { CacheFactory, CacheManager } from '@foxframework/core';
 
 // Crear instancia de caché
 const cache = CacheFactory.create({
@@ -975,8 +975,8 @@ const multiCache = CacheFactory.create({
 ### Uso de Caché
 
 ```typescript
-import { Injectable } from 'fox-framework/core';
-import { CacheManager } from 'fox-framework/core/cache';
+import { Injectable } from '@foxframework/core';
+import { CacheManager } from '@foxframework/core';
 
 @Injectable()
 export class ProductService {
@@ -1061,8 +1061,8 @@ export class ProductService {
 ### Decorador de Caché
 
 ```typescript
-import { Cache } from 'fox-framework/core/cache';
-import { Injectable } from 'fox-framework/core';
+import { Cache } from '@foxframework/core';
+import { Injectable } from '@foxframework/core';
 
 @Injectable()
 export class UserService {
@@ -1098,7 +1098,7 @@ export class UserService {
 Fox Framework proporciona un sistema completo para gestionar traducciones y localización:
 
 ```typescript
-import { I18nFactory } from 'fox-framework/core/i18n';
+import { I18nFactory } from '@foxframework/core';
 
 // Configurar sistema de internacionalización
 const i18n = I18nFactory.create({
@@ -1194,7 +1194,7 @@ const price = i18n.formatNumber(29.99, 'currency', { currency: 'EUR' });
 ### Middleware de i18n
 
 ```typescript
-import { i18nMiddleware } from 'fox-framework/core/middlewares';
+import { i18nMiddleware } from '@foxframework/core';
 
 // Registrar middleware de internacionalización
 server.use(i18nMiddleware({
@@ -1294,8 +1294,8 @@ getProfile(ctx: HttpContext) {
 Fox Framework incluye características de seguridad integradas para proteger tus aplicaciones:
 
 ```typescript
-import { FoxFactory } from 'fox-framework/core';
-import { securityMiddleware } from 'fox-framework/core/security';
+import { FoxFactory } from '@foxframework/core';
+import { securityMiddleware } from '@foxframework/core';
 
 // Crear servidor con configuración de seguridad
 const server = FoxFactory.createServer({
@@ -1370,7 +1370,7 @@ server.use(securityMiddleware.rateLimit());
 ### Autenticación Flexible
 
 ```typescript
-import { AuthFactory, JwtStrategy, BasicStrategy } from 'fox-framework/core/auth';
+import { AuthFactory, JwtStrategy, BasicStrategy } from '@foxframework/core';
 
 // Configurar autenticación
 const auth = AuthFactory.create({
@@ -1467,7 +1467,7 @@ server.router.get('/products', auth.optional(), (ctx) => {
 ### Autorización y Control de Acceso
 
 ```typescript
-import { AccessControl } from 'fox-framework/core/auth/acl';
+import { AccessControl } from '@foxframework/core';
 
 // Definir roles y permisos
 const ac = new AccessControl();
@@ -1573,7 +1573,7 @@ server.router.delete('/products/:id', auth.required(), checkPermission('product'
 Fox Framework puede funcionar con varios servidores HTTP subyacentes:
 
 ```typescript
-import { FoxFactory } from 'fox-framework/core';
+import { FoxFactory } from '@foxframework/core';
 
 // Crear servidor con Express (por defecto)
 const expressServer = FoxFactory.createServer({
@@ -1647,8 +1647,8 @@ fastifyApp.register(require('fastify-swagger'), {
 Fox Framework está diseñado para ser extensible a través de plugins:
 
 ```typescript
-import { FoxFactory } from 'fox-framework/core';
-import { PluginManager } from 'fox-framework/core/plugins';
+import { FoxFactory } from '@foxframework/core';
+import { PluginManager } from '@foxframework/core';
 
 // Crear gestor de plugins
 const pluginManager = new PluginManager();
@@ -1685,7 +1685,7 @@ server.plugins.load('fox-graphql', {
 ### Crear Plugins Personalizados
 
 ```typescript
-import { Plugin, Server, PluginContext } from 'fox-framework/core/plugins';
+import { Plugin, Server, PluginContext } from '@foxframework/core';
 
 // Definir plugin personalizado
 class CustomLoggerPlugin implements Plugin {

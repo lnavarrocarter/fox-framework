@@ -17,7 +17,7 @@ Fox Framework incluye un potente sistema de validación que permite verificar da
 ### Definición de Esquemas
 
 ```typescript
-import { Schema, Validators } from 'fox-framework';
+import { Schema, Validators } from '@foxframework/core';
 
 // Definir un esquema para usuario
 const userSchema = new Schema({
@@ -41,7 +41,7 @@ type User = typeof userSchema.type;
 ### Validación de Objetos
 
 ```typescript
-import { validate } from 'fox-framework';
+import { validate } from '@foxframework/core';
 
 // Datos a validar
 const data = {
@@ -73,7 +73,7 @@ async function validateUser(data) {
 ### Middleware de Validación
 
 ```typescript
-import { Router, validateBody, validateQuery, validateParams } from 'fox-framework';
+import { Router, validateBody, validateQuery, validateParams } from '@foxframework/core';
 
 const router = new Router();
 
@@ -261,7 +261,7 @@ const schema = new Schema({
 Para validaciones que requieren operaciones asíncronas (como verificar un email en la base de datos):
 
 ```typescript
-import { Schema, Validators } from 'fox-framework';
+import { Schema, Validators } from '@foxframework/core';
 import { userRepository } from './repositories';
 
 const registerSchema = new Schema({
@@ -301,7 +301,7 @@ router.post('/register', async (req, res) => {
 Para validar formularios HTML con soporte para archivos:
 
 ```typescript
-import { Schema, Validators } from 'fox-framework';
+import { Schema, Validators } from '@foxframework/core';
 
 const fileSchema = new Schema({
   name: Validators.string().required(),
@@ -368,7 +368,7 @@ const employeeSchema = customerSchema.extend({
 Para proyectos que utilizan clases, se pueden integrar los esquemas con decoradores:
 
 ```typescript
-import { validate, schema, field } from 'fox-framework';
+import { validate, schema, field } from '@foxframework/core';
 
 @schema()
 class User {
@@ -405,7 +405,7 @@ try {
 ### Creando Validadores Personalizados
 
 ```typescript
-import { Validator, ValidatorContext } from 'fox-framework';
+import { Validator, ValidatorContext } from '@foxframework/core';
 
 // Validador personalizado
 class CreditCardValidator extends Validator<string> {
@@ -495,7 +495,7 @@ const paymentSchema = new Schema({
 ### Extendiendo el Sistema de Validación
 
 ```typescript
-import { Schema, Validators, extend } from 'fox-framework';
+import { Schema, Validators, extend } from '@foxframework/core';
 
 // Agregar métodos personalizados al sistema de validación
 extend(Validators, {
@@ -560,7 +560,7 @@ const validData = validate(inputData, userSchema, {
 Fox Framework permite generar especificaciones OpenAPI automáticamente desde los esquemas de validación:
 
 ```typescript
-import { generateOpenApi } from 'fox-framework';
+import { generateOpenApi } from '@foxframework/core';
 
 const userSchema = new Schema({
   id: Validators.uuid().required(),
@@ -610,7 +610,7 @@ import {
   validateBody,
   validateParams,
   validateQuery
-} from 'fox-framework';
+} from '@foxframework/core';
 
 // Esquemas de validación
 const createProductSchema = new Schema({

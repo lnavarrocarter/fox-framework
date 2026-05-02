@@ -12,7 +12,7 @@ Fox Framework utiliza extensivamente el patrón Factory para crear instancias de
 
 ```typescript
 // Ejemplo de uso del Factory Pattern
-import { FoxFactory } from 'fox-framework';
+import { FoxFactory } from '@foxframework/core';
 
 // Crear una instancia del servidor
 const app = FoxFactory.createInstance({
@@ -87,7 +87,7 @@ router.get('/admin', authMiddleware, (req, res) => {
 Fox Framework incorpora un sistema de eventos que permite una arquitectura desacoplada:
 
 ```typescript
-import { EventEmitter } from 'fox-framework';
+import { EventEmitter } from '@foxframework/core';
 
 // Crear emisor de eventos
 const events = EventEmitter.create();
@@ -132,7 +132,7 @@ router.get('/perfil', (req, res) => {
 Extiende Fox Framework con plugins:
 
 ```typescript
-import { RedisCache } from 'fox-framework-redis';
+import { RedisCache } from '@foxframework/db-redis';
 
 // Registrar plugin
 FoxFactory.registerPlugin('cache', new RedisCache({

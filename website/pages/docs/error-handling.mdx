@@ -20,7 +20,7 @@ El sistema de manejo de errores de Fox Framework proporciona mecanismos robustos
 Fox Framework extiende la clase `Error` nativa para proporcionar información adicional útil para la gestión de errores HTTP:
 
 ```typescript
-import { HttpStatusCode } from 'fox-framework/core/enums';
+import { HttpStatusCode } from '@foxframework/core';
 
 export class FoxError extends Error {
   /** Código de estado HTTP */
@@ -81,8 +81,8 @@ export class FoxError extends Error {
 El framework incluye una serie de errores predefinidos para casos comunes:
 
 ```typescript
-import { HttpStatusCode } from 'fox-framework/core/enums';
-import { FoxError } from 'fox-framework/core/errors';
+import { HttpStatusCode } from '@foxframework/core';
+import { FoxError } from '@foxframework/core';
 
 export class BadRequestError extends FoxError {
   constructor(message = 'Petición inválida', options?: Partial<FoxErrorOptions>) {
@@ -184,8 +184,8 @@ export class InternalServerError extends FoxError {
 ### Configuración Básica
 
 ```typescript
-import { FoxFactory } from 'fox-framework/core';
-import { ErrorHandler } from 'fox-framework/core/errors';
+import { FoxFactory } from '@foxframework/core';
+import { ErrorHandler } from '@foxframework/core';
 
 // Crear un servidor con configuración del manejador de errores
 const server = FoxFactory.createServer({
@@ -234,7 +234,7 @@ const server = FoxFactory.createServer({
 Fox Framework proporciona un middleware que captura errores y los gestiona adecuadamente:
 
 ```typescript
-import { errorMiddleware } from 'fox-framework/core/middlewares';
+import { errorMiddleware } from '@foxframework/core';
 
 // Registrar middleware de errores (normalmente al final de la cadena)
 server.use(errorMiddleware({
@@ -262,7 +262,7 @@ import {
   NotFoundError,
   ValidationError,
   UnauthorizedError
-} from 'fox-framework/core';
+} from '@foxframework/core';
 
 @Controller('/users')
 export class UserController {
@@ -336,7 +336,7 @@ export class UserController {
 #### En Servicios
 
 ```typescript
-import { NotFoundError, ValidationError, DatabaseError } from 'fox-framework/core/errors';
+import { NotFoundError, ValidationError, DatabaseError } from '@foxframework/core';
 
 export class UserService {
   constructor(private db) {}
@@ -451,7 +451,7 @@ export class ProductController {
 Puedes definir manejadores específicos para diferentes tipos de error:
 
 ```typescript
-import { ErrorHandler } from 'fox-framework/core/errors';
+import { ErrorHandler } from '@foxframework/core';
 
 const errorHandler = new ErrorHandler({
   // Configuración base
@@ -511,8 +511,8 @@ server.setErrorHandler(errorHandler);
 ### Middleware de Error Personalizado
 
 ```typescript
-import { NextFunction } from 'fox-framework/core/types';
-import { FoxError } from 'fox-framework/core/errors';
+import { NextFunction } from '@foxframework/core';
+import { FoxError } from '@foxframework/core';
 
 // Middleware para errores específicos de base de datos
 export function databaseErrorMiddleware(err: Error, req: Request, res: Response, next: NextFunction) {
@@ -577,8 +577,8 @@ server.useErrorHandler(); // Middleware de error por defecto al final
 ### Errores de Validación
 
 ```typescript
-import { ValidationError } from 'fox-framework/core/errors';
-import { validateSchema } from 'fox-framework/core/validation';
+import { ValidationError } from '@foxframework/core';
+import { validateSchema } from '@foxframework/core';
 
 // Definir esquema de validación
 const userSchema = {
@@ -780,8 +780,8 @@ server.setErrorHandler(errorHandler);
 ### Internacionalización de Errores
 
 ```typescript
-import { FoxError } from 'fox-framework/core/errors';
-import { i18n } from 'fox-framework/core/i18n';
+import { FoxError } from '@foxframework/core';
+import { i18n } from '@foxframework/core';
 
 export class LocalizedError extends FoxError {
   constructor(
@@ -873,7 +873,7 @@ export class UserController {
 
 ```typescript
 import axios from 'axios';
-import { ServiceUnavailableError, BadGatewayError } from 'fox-framework/core/errors';
+import { ServiceUnavailableError, BadGatewayError } from '@foxframework/core';
 
 export class PaymentGatewayService {
   async processPayment(paymentData: PaymentData): Promise<PaymentResult> {
@@ -954,8 +954,8 @@ export class PaymentGatewayService {
 ### Mejora de Stack Traces
 
 ```typescript
-import { FoxError } from 'fox-framework/core/errors';
-import { StackTraceEnhancer } from 'fox-framework/core/debug';
+import { FoxError } from '@foxframework/core';
+import { StackTraceEnhancer } from '@foxframework/core';
 
 // Configurar el mejorador de stack traces
 const stackTraceEnhancer = new StackTraceEnhancer({
@@ -993,7 +993,7 @@ export class ValidationError extends EnhancedFoxError {
 ### Error Aggregator para Problemas Recurrentes
 
 ```typescript
-import { ErrorAggregator } from 'fox-framework/core/debug';
+import { ErrorAggregator } from '@foxframework/core';
 
 // Crear un agregador de errores
 const errorAggregator = new ErrorAggregator({
@@ -1052,7 +1052,7 @@ errorHandler.onError((err, req) => {
 
 ```typescript
 import { expect } from 'chai';
-import { FoxError, NotFoundError } from 'fox-framework/core/errors';
+import { FoxError, NotFoundError } from '@foxframework/core';
 
 describe('Error Handler', () => {
   let server;
