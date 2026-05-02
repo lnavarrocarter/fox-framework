@@ -2,6 +2,43 @@
 
 Esta guía te ayudará a migrar desde diferentes frameworks y versiones hacia Fox Framework, minimizando el esfuerzo y asegurando una transición suave.
 
+## v1.4.2 → v1.4.3 — CLI como paquete separado
+
+### Breaking changes
+
+#### `tsfox` binary se mueve a `@foxframework/cli`
+
+El binario `tsfox` ya no está incluido en `@foxframework/core`. Instala el paquete dedicado:
+
+```bash
+# Antes (v1.4.2 y anteriores) — tsfox venía incluido con core
+npm install @foxframework/core
+
+# Ahora (v1.4.3+) — instalación explícita
+npm install @foxframework/core
+npm install -g @foxframework/cli      # instalación global (recomendado)
+# o como devDependency del proyecto
+npm install --save-dev @foxframework/cli
+```
+
+#### `express` y `axios` son ahora peerDependencies de `@foxframework/core`
+
+Si tu proyecto los usa (directamente o via `@foxframework/core`), asegúrate de tenerlos en tus dependencias:
+
+```bash
+npm install express axios
+```
+
+#### `commander`, `inquirer`, `ora` eliminados de `@foxframework/core`
+
+Si importabas estas librerías transitivamente desde `@foxframework/core`, instálalas directamente:
+
+```bash
+npm install commander inquirer ora
+```
+
+---
+
 ## 🔄 Migración desde Express.js
 
 ### Evaluación Pre-Migración
