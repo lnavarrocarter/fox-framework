@@ -384,14 +384,45 @@ export class AuthController {
         });
       }
 
-      // Verificar token (aquí deberías usar una función de verificación JWT)
-      // const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      // Por simplicidad, asumimos que el token es válido
-
-      const user = this.users.find(u => u.id === 1); // Ejemplo
-      if (user) {
-        user.emailVerified = true;
+      // Verificar y decodificar el token JWT
+      let decoded: { userId: number; type: string };
+      try {
+        decoded = AuthMiddleware.verifyToken(token, {
+          secret: process.env.JWT_SECRET || 'your-secret-key'
+        }) as { userId: number; type: string };
+      } catch {
+        return res.status(400).json({
+          error: 'Invalid token',
+          message: 'Verification token is invalid or has expired'
+        });
       }
+
+      if (decoded.type !== 'email-verification') {
+        return res.status(400).json({
+          error: 'Invalid token type',
+          message: 'Token is not an email verification token'
+        });
+      }
+
+      const user = this.users.find(u => u.id === decoded.userId);
+      if (!user) {
+        return res.status(404).json({
+          error: 'User not found',
+          message: 'No user associated with this verification token'
+        });
+      }
+
+      if (user.emailVerified) {
+        return res.status(409).json({
+          error: 'Already verified',
+          message: 'This email address has already been verified'
+        });
+      }
+
+      user.emailVerified = true;
+
+      // Send welcome email after successful verification
+      await this.emailService.sendWelcomeEmail(user.email, user.firstName);
 
       res.json({
         message: 'Email verified successfully'

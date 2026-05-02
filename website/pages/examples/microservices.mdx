@@ -648,7 +648,7 @@ class NotificationService {
     this.serviceId = await this.registry.registerService({
       name: 'notification-service',
       host: 'localhost',
-      port: 3003,
+      port: 3004,
       version: '1.0.0',
       metadata: {
         description: 'Notification service with email, SMS and push support',
@@ -856,7 +856,7 @@ class NotificationService {
 
   createServer() {
     return FoxFactory.createServer({
-      port: 3003,
+      port: 3004,
       
       middleware: [
         (req: Request, res: Response, next: any) => {
@@ -899,7 +899,7 @@ notificationService.startService();
 
 const app = notificationService.createServer();
 app.start().then(() => {
-  console.log('📧 Notification Service running on http://localhost:3003');
+  console.log('📧 Notification Service running on http://localhost:3004');
 });
 ```
 
@@ -923,7 +923,7 @@ async function startMicroservices() {
   console.log('  API Gateway     : http://localhost:8080');
   console.log('  User Service    : http://localhost:3001');
   console.log('  Product Service : http://localhost:3002');
-  console.log('  Notification Service: http://localhost:3003');
+  console.log('  Notification Service: http://localhost:3004');
   console.log('\n🔍 Available Endpoints:');
   console.log('  GET  /registry/services     - Service registry stats');
   console.log('  GET  /api/users            - User management');
@@ -962,7 +962,7 @@ services:
   notification-service:
     build: ./services/notification-service
     ports:
-      - "3003:3003"
+      - "3004:3004"
     environment:
       - NODE_ENV=production
       - SMTP_HOST=${SMTP_HOST}
@@ -970,7 +970,7 @@ services:
       - SMTP_PASS=${SMTP_PASS}
 
   consul:
-    image: consul:latest
+    image: hashicorp/consul:1.19
     ports:
       - "8500:8500"
     command: agent -server -bootstrap -ui -client=0.0.0.0

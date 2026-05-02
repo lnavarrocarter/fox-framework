@@ -599,6 +599,46 @@ export class ProductRepository extends BaseRepository<Product> {
     return data;
   }
 }
+
+// src/repositories/order.repository.ts
+export class OrderRepository extends BaseRepository<Order> {
+  constructor(db: DatabaseProvider) {
+    super(db, 'orders');
+  }
+
+  async findByUserId(userId: number, transaction?: Transaction): Promise<Order[]> {
+    return this.findAll({ where: { userId }, orderBy: 'createdAt DESC', transaction });
+  }
+
+  async findByStatus(status: Order['status'], transaction?: Transaction): Promise<Order[]> {
+    return this.findAll({ where: { status }, transaction });
+  }
+
+  async updateStatus(orderId: number, status: Order['status'], transaction?: Transaction): Promise<Order | null> {
+    const query = this.db.createQueryBuilder()
+      .update(this.tableName)
+      .set({ status, updatedAt: new Date() })
+      .where('id = ?', [orderId]);
+
+    if (transaction) {
+      query.setTransaction(transaction);
+    }
+
+    await query.execute();
+    return this.findById(orderId, transaction);
+  }
+
+  protected mapToEntity(data: any): Order {
+    const order = new Order();
+    Object.assign(order, data);
+    return order;
+  }
+
+  protected mapFromEntity(entity: Partial<Order>): Record<string, any> {
+    const { id, createdAt, updatedAt, ...data } = entity as any;
+    return data;
+  }
+}
 ```
 
 ## Services con Transacciones

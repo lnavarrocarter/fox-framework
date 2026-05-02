@@ -40,7 +40,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --detectOpenHandles",
     "test:integration": "jest --testMatch='**/__tests__/integration/**/*.test.ts' --detectOpenHandles",
-    "test:unit": "jest --testMatch='**/__tests__/**/*.test.ts' --ignore-pattern='integration' --detectOpenHandles",
+    "test:unit": "jest --testMatch='**/__tests__/**/*.test.ts' --testPathIgnorePatterns='<rootDir>/tsfox/__tests__/integration' --detectOpenHandles",
     "test:ci": "npm run test:unit && npm run test:integration",
     "test:codecov": "./scripts/check-codecov.sh",
     "staging:start": "ts-node staging/server.ts",
@@ -54,7 +54,7 @@
     "format:check": "prettier --check 'tsfox/**/*.ts'",
     "build:clean": "rm -rf dist && npm run build",
     "build:watch": "tsc --watch",
-    "ai:test": "jest tsfox/ai/__tests__/ --detectOpenHandles",
+    "ai:test": "jest tsfox/core/agents/__tests__/ --detectOpenHandles",
     "docker:build": "docker build -t fox-framework:latest .",
     "docker:run": "docker run -p 3000:3000 fox-framework:latest",
     "docker:compose:up": "docker-compose up -d",
@@ -114,7 +114,7 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
