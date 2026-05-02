@@ -26,7 +26,7 @@ interface Event<T = any> {
 Permite a los componentes emitir y suscribirse a eventos dentro de la aplicación.
 
 ```typescript
-import { EventEmitter } from 'fox-framework';
+import { EventEmitter } from '@foxframework/core';
 
 const emitter = EventEmitter.create();
 
@@ -44,7 +44,7 @@ emitter.emit('user.created', { id: 1, name: 'Ana' });
 Extiende el concepto de Event Emitter para permitir distribución de eventos entre múltiples servicios o instancias, facilitando la arquitectura de microservicios.
 
 ```typescript
-import { EventBusFactory } from 'fox-framework';
+import { EventBusFactory } from '@foxframework/core';
 
 const eventBus = EventBusFactory.create({
   provider: 'redis',
@@ -71,7 +71,7 @@ eventBus.subscribe('orders.completed', async (event) => {
 Almacena eventos de manera persistente, lo que permite reconstruir el estado de la aplicación o implementar Event Sourcing.
 
 ```typescript
-import { EventStoreFactory } from 'fox-framework';
+import { EventStoreFactory } from '@foxframework/core';
 
 const eventStore = EventStoreFactory.create({
   provider: 'mongodb',
@@ -102,7 +102,7 @@ const events = await eventStore.getEvents('user-1');
 Fox Framework soporta Event Sourcing, un patrón donde el estado de una aplicación se determina por una secuencia de eventos en lugar de un snapshot del estado actual.
 
 ```typescript
-import { EventSourcingFactory } from 'fox-framework';
+import { EventSourcingFactory } from '@foxframework/core';
 
 // Crear un aggregate
 class UserAggregate {
@@ -148,7 +148,7 @@ const user = await userRepository.getById('user-1');
 CQRS separa las operaciones de lectura (queries) de las operaciones de escritura (commands).
 
 ```typescript
-import { CommandBus, QueryBus } from 'fox-framework';
+import { CommandBus, QueryBus } from '@foxframework/core';
 
 // Configurar buses
 const commandBus = CommandBus.create();
@@ -187,7 +187,7 @@ const user = await queryBus.dispatch({
 Las proyecciones transforman eventos en vistas optimizadas para lectura, facilitando el patrón CQRS.
 
 ```typescript
-import { ProjectionFactory } from 'fox-framework';
+import { ProjectionFactory } from '@foxframework/core';
 
 // Crear una proyección
 const userProjection = ProjectionFactory.create({
@@ -249,7 +249,7 @@ const kafkaEventBus = EventBusFactory.create({
 Para transacciones distribuidas que abarcan múltiples servicios:
 
 ```typescript
-import { SagaFactory } from 'fox-framework';
+import { SagaFactory } from '@foxframework/core';
 
 const orderSaga = SagaFactory.create({
   name: 'place-order-saga',

@@ -8,7 +8,7 @@ Un ejemplo simple de API RESTful con controladores, rutas y middleware.
 
 ```typescript
 // src/controllers/todo.controller.ts
-import { Request, Response } from 'fox-framework';
+import { Request, Response } from 'express';
 
 export class TodoController {
   private todos = [
@@ -16,34 +16,36 @@ export class TodoController {
     { id: 2, title: 'Crear un API REST', completed: false }
   ];
 
-  getAll = (req: Request, res: Response): void => {
+  getAll = (_req: Request, res: Response): void => {
     res.json(this.todos);
   };
 
   getById = (req: Request, res: Response): void => {
     const id = parseInt(req.params.id);
     const todo = this.todos.find(t => t.id === id);
-    
+
     if (!todo) {
-      return res.status(404).json({ error: 'Todo not found' });
+      res.status(404).json({ error: 'Todo not found' });
+      return;
     }
-    
+
     res.json(todo);
   };
 
   create = (req: Request, res: Response): void => {
     const { title } = req.body;
-    
+
     if (!title) {
-      return res.status(400).json({ error: 'Title is required' });
+      res.status(400).json({ error: 'Title is required' });
+      return;
     }
-    
+
     const newTodo = {
       id: this.todos.length + 1,
       title,
       completed: false
     };
-    
+
     this.todos.push(newTodo);
     res.status(201).json(newTodo);
   };
@@ -51,30 +53,26 @@ export class TodoController {
   update = (req: Request, res: Response): void => {
     const id = parseInt(req.params.id);
     const todoIndex = this.todos.findIndex(t => t.id === id);
-    
+
     if (todoIndex === -1) {
-      return res.status(404).json({ error: 'Todo not found' });
+      res.status(404).json({ error: 'Todo not found' });
+      return;
     }
-    
-    this.todos[todoIndex] = {
-      ...this.todos[todoIndex],
-      ...req.body
-    };
-    
+
+    this.todos[todoIndex] = { ...this.todos[todoIndex], ...req.body };
     res.json(this.todos[todoIndex]);
   };
 
   delete = (req: Request, res: Response): void => {
     const id = parseInt(req.params.id);
     const todoIndex = this.todos.findIndex(t => t.id === id);
-    
+
     if (todoIndex === -1) {
-      return res.status(404).json({ error: 'Todo not found' });
+      res.status(404).json({ error: 'Todo not found' });
+      return;
     }
-    
-    const deletedTodo = this.todos[todoIndex];
-    this.todos.splice(todoIndex, 1);
-    
+
+    const deletedTodo = this.todos.splice(todoIndex, 1)[0];
     res.json(deletedTodo);
   };
 }
@@ -82,43 +80,44 @@ export class TodoController {
 
 ```typescript
 // src/routes/todo.routes.ts
-import { Router } from 'fox-framework';
+import { Router } from 'express';
 import { TodoController } from '../controllers/todo.controller';
 
+const todoRouter = Router();
 const todoController = new TodoController();
-const router = Router.create();
 
-router.get('/todos', todoController.getAll);
-router.get('/todos/:id', todoController.getById);
-router.post('/todos', todoController.create);
-router.put('/todos/:id', todoController.update);
-router.delete('/todos/:id', todoController.delete);
+todoRouter.get('/todos', todoController.getAll);
+todoRouter.get('/todos/:id', todoController.getById);
+todoRouter.post('/todos', todoController.create);
+todoRouter.put('/todos/:id', todoController.update);
+todoRouter.delete('/todos/:id', todoController.delete);
 
-export default router;
+export default todoRouter;
 ```
 
 ```typescript
 // src/server/index.ts
-import { FoxFactory, ServerConfig } from 'fox-framework';
+import express from 'express';
+import { FoxFactory } from '@foxframework/core';
 import todoRouter from '../routes/todo.routes';
 
-const config: ServerConfig = {
-  port: 3000,
-  cors: {
-    origin: '*'
-  },
-  bodyParser: {
-    json: true
-  }
-};
+const app = express();
+app.use(express.json());
 
-const app = FoxFactory.createInstance(config);
+const fox = new FoxFactory(app);
 
-// Registrar las rutas
+// Health endpoint (via FoxFactory)
+fox.get('/', (_req, res) => {
+  res.json({ name: 'todo-api', version: '1.0.0' });
+});
+
+// Register routes
 app.use('/api', todoRouter);
 
-app.start();
-console.log('Todo API server running on port 3000');
+const PORT = Number(process.env.PORT) || 3000;
+app.listen(PORT, () => {
+  console.log(`🦊 Todo API running on http://localhost:${PORT}`);
+});
 ```
 
 ## Aplicación con Cache System
@@ -127,44 +126,44 @@ Este ejemplo muestra cómo implementar un sistema de caché para mejorar el rend
 
 ```typescript
 // src/controllers/product.controller.ts
-import { Request, Response } from 'fox-framework';
-import { CacheFactory, ICache } from 'fox-framework/cache';
+import { Request, Response } from 'express';
+
+// Simple in-memory cache (use @foxframework/db-redis for production)
+const cache = new Map<string, { data: any; expiresAt: number }>();
+
+function cacheGet<T>(key: string): T | null {
+  const entry = cache.get(key);
+  if (!entry || entry.expiresAt < Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function cacheSet(key: string, data: any, ttlSeconds = 3600): void {
+  cache.set(key, { data, expiresAt: Date.now() + ttlSeconds * 1000 });
+}
 
 export class ProductController {
-  private cache: ICache;
-  
-  constructor() {
-    this.cache = CacheFactory.create({
-      provider: 'memory',
-      ttl: 3600 // 1 hora
-    });
-  }
-  
-  async getProducts(req: Request, res: Response): Promise<void> {
+  async getProducts(_req: Request, res: Response): Promise<void> {
     const cacheKey = 'products:all';
-    
-    // Intentar obtener del caché
-    const cachedProducts = await this.cache.get(cacheKey);
-    
+
+    const cachedProducts = cacheGet<any[]>(cacheKey);
     if (cachedProducts) {
       console.log('Returning products from cache');
-      return res.json(cachedProducts);
+      res.json(cachedProducts);
+      return;
     }
-    
-    // Simular obtención de base de datos
+
     console.log('Fetching products from database');
     const products = await this.fetchProductsFromDB();
-    
-    // Guardar en caché
-    await this.cache.set(cacheKey, products);
-    
+
+    cacheSet(cacheKey, products);
     res.json(products);
   }
-  
+
   private async fetchProductsFromDB(): Promise<any[]> {
-    // Simular tiempo de consulta a la base de datos
     await new Promise(resolve => setTimeout(resolve, 500));
-    
     return [
       { id: 1, name: 'Laptop', price: 999.99 },
       { id: 2, name: 'Smartphone', price: 699.99 },
