@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/auth-ldap",
-  "version": "1.0.0",
+  "version": "1.4.4",
   "description": "LDAP/Active Directory authentication provider for Fox Framework — IDirectoryProvider with full user sync",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

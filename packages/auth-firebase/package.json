@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/auth-firebase",
-  "version": "1.0.0",
+  "version": "1.4.4",
   "description": "Firebase Authentication provider for Fox Framework — IAuthProvider via Firebase Auth REST API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

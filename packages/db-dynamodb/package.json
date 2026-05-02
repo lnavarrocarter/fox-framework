@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/db-dynamodb",
-  "version": "1.0.0",
+  "version": "1.4.4",
   "description": "AWS DynamoDB provider for Fox Framework — full DynamoDB API with table auto-creation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

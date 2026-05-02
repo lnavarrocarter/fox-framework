@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/db-documentdb",
-  "version": "1.0.0",
+  "version": "1.4.4",
   "description": "AWS DocumentDB provider for Fox Framework — MongoDB-compatible with TLS and collection auto-creation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

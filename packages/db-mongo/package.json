@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/db-mongo",
-  "version": "1.0.0",
+  "version": "1.4.4",
   "description": "MongoDB provider for Fox Framework — Repository pattern via mongodb driver",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

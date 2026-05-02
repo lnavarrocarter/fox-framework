@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/model-openai",
-  "version": "1.0.0",
+  "version": "1.4.4",
   "description": "OpenAI model provider for Fox Framework agents — native fetch, no SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

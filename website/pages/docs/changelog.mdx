@@ -6,6 +6,17 @@ import { Callout } from 'nextra/components'
   Fox Framework sigue [Semantic Versioning](https://semver.org/). El historial completo también está disponible en [CHANGELOG.md](https://github.com/lnavarrocarter/fox-framework/blob/main/CHANGELOG.md) en el repositorio.
 </Callout>
 
+## v1.4.4 — 2026-05-02
+
+Lanzamiento unificado del roadmap v1.4.x: fixes críticos, docs completos, CLI como workspace separado y 5 example apps con infra Docker.
+
+- **v1.4.1** — Fixes críticos de documentación, scripts y configuración de runtime (ver detalle abajo)
+- **v1.4.2** — Docs completos: agent tools, SSE streaming, telemetría/OTel, vector store providers, changelog
+- **v1.4.3** — CLI extraído a `@foxframework/cli`; `express`/`axios` → peerDeps en core; migration guide
+- **v1.4.4** — 5 example apps (`basic-api`, `rest-api`, `agent-chat`, `event-sourcing`, `fullstack`) con Docker Compose y script `--infrastructure` unificado
+
+---
+
 ## v1.4.1 — 2026-05-02 (patch)
 
 Fixes críticos de documentación, scripts y configuración de runtime.
@@ -124,10 +135,6 @@ Esta es la release más grande hasta la fecha. Introduce el **sistema completo d
 ---
 
 ## Roadmap
-
-### v1.4.2 — En progreso
-- **CLI como workspace** — `packages/cli/` = `@foxframework/cli` con su propio `bin`; extraer `commander`, `inquirer`, `ora` del core
-- **Example Apps** — `basic-api`, `rest-api`, `agent-chat`, `event-sourcing`, `fullstack` con Docker Compose
 
 ### v1.5.0 — Planificado
 - **Workflow Engine** — Workflows duraderos con checkpoint/resume

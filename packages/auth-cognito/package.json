@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/auth-cognito",
-  "version": "1.0.0",
+  "version": "1.4.4",
   "description": "AWS Cognito authentication provider for Fox Framework — IAuthProvider via Cognito User Pools REST API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

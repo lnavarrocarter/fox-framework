@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/auth-2fa",
-  "version": "1.0.0",
+  "version": "1.4.4",
   "description": "Multi-factor authentication for Fox Framework — TOTP, Email OTP and recovery codes via IMfaProvider",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

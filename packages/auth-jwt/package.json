@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/auth-jwt",
-  "version": "1.0.0",
+  "version": "1.4.4",
   "description": "JWT authentication provider for Fox Framework — JwtAuthProvider, InMemoryUserStore, TokenService",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@foxframework/cli",
-  "version": "1.4.0",
+  "version": "1.4.4",
   "description": "Fox Framework CLI — scaffold, generate, deploy and manage Fox projects",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
