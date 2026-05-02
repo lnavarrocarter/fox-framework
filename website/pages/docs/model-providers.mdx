@@ -186,3 +186,92 @@ class MyCustomProvider implements IModelProvider {
   }
 }
 ```
+
+---
+
+## Vector Store Providers (v1.4)
+
+Three vector store packages implement `IVectorSearchProvider` for use with `createVectorSearchTool`. All use native `fetch` — no vendor SDKs.
+
+```bash
+npm install @foxframework/vector-pinecone    # Pinecone
+npm install @foxframework/vector-weaviate   # Weaviate
+npm install @foxframework/vector-chroma     # ChromaDB
+```
+
+### Pinecone
+
+```typescript
+import { PineconeProvider } from '@foxframework/vector-pinecone';
+
+const provider = new PineconeProvider({
+  apiKey: process.env.PINECONE_API_KEY!,
+  indexHost: process.env.PINECONE_INDEX_HOST!, // from Pinecone console
+  embed: async (text) => myEmbeddingFn(text),  // optional: auto-embed on search/upsert
+});
+
+// Search
+const results = await provider.search('climate change solutions', { topK: 5 });
+
+// Upsert (requires embed function)
+await provider.upsert('doc-1', 'Fox Framework is a TypeScript web framework.', {
+  source: 'docs',
+  version: '1.4',
+});
+```
+
+### Weaviate
+
+```typescript
+import { WeaviateProvider } from '@foxframework/vector-weaviate';
+
+const provider = new WeaviateProvider({
+  url: 'https://my-cluster.weaviate.network',
+  className: 'Document',          // Weaviate class/collection
+  apiKey: process.env.WEAVIATE_API_KEY,
+  textProperty: 'text',           // property holding document content (default: 'text')
+});
+
+const results = await provider.search('renewable energy', { topK: 3, minScore: 0.7 });
+```
+
+### ChromaDB
+
+```typescript
+import { ChromaProvider } from '@foxframework/vector-chroma';
+
+const provider = new ChromaProvider({
+  url: 'http://localhost:8000',
+  collection: 'my-docs',
+  embed: async (texts) => myBatchEmbedFn(texts), // required for search + upsert
+});
+
+const results = await provider.search('Fox Framework routing', { topK: 5 });
+```
+
+### Comparison
+
+| Feature | Pinecone | Weaviate | ChromaDB |
+|---|---|---|---|
+| Hosting | Cloud (managed) | Cloud + self-hosted | Self-hosted |
+| Embedding | Client-side (optional) | Server-side or client | Client-side (required) |
+| Filter | ✅ metadata filter | ✅ `where` clause | ✅ `where` filter |
+| Namespaces | ✅ | ✅ (via `className`) | ✅ (via `collection`) |
+| Upsert / Delete | ✅ | ✅ | ✅ |
+| SDK dependency | ❌ (fetch) | ❌ (fetch) | ❌ (fetch) |
+
+### Use with an agent
+
+```typescript
+import { createVectorSearchTool } from '@foxframework/core/agents/tools';
+import { PineconeProvider } from '@foxframework/vector-pinecone';
+import { ReActAgent } from '@foxframework/core/agents';
+
+const tool = createVectorSearchTool(
+  new PineconeProvider({ apiKey: '...', indexHost: '...' }),
+  { label: 'knowledge_base', defaultTopK: 5 },
+);
+
+const agent = new ReActAgent({ model, tools: [tool] });
+const result = await agent.run('What does Fox Framework say about middleware?');
+```
