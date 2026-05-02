@@ -37,14 +37,15 @@ program
         generateView(name);
     });
 
-// Add new project command
+// Add new project command (interactive wizard)
 program
-    .command('new <name>')
-    .description('Create a new Fox Framework project')
-    .option('-t, --template <template>', 'Project template (basic, api, full)', 'basic')
-    .action(async (projectName: string, options: { template?: string }) => {
-        const { generateNewProject } = await import('./generators');
-        await generateNewProject(projectName, options.template || 'basic');
+    .command('new [name]')
+    .description('Create a new Fox Framework project (interactive wizard)')
+    .action(async (name?: string) => {
+        const { runProjectWizard } = await import('./commands/project/wizard');
+        const { generateProject } = await import('./project-generator');
+        const config = await runProjectWizard(name);
+        await generateProject(config);
     });
 
 // Add Docker commands
