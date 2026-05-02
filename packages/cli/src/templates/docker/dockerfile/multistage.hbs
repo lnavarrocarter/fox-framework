@@ -1,0 +1,95 @@
+# Multi-stage Dockerfile for optimized production builds
+FROM node:{{nodeVersion}} AS builder
+
+# Set working directory
+WORKDIR {{workdir}}
+
+{{#if hasTypeScript}}
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    python3 \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+{{/if}}
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies for building)
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+{{#if hasTypeScript}}
+# Build TypeScript application
+RUN npm run build
+{{/if}}
+
+{{#if hasTests}}
+# Run tests
+RUN npm test
+{{/if}}
+
+# Remove dev dependencies
+RUN npm prune --production
+
+# ================================
+# Production Stage
+# ================================
+FROM node:{{nodeVersion}} AS production
+
+# Set working directory
+WORKDIR {{workdir}}
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create user for security
+RUN groupadd --gid 1001 nodejs && \
+    useradd --uid 1001 --gid nodejs --shell /bin/bash nodejs
+
+# Copy package.json for runtime
+COPY package*.json ./
+
+# Copy production dependencies from builder
+COPY --from=builder {{workdir}}/node_modules ./node_modules
+
+{{#if hasTypeScript}}
+# Copy built application
+COPY --from=builder {{workdir}}/dist ./dist
+{{else}}
+# Copy application source
+COPY --from=builder {{workdir}}/src ./src
+{{/if}}
+
+# Copy static assets
+COPY --from=builder {{workdir}}/public ./public
+
+# Change ownership to nodejs user
+RUN chown -R nodejs:nodejs {{workdir}}
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port
+EXPOSE {{port}}
+
+{{#if healthCheck}}
+# Health check
+HEALTHCHECK --interval={{healthCheck.interval}} \
+            --timeout={{healthCheck.timeout}} \
+            --start-period={{healthCheck.start_period}} \
+            --retries={{healthCheck.retries}} \
+            CMD {{#each healthCheck.test}}{{this}}{{#unless @last}} {{/unless}}{{/each}}
+{{/if}}
+
+{{#if hasTypeScript}}
+# Start command
+CMD ["node", "dist/src/server/index.js"]
+{{else}}
+CMD ["npm", "start"]
+{{/if}}
