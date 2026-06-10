@@ -141,7 +141,7 @@ describe('RequestLoggingMiddleware', () => {
         skipPaths: ['/health', '/metrics']
       });
 
-      mockReq.path = '/health';
+      (mockReq as any).path = '/health';
       
       const middlewareFn = middlewareWithSkip.middleware();
       middlewareFn(mockReq as Request & { requestId?: string }, mockRes as Response, mockNext);

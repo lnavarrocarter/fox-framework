@@ -28,7 +28,8 @@ function applyEvent(state: AccountState, event: DomainEvent): AccountState {
 function rehydrate(id: string): AccountState | null {
   const events = loadEvents(id);
   if (events.length === 0) return null;
-  return events.reduce((s, e) => applyEvent(s, e), { id, owner: '', balance: 0, isClosed: false });
+  const initial: AccountState = { id, owner: '', balance: 0, isClosed: false };
+  return events.reduce<AccountState>((s, e) => applyEvent(s, e), initial);
 }
 
 // ── API ───────────────────────────────────────────────────────────────────
@@ -95,5 +96,9 @@ app.delete('/accounts/:id', (req, res) => {
   res.json({ message: 'Account closed', id: req.params.id });
 });
 
-const PORT = Number(process.env.PORT) || 3003;
-app.listen(PORT, () => console.log(`Fox event-sourcing running on http://localhost:${PORT}`));
+export { app };
+
+if (require.main === module) {
+  const PORT = Number(process.env.PORT) || 3003;
+  app.listen(PORT, () => console.log(`Fox event-sourcing running on http://localhost:${PORT}`));
+}

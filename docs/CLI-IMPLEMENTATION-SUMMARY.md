@@ -1,4 +1,6 @@
-# 🎉 CLI Implementation Summary - Fox Framework
+> ⚠️ **DEPRECATED** — Julio 2025. El código descrito aquí (`tsfox/cli/`) fue eliminado en la Fase 1 del saneamiento v1.4.4. El CLI real vive en `packages/cli/`. Este documento se conserva solo como referencia histórica.
+
+# 🎉 CLI Implementation Summary - Fox Framework [OBSOLETO]
 
 ## ✅ **IMPLEMENTACIÓN COMPLETADA**
 

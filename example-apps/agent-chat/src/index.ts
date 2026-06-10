@@ -23,18 +23,22 @@ async function createModel() {
   return new OpenAIProvider({ apiKey, model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini' });
 }
 
+// ── Module-scoped vars (exported for testing) ────────────────────────────────
+export let app: express.Express;
+export let agent: ReActAgent;
+
 // ── App ──────────────────────────────────────────────────────────────────────
 async function main() {
   const model = await createModel();
 
-  const agent = new ReActAgent({
+  agent = new ReActAgent({
     model,
     tools: [HttpTool, CalculatorTool],
     systemPrompt: 'You are a helpful assistant. Be concise.',
     maxIterations: 8,
   });
 
-  const app = express();
+  app = express();
   app.use(express.json());
   app.use(express.static(path.join(__dirname, '../public')));
 
@@ -59,11 +63,14 @@ async function main() {
     }
   });
 
-  const PORT = Number(process.env.PORT) || 3002;
-  app.listen(PORT, () => {
-    console.log(`Fox agent-chat running on http://localhost:${PORT}`);
-    console.log(`Provider: ${process.env.PROVIDER ?? 'openai'}`);
-  });
+  if (require.main === module) {
+    const PORT = Number(process.env.PORT) || 3002;
+    app.listen(PORT, () => {
+      console.log(`Fox agent-chat running on http://localhost:${PORT}`);
+      console.log(`Provider: ${process.env.PROVIDER ?? 'openai'}`);
+    });
+  }
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+export const ready = main();
+ready.catch(err => { console.error(err); process.exit(1); });

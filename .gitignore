@@ -1,10 +1,13 @@
 # Dependencies
 /node_modules
 /node_modules/*
+/packages/*/node_modules/
 
 # Build outputs
 /dist
 /dist/*
+/packages/*/dist/
+/packages/*/dist/*
 
 # Test coverage
 /coverage
@@ -44,6 +47,9 @@ lerna-debug.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Asturion working data
+.asturion/
 
 # IDE files
 .vscode/

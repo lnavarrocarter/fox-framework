@@ -11,7 +11,12 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'healthy', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 
-const PORT = Number(process.env.PORT) || 3000;
-app.listen(PORT, () => {
-  console.log(`Fox basic-api running on http://localhost:${PORT}`);
-});
+export { app };
+
+// Only listen when run directly (not when imported by tests)
+if (require.main === module) {
+  const PORT = Number(process.env.PORT) || 3000;
+  app.listen(PORT, () => {
+    console.log(`Fox basic-api running on http://localhost:${PORT}`);
+  });
+}

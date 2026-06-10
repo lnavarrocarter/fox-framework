@@ -23,7 +23,7 @@ El sistema de IA del Fox Framework ahora soporta prompts personalizados y config
 
 ```bash
 # Modo interactivo con prompts personalizados
-node tsfox/cli/index.js ai:generate controller --interactive
+npx @foxframework/cli ai:generate controller --interactive
 
 # El sistema preguntará:
 # - ¿Usar prompt personalizado? (y/n)
@@ -190,7 +190,7 @@ export interface ArchitecturalPatterns {
 
 ```bash
 # CLI interactivo
-node tsfox/cli/index.js ai:generate controller UserManagement --interactive
+npx @foxframework/cli ai:generate controller UserManagement --interactive
 
 # Prompt personalizado:
 # "Generate a controller following Domain-Driven Design patterns. 
@@ -202,7 +202,7 @@ node tsfox/cli/index.js ai:generate controller UserManagement --interactive
 
 ```bash
 # Generar middleware con logging avanzado
-node tsfox/cli/index.js ai:generate middleware Security --interactive
+npx @foxframework/cli ai:generate middleware Security --interactive
 
 # Prompt personalizado:
 # "Create security middleware with rate limiting, request validation, 
@@ -213,7 +213,7 @@ node tsfox/cli/index.js ai:generate middleware Security --interactive
 
 ```bash
 # Modelo con validaciones complejas
-node tsfox/cli/index.js ai:generate model Customer --interactive
+npx @foxframework/cli ai:generate model Customer --interactive
 
 # Prompt personalizado:
 # "Generate a model with Zod validation, audit fields, 

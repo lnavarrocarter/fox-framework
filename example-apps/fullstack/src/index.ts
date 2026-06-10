@@ -30,9 +30,12 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+// ── Module-scoped var (exported for testing) ─────────────────────────────────
+export let app: express.Express;
+
 // ── App ─────────────────────────────────────────────────────────────────────
 async function main() {
-  const app = express();
+  app = express();
   app.use(express.json());
 
   app.get('/health', (_req, res) => res.json({ status: 'healthy', version: '1.0.0' }));
@@ -96,8 +99,11 @@ async function main() {
     console.log('AI agent disabled (set OPENAI_API_KEY to enable)');
   }
 
-  const PORT = Number(process.env.PORT) || 3004;
-  app.listen(PORT, () => console.log(`Fox fullstack running on http://localhost:${PORT}`));
+  if (require.main === module) {
+    const PORT = Number(process.env.PORT) || 3004;
+    app.listen(PORT, () => console.log(`Fox fullstack running on http://localhost:${PORT}`));
+  }
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+export const ready = main();
+ready.catch(err => { console.error(err); process.exit(1); });

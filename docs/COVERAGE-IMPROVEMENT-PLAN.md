@@ -1,4 +1,6 @@
-# Plan de Mejora de Coverage - Fox Framework
+> ⚠️ **DEPRECATED** — Julio 2025. `tsfox/cli/` fue eliminado. Las rutas de test aquí referenciadas ya no existen. El plan actualizado de coverage debe usar `packages/cli/`. Este documento se conserva como referencia histórica.
+
+# Plan de Mejora de Coverage - Fox Framework [OBSOLETO]
 
 ## 🎯 Objetivo
 Aumentar coverage del **39.59%** actual al **80%** mínimo

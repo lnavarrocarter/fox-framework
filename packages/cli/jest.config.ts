@@ -6,10 +6,18 @@ const config: Config = {
   roots: ['<rootDir>/src/__tests__'],
   testMatch: ['**/*.test.ts'],
   transform: {
-    '^.+\\.[tj]sx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json', allowJs: true }],
+    '^.+\\.[tj]sx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
   },
-  // inquirer v9+, chalk v5+, ora v7+ are ESM-only — must be transformed by ts-jest
-  transformIgnorePatterns: ['node_modules/(?!(inquirer|chalk|ora|@inquirer)/)'],
+  // inquirer v9+, chalk v5+, ora v7+, log-symbols are ESM-only
+  // ts-jest transform is unreliable for ESM subpath imports (#ansi-styles)
+  // → use CommonJS mocks via moduleNameMapper instead
+  transformIgnorePatterns: [
+    'node_modules/(?!(tslib)/)',
+  ],
+  moduleNameMapper: {
+    '^chalk$': '<rootDir>/src/__mocks__/chalk.ts',
+    '^inquirer$': '<rootDir>/src/__mocks__/inquirer.ts',
+  },
   testTimeout: 15000,
   forceExit: true,
   clearMocks: true,

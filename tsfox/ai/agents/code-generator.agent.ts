@@ -21,7 +21,7 @@ import {
     CodeStyleRules
 } from '../interfaces/ai-agent.interface';
 import { OpenAIProvider } from '../providers/openai.provider';
-import { formatClassName, formatFileName } from '../../cli/generators';
+import { formatClassName, formatFileName } from '../../core/utils/string-utils';
 
 export class CodeGeneratorAgent implements AIAgentInterface {
     private provider: OpenAIProvider;

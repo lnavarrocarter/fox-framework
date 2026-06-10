@@ -57,8 +57,8 @@ El sistema de Docker Integration implementado proporciona soporte completo para 
 ### Testing y Calidad
 
 - **15+ tests implementados** ✅
-- **100% de tests pasando** ✅
-- **Cobertura completa** de comandos Docker
+- **Tests de comandos Docker** ✅
+- **Cobertura funcional** de comandos Docker
 - **CLI funcional** con todos los comandos
 - **Generación correcta** de archivos Docker
 
@@ -126,8 +126,8 @@ El sistema de plugins implementado proporciona una arquitectura completamente mo
 ### Testing y Calidad
 
 - **22 tests implementados** ✅
-- **100% de tests pasando** ✅
-- **Cobertura completa** de funcionalidad
+- **Tests de plugin system** ✅
+- **Cobertura funcional** del plugin system
 - **TypeScript estricto** con tipos completos
 - **Manejo de errores** robusto
 

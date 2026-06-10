@@ -1,4 +1,6 @@
-# Resumen: Solución al Error de Rate Limit de Codecov
+> ⚠️ **PARCIALMENTE OBSOLETO** — Julio 2025. Las referencias a `tsfox/cli/` ya no aplican (fue eliminado, el CLI real está en `packages/cli/`). Las configuraciones de Codecov y workflows se mantienen vigentes.
+
+# Resumen: Solución al Error de Rate Limit de Codecov [PARCIALMENTE OBSOLETO]
 
 ## 🎯 Problema Resuelto
 **Error**: Rate limit reached en Codecov (HTTP 429)

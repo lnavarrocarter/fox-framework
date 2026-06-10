@@ -224,7 +224,7 @@ npx -p @foxframework/core tsfox docker compose exec app npm run migration
 Genera Dockerfiles optimizados para aplicaciones Fox Framework.
 
 ```typescript
-import { DockerfileGenerator } from '@tsfox/cli/generators';
+import { DockerfileGenerator } from '@foxframework/cli/generators';
 
 const generator = new DockerfileGenerator();
 
@@ -266,7 +266,7 @@ interface DockerfileConfig {
 Genera archivos docker-compose.yml para orchestración completa.
 
 ```typescript
-import { ComposeGenerator } from '@tsfox/cli/generators';
+import { ComposeGenerator } from '@foxframework/cli/generators';
 
 const generator = new ComposeGenerator();
 

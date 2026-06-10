@@ -987,7 +987,7 @@ Acciones válidas: `up`, `down`, `logs`, `ps`, `restart`, `stop`, `start`, `pull
 Generador de Dockerfiles optimizados.
 
 ```typescript
-import { DockerfileGenerator } from '@tsfox/cli/generators';
+import { DockerfileGenerator } from '@foxframework/cli/generators';
 
 const generator = new DockerfileGenerator();
 
@@ -1013,7 +1013,7 @@ const multistage = generator.generateMultiStage({
 Generador de archivos docker-compose.yml.
 
 ```typescript
-import { ComposeGenerator } from '@tsfox/cli/generators';
+import { ComposeGenerator } from '@foxframework/cli/generators';
 
 const generator = new ComposeGenerator();
 

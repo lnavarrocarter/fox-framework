@@ -40,5 +40,9 @@ app.delete('/todos/:id', (req: Request, res: Response) => {
   res.json(deleted);
 });
 
-const PORT = Number(process.env.PORT) || 3001;
-app.listen(PORT, () => console.log(`Fox rest-api running on http://localhost:${PORT}`));
+export { app };
+
+if (require.main === module) {
+  const PORT = Number(process.env.PORT) || 3001;
+  app.listen(PORT, () => console.log(`Fox rest-api running on http://localhost:${PORT}`));
+}

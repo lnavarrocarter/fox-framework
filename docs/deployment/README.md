@@ -72,7 +72,7 @@ interface DeploymentConfig {
 - ServiceMonitor para Prometheus
 - Tests de conectividad
 
-#### 4. CLI de Deployment (`tsfox/cli/commands/deploy.command.ts`)
+#### 4. CLI de Deployment (`packages/cli/src/commands/deploy.command.ts`)
 **Comandos disponibles:**
 ```bash
 # Deployment interactivo
