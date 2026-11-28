@@ -22,7 +22,7 @@ These dependencies are approved by this ticket.
 - [x] TypeScript, Next.js and unported packages retired; breaks documented.
 - [x] Static rustdoc, CI, Docker example and accurate contributor instructions.
 - [x] Formatting, Clippy, unit/integration tests and real HTTP smoke pass.
-- [ ] Branch and PR published without merging or releasing.
+- [x] Branch and PR published without merging or releasing.
 
 No TLS, HTTP/2, WebSocket, database, authentication, cache, template, event,
 agent, vector, OpenTelemetry or cloud adapters are promised in this version.
@@ -36,3 +36,6 @@ HTTP smoke passed. The smoke checked ephemeral binding, health, decoded UTF-8,
 HEAD, 404, 405, invalid environment settings and a successful SIGINT drain.
 Docker base image manifests were verified; the local Docker socket is not
 accessible to this user, so the container build must pass in PR CI.
+
+Delivery: https://github.com/lnavarrocarter/fox-framework/pull/44
+Branch: `migration/rust-framework`. Status: in review, not merged or released.
